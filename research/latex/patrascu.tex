@@ -1,0 +1,348 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{geometry}
+\usepackage{hyperref}
+
+\geometry{margin=1in}
+
+\begin{document}
+
+\title{Color Image Processing Using Logarithmic Operations}
+\author{Vasile P\^atr\c{a}scu, Vasile Buzuloiu}
+\date{}
+\maketitle
+
+\begin{abstract}
+In this paper, we present a mathematical model for color image processing. It is a logarithmic one. We consider the cube $(-1,1)^3$ as the set of values for the color space. We define two operations: addition $(+)$ and real scalar multiplication $(\times)$. With these operations the space of colors becomes a real vector space. Then, defining the scalar product $(\cdot)$ and the norm $\|\cdot\|$, we obtain a logarithmic Euclidean space. We show how we can use this model for color image enhancement and we present some experimental results.
+\end{abstract}
+
+\section{Introduction}
+
+Image enhancement is an important branch of image processing. Its definition according to [1] can be expressed as follows: it consists of a collection of techniques that seek to improve the visual appearance of an image, or to convert the image to a form better suited for analysis by a human or a machine.
+
+Another approach exists in the general setting of logarithmic representations suited for the imaging processes obtained by transmitted light or for human visual perception. Jourlin and Pinoli introduced a mathematical framework for this kind of nonlinear representation [2].
+
+The logarithmic model for gray level images presented in [4,5] does work with bounded real sets. The extension of our model to color images is natural and we develop it here. We consider the unit cube of colors $(0,1)^3$ and transform it into the cube $(-1,1)^3$ by the simplest linear transformation, which translates the point $(0.5,0.5,0.5)$ to $(0,0,0)$. It is this new cube which plays the central role in our model.
+
+\section{The Real Vector Space of the Colors}
+
+We consider as the space of colors the cube
+\[
+E_3 = (-1,1)\times(-1,1)\times(-1,1).
+\]
+The three components of a vector $v\in E_3$ are noted $r$, $g$, and $b$ (red, green, blue). In the cube $E_3$ we define the addition $(+)$ and the real scalar multiplication $(\times)$.
+
+\subsection{Addition}
+
+For $v_1,v_2\in E_3$, with
+\[
+v_1=(r_1,g_1,b_1), \qquad v_2=(r_2,g_2,b_2),
+\]
+the sum $v_1(+ )v_2$ is defined by
+\begin{equation}
+v_1(+ )v_2=
+\left(
+\frac{r_1+r_2}{1+r_1r_2},
+\frac{g_1+g_2}{1+g_1g_2},
+\frac{b_1+b_2}{1+b_1b_2}
+\right).
+\end{equation}
+
+The neutral element for addition is
+\[
+\theta=(0,0,0).
+\]
+Each element $v=(r,g,b)\in E_3$ has as its opposite the element
+\[
+-v=(-r,-g,-b).
+\]
+The addition is stable, associative, commutative, has a neutral element and each element has an opposite. It follows that this operation establishes on $E_3$ a commutative group structure.
+
+The subtraction operation is defined by
+\begin{equation}
+v_1(-)v_2=
+\left(
+\frac{r_1-r_2}{1-r_1r_2},
+\frac{g_1-g_2}{1-g_1g_2},
+\frac{b_1-b_2}{1-b_1b_2}
+\right).
+\end{equation}
+
+\subsection{Scalar Multiplication}
+
+For $\lambda\in\mathbb{R}$ and $v=(r,g,b)\in E_3$, we define
+\begin{equation}
+\lambda(x)v=
+\left(
+\frac{(1+r)^\lambda-(1-r)^\lambda}{(1+r)^\lambda+(1-r)^\lambda},
+\frac{(1+g)^\lambda-(1-g)^\lambda}{(1+g)^\lambda+(1-g)^\lambda},
+\frac{(1+b)^\lambda-(1-b)^\lambda}{(1+b)^\lambda+(1-b)^\lambda}
+\right).
+\end{equation}
+
+The two operations, addition $(+)$ and scalar multiplication $(\times)$, establish on $E_3$ a real vector space structure.
+
+\subsection{The Euclidean Space of the Colors}
+
+We define the scalar product $(\cdot)_{E_3}:E_3\times E_3\to\mathbb{R}$ by
+\begin{equation}
+(v_1\mid v_2)_{E_3}
+= \varphi(r_1)\varphi(r_2)+\varphi(g_1)\varphi(g_2)+\varphi(b_1)\varphi(b_2),
+\end{equation}
+where
+\[
+\varphi:(-1,1)\to\mathbb{R}, \qquad \varphi(x)=\operatorname{arcth}(x).
+\]
+
+The norm is defined by
+\begin{equation}
+\|v\|_{E_3}=\sqrt{\varphi^2(r)+\varphi^2(g)+\varphi^2(b)}.
+\end{equation}
+
+Thus, our color space becomes a three-dimensional Euclidean space.
+
+\section{The Vector Space of the Color Images}
+
+A color image is a function defined on a bi-dimensional compact set $D\subset \mathbb{R}^2$ taking values in the color space $E_3$. We denote by $F(D,E_3)$ the set of color images defined on $D$.
+
+\subsection{Addition}
+
+For $f_1,f_2\in F(D,E_3)$ and $(x,y)\in D$,
+\begin{equation}
+(f_1(+ )f_2)(x,y)=f_1(x,y)(+ )f_2(x,y).
+\end{equation}
+
+The neutral element is the identically null function. The addition is stable, associative, commutative, has a neutral element and each element has an opposite. Therefore, this operation establishes on $F(D,E_3)$ a commutative group structure.
+
+\subsection{Scalar Multiplication}
+
+For $\lambda\in\mathbb{R}$, $f\in F(D,E_3)$ and $(x,y)\in D$,
+\begin{equation}
+(\lambda(x)f)(x,y)=\lambda(x)f(x,y).
+\end{equation}
+
+The two operations, addition $(+)$ and scalar multiplication $(\times)$, establish on $F(D,E_3)$ a real vector space structure.
+
+\subsection{The Hilbert Space of the Color Images}
+
+Let $f$ and $g$ be two integrable functions from $F(D,E_3)$. We define the scalar product by
+\begin{equation}
+(f_1\mid f_2)_{L^2(E_3)}=\int_D (f_1(x,y)\mid f_2(x,y))_{E_3}\,dx\,dy.
+\end{equation}
+
+The norm is then
+\begin{equation}
+\|f\|_{L^2(E_3)}=
+\left(\int_D \|f(x,y)\|_{E_3}^2\,dx\,dy\right)^{1/2}.
+\end{equation}
+
+Thus, the color image space $F(D,E_3)$ becomes a Hilbert space.
+
+\section{Applications in Enhancement of Color Images}
+
+The enhancement algorithms presented in this paper consist of affine transformations
+\begin{equation}
+t:F(D,E_3)\to F(D,E_3), \qquad t(f)=\alpha(x)f(+)\beta(x)k,
+\end{equation}
+where $f$ is the original image and $h=t(f)$ is the enhanced image. Here $k$ is a constant image. The parameters $\alpha,\beta$ are determined so that the transformation satisfies some conditions.
+
+Let $f:D\to E_3$ be a color image with scalar components
+\[
+f_r:D\to E,\qquad f_g:D\to E,\qquad f_b:D\to E.
+\]
+
+We consider the following subsets of the support $D$:
+\[
+D_{r1}=\{(x,y)\in D \mid f_r(x,y)<m(f_r(D))\},
+\]
+\[
+D_{r2}=\{(x,y)\in D \mid f_r(x,y)>m(f_r(D))\},
+\]
+\[
+D_{g1}=\{(x,y)\in D \mid f_g(x,y)<m(f_g(D))\},
+\]
+\[
+D_{g2}=\{(x,y)\in D \mid f_g(x,y)>m(f_g(D))\},
+\]
+\[
+D_{b1}=\{(x,y)\in D \mid f_b(x,y)<m(f_b(D))\},
+\]
+\[
+D_{b2}=\{(x,y)\in D \mid f_b(x,y)>m(f_b(D))\},
+\]
+where
+\begin{equation}
+m(f_i(D))=\frac{1}{\operatorname{area}(D)}\int_D f_i(x,y)\,dx\,dy.
+\end{equation}
+
+In the discrete case, $\operatorname{area}(D)$ is replaced by $\operatorname{card}(D)$.
+
+We define the following vectors:
+\[
+v_0=(m(f_r(D)),m(f_g(D)),m(f_b(D))),
+\]
+\[
+v_1=(m(f_r(D_{r1})),m(f_g(D_{g1})),m(f_b(D_{b1}))),
+\]
+\[
+v_2=(m(f_r(D_{r2})),m(f_g(D_{g2})),m(f_b(D_{b2}))),
+\]
+\[
+u_L=(\operatorname{th}(1),\operatorname{th}(1),\operatorname{th}(1)),
+\]
+\[
+w_0=(0,0,0), \qquad w_1=(-0.5,-0.5,-0.5), \qquad w_2=(0.5,0.5,0.5).
+\]
+
+\subsection{Algorithm A}
+
+A constant translation on each component of the color. In this case we put
+\begin{equation}
+\forall x,y\in D,\qquad k(x,y)=u_L.
+\end{equation}
+
+We obtain the parameters $\alpha,\beta$ from the overdetermined linear system
+\begin{equation}
+\begin{cases}
+\alpha(x)v_0(+)\beta(x)u_L=w_0,\\
+\alpha(x)\big(v_1(-)v_0\big)=w_1,\\
+\alpha(x)\big(v_2(-)v_0\big)=w_2.
+\end{cases}
+\end{equation}
+
+Let us use the notations
+\[
+c_{vv}=\|v_0\|_{E_3}^2+\|v_1-v_0\|_{E_3}^2+\|v_2-v_0\|_{E_3}^2,
+\]
+\[
+c_{uu}=\|u_L\|_{E_3}^2,\qquad
+c_{vw}=(v_0\mid w_0)_{E_3}+(v_1\mid w_1)_{E_3}+(v_2\mid w_2)_{E_3},
+\]
+\[
+c_{uv}=(v_0\mid u_L)_{E_3},\qquad
+c_{uw}=(u_L\mid w_0)_{E_3},
+\]
+then the generalized solution, corresponding to the minimum mean square error, is
+\begin{equation}
+\alpha=\frac{c_{vw}c_{uu}-c_{uw}c_{uv}}{c_{vv}c_{uu}-(c_{uv})^2},
+\end{equation}
+\begin{equation}
+\beta=\frac{-c_{vw}c_{uv}+c_{vv}c_{uw}}{c_{vv}c_{uu}-(c_{uv})^2}.
+\end{equation}
+
+The transformation is
+\begin{equation}
+t(f)=
+\frac{c_{vw}c_{uu}-c_{uw}c_{uv}}{c_{vv}c_{uu}-(c_{uv})^2}\,x\,f
++
+\frac{-c_{vw}c_{uv}+c_{vv}c_{uw}}{c_{vv}c_{uu}-(c_{uv})^2}\,x\,u_L.
+\end{equation}
+
+\subsection{Algorithm B}
+
+A translation proportional to the mean. We suppose $v_0\in E_3$, $v_0\neq 0$. In this case we shall choose the constant vector
+\begin{equation}
+k=v_0.
+\end{equation}
+
+The overdetermined system from which the parameters $\alpha,\beta$ are found is
+\begin{equation}
+\begin{cases}
+\alpha(x)v_0(+)\beta(x)v_0=w_0,\\
+\alpha(x)v_1(+)\beta(x)v_0=w_1,\\
+\alpha(x)v_2(+)\beta(x)v_0=w_2.
+\end{cases}
+\end{equation}
+
+We again use the notations
+\[
+c_{vv}=\|v_0\|_{E_3}^2+\|v_1\|_{E_3}^2+\|v_2\|_{E_3}^2,
+\]
+\[
+c_{uu}=3\|v_0\|_{E_3}^2,\qquad
+c_{vu}=(v_0\mid v_0)_{E_3}+(v_1\mid v_0)_{E_3}+(v_2\mid v_0)_{E_3},
+\]
+\[
+c_{vw}=(v_0\mid w_0)_{E_3}+(v_1\mid w_1)_{E_3}+(v_2\mid w_2)_{E_3},
+\]
+\[
+c_{uw}=(v_0\mid w_0)_{E_3}+(v_0\mid w_1)_{E_3}+(v_0\mid w_2)_{E_3},
+\]
+and the minimum mean square error solution is
+\begin{equation}
+\alpha=\frac{c_{vw}c_{uu}-c_{uw}c_{vu}}{c_{vv}c_{uu}-(c_{vu})^2},
+\end{equation}
+\begin{equation}
+\beta=\frac{-c_{vw}c_{vu}+c_{vv}c_{uw}}{c_{vv}c_{uu}-(c_{vu})^2}.
+\end{equation}
+
+The transformation is
+\begin{equation}
+t(f)=
+\frac{c_{vw}c_{uu}-c_{uw}c_{vu}}{c_{vv}c_{uu}-(c_{vu})^2}\,x\,f
++
+\frac{-c_{vw}c_{vu}+c_{vv}c_{uw}}{c_{vv}c_{uu}-(c_{vu})^2}\,x\,v_0.
+\end{equation}
+
+\section{Experimental Results}
+
+The algorithm A gives
+\[
+\alpha=1.384,\qquad \beta=1.116,\qquad k=(0.762,0.762,0.762),
+\]
+\[
+t(f)=1.384(x)f(+)\,1.116(x)k.
+\]
+
+The algorithm B gives
+\[
+\alpha=1.450,\qquad \beta=-1.447,\qquad k=(-0.694,-0.727,-0.580),
+\]
+\[
+t(f)=1.450(x)f(-)1.447(x)k.
+\]
+
+For the boat image, the algorithm A gives
+\[
+\alpha=1.402,\qquad \beta=0.412,\qquad k=(0.762,0.762,0.762),
+\]
+\[
+t(f)=1.402(x)f(+)\,0.412(x)k.
+\]
+
+The algorithm B gives
+\[
+\alpha=1.538,\qquad \beta=-1.941,\qquad k=(-0.194,-0.323,-0.338),
+\]
+\[
+t(f)=1.538(x)f(-)1.941(x)k.
+\]
+
+\section{Conclusions}
+
+Using this mathematical model we obtained two very simple algorithms for color image enhancement. The algorithm A improves the color contrast and saturation and preserves quite well the hue, while the algorithm B tends to attenuate the dominant colors which results in hue modifications. The main advantage consists in the ability to parameterize the algorithms and to simply introduce optimality criteria.
+
+\begin{thebibliography}{9}
+\bibitem{gonzales}
+R.C. Gonzalez and P. Wintz, \emph{Digital Image Processing}, 2nd ed., Addison-Wesley, New York, 1987.
+
+\bibitem{jourlin}
+M. Jourlin and J.C. Pinoli, \emph{A model for logarithmic image processing}, Publication No. 3, Departement de Mathematiques, Univ. de Saint-Etienne, 1985.
+
+\bibitem{oppenheim}
+A.V. Oppenheim, \emph{Superposition in a class of non-linear systems}, Technical Report 432, Research Laboratory of Electronics, M.I.T. Cambridge, 1965.
+
+\bibitem{patrascu2001}
+V. P\^atr\c{a}scu and V. Buzuloiu, \emph{A mathematical model for logarithmic image processing}, SCI 2001, Orlando, USA, 2001.
+
+\bibitem{patrascu2000}
+V. P\^atr\c{a}scu and I. Voicu, \emph{An Algebraical Model for Gray Level Images}, OPTIM 2000, pp. 809--812, Bra\v{s}ov, Romania, 2000.
+
+\bibitem{rosenfeld}
+A. Rosenfeld and A.C. Kak, \emph{Digital Picture Processing}, Academic Press, New York, 1982.
+
+\bibitem{stockham}
+T.G. Stockham, \emph{Image processing in the context of visual model}, Proc. IEEE, Vol. 60, July 1972.
+\end{thebibliography}
+
+\end{document}

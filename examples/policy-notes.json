@@ -1,0 +1,21 @@
+{
+  "description": "Illustrative future policy file; v0.1 does not load this file.",
+  "auto": {
+    "center_weight": 0.60,
+    "global_weight": 0.40,
+    "black_percentile": 0.005,
+    "white_percentile": 0.995,
+    "endpoint_safety_ev": 0.40
+  },
+  "future_scene_overrides": {
+    "night": {
+      "maximum_shadow_lift_ev": 1.0
+    },
+    "high_key": {
+      "preserve_bright_median": true
+    },
+    "backlit_portrait": {
+      "prefer_face_exposure": true
+    }
+  }
+}

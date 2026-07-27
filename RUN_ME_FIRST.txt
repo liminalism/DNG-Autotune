@@ -1,0 +1,13 @@
+raw-autotune 0.1.0 prototype
+
+1. Install Rust through rustup if `cargo --version` does not work.
+2. On Windows, double-click or run: build-release.bat
+3. Test the binary:
+   target\release\raw-autotune.exe photo.dng --output results --emit-baseline
+4. Read:
+   README.md
+   docs\TESTING.md
+   docs\KNOWN_LIMITATIONS.md
+   docs\BUILD_STATUS.md
+
+This archive contains source and build/package scripts, not a precompiled executable.

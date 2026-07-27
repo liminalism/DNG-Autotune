@@ -1,0 +1,13 @@
+/target
+/dist
+/raw-autotune-output
+*.dng
+*.DNG
+*.arw
+*.ARW
+*.nef
+*.NEF
+*.cr2
+*.CR2
+*.cr3
+*.CR3
