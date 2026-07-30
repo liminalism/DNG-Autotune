@@ -139,8 +139,15 @@ fn run() -> Result<i32> {
     let mut exposures = Vec::new();
     let mut colourfulness = Vec::new();
     let mut clipped = Vec::new();
+    let mut luminance_entropy = Vec::new();
+    let mut average_gradient = Vec::new();
     let mut snr10 = Vec::new();
     let mut pooled_groups: BTreeMap<String, usize> = BTreeMap::new();
+    let mut reference_pairs = 0_usize;
+    let mut reference_subject_ev = Vec::new();
+    let mut reference_colourfulness = Vec::new();
+    let mut reference_mean_level = Vec::new();
+    let mut reference_saturation_ratio = Vec::new();
 
     for (job, result) in jobs.iter().zip(results) {
         match result {
@@ -161,6 +168,10 @@ fn run() -> Result<i32> {
                     noise_floor: report.noise_floor,
                     shot: report.shot,
                     preview: report.preview,
+                    local_tone: report.local_tone,
+                    chroma_denoise: report.chroma_denoise,
+                    sharpen: report.sharpen,
+                    reference: report.reference,
                     error: None,
                 });
             }
@@ -189,6 +200,8 @@ fn run() -> Result<i32> {
                 if let Some(stats) = &report.measured {
                     colourfulness.push(stats.colourfulness);
                     clipped.push(stats.near_white_fraction);
+                    luminance_entropy.push(stats.luminance_entropy);
+                    average_gradient.push(stats.average_gradient);
                 }
                 if let Some(estimate) = &report.noise {
                     snr10.push(estimate.snr10_ev);
@@ -198,6 +211,13 @@ fn run() -> Result<i32> {
                     && let Some(key) = &floor.group_key
                 {
                     *pooled_groups.entry(key.clone()).or_default() += 1;
+                }
+                if let Some(reference) = &report.reference {
+                    reference_pairs += 1;
+                    reference_subject_ev.push(reference.delta.subject_display_ev);
+                    reference_colourfulness.extend(reference.delta.colourfulness);
+                    reference_mean_level.extend(reference.delta.mean_level);
+                    reference_saturation_ratio.extend(reference.delta.saturation_ratio);
                 }
                 entries.push(types::SummaryEntry {
                     input: report.input.to_string_lossy().into_owned(),
@@ -217,6 +237,10 @@ fn run() -> Result<i32> {
                     noise_floor: report.noise_floor,
                     shot: report.shot,
                     preview: report.preview,
+                    local_tone: report.local_tone,
+                    chroma_denoise: report.chroma_denoise,
+                    sharpen: report.sharpen,
+                    reference: report.reference,
                     error: None,
                 });
             }
@@ -237,6 +261,10 @@ fn run() -> Result<i32> {
                     noise_floor: None,
                     shot: None,
                     preview: None,
+                    local_tone: None,
+                    chroma_denoise: None,
+                    sharpen: None,
+                    reference: None,
                     error: Some(format!("{error:#}")),
                 });
             }
@@ -248,9 +276,26 @@ fn run() -> Result<i32> {
         completed, skipped, failed
     );
 
+    if options.reference.is_enabled() {
+        let median =
+            |values: &[f32]| types::Distribution::from_samples(values.to_vec()).map(|d| d.median);
+        println!(
+            "reference: {} of {} paired | median subject {:+.2} EV | saturation x{} | colourfulness {} | level {}",
+            reference_pairs,
+            completed,
+            median(&reference_subject_ev).unwrap_or(f32::NAN),
+            median(&reference_saturation_ratio)
+                .map_or_else(|| "-".to_string(), |value| format!("{value:.3}")),
+            median(&reference_colourfulness)
+                .map_or_else(|| "-".to_string(), |value| format!("{value:+.1}")),
+            median(&reference_mean_level)
+                .map_or_else(|| "-".to_string(), |value| format!("{value:+.1}")),
+        );
+    }
+
     if let Some(path) = &options.summary_path {
         let summary = types::BatchSummary {
-            schema_version: 1,
+            schema_version: types::REPORT_SCHEMA_VERSION,
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             preset: options.preset,
             dry_run: options.dry_run,
@@ -262,7 +307,18 @@ fn run() -> Result<i32> {
             exposure_ev: types::Distribution::from_samples(exposures),
             colourfulness: types::Distribution::from_samples(colourfulness),
             near_white_fraction: types::Distribution::from_samples(clipped),
+            luminance_entropy: types::Distribution::from_samples(luminance_entropy),
+            average_gradient: types::Distribution::from_samples(average_gradient),
             snr10_ev: types::Distribution::from_samples(snr10),
+            reference_pairs,
+            reference_subject_ev_delta: types::Distribution::from_samples(reference_subject_ev),
+            reference_colourfulness_delta: types::Distribution::from_samples(
+                reference_colourfulness,
+            ),
+            reference_mean_level_delta: types::Distribution::from_samples(reference_mean_level),
+            reference_saturation_ratio: types::Distribution::from_samples(
+                reference_saturation_ratio,
+            ),
             pooled_groups,
             files: entries,
         };

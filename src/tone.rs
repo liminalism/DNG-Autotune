@@ -48,7 +48,7 @@ fn smoothstep(t: f32) -> f32 {
 }
 
 #[inline]
-fn map_ev(ev: f32, params: &ToneParams) -> f32 {
+pub(crate) fn map_ev(ev: f32, params: &ToneParams) -> f32 {
     if ev <= 0.0 {
         let denominator = (-params.black_input_ev).max(1.0e-4);
         let position = ((ev - params.black_input_ev) / denominator).clamp(0.0, 1.0);
@@ -133,8 +133,8 @@ fn compress_gamut(mut rgb: [f32; 3], anchor: f32) -> [f32; 3] {
 }
 
 #[inline]
-fn render_pixel(source: [f32; 3], params: &ToneParams) -> [u16; 3] {
-    let exposure_gain = params.exposure_ev.exp2();
+fn render_pixel_local(source: [f32; 3], params: &ToneParams, local_ev: f32) -> [u16; 3] {
+    let exposure_gain = (params.exposure_ev + local_ev).exp2();
     let exposed = [
         source[0] * exposure_gain,
         source[1] * exposure_gain,
@@ -186,7 +186,44 @@ fn render_pixel(source: [f32; 3], params: &ToneParams) -> [u16; 3] {
     let chroma = (maximum - minimum).clamp(0.0, 1.0);
     let midtone_weight = 1.0 - ((mapped_luminance - 0.5).abs() * 2.0).clamp(0.0, 1.0);
     let adaptive_vibrance = 1.0 + params.vibrance * (1.0 - chroma) * midtone_weight;
-    let chroma_scale = params.saturation * adaptive_vibrance * highlight_saturation;
+
+    // Chroma is expanded around the pixel's own rendered luminance, so a large
+    // enough scale drives the outermost channel past the white point the curve
+    // just placed it under. On a blue sky that is the whole frame at once: with
+    // `highlight_norm == 1.0` the curve deliberately lands the brightest channel
+    // just below white, and a chroma boost applied afterwards spends exactly the
+    // headroom that protection created. Raising `auto`'s saturation without this
+    // cap took the worst Sony frame from 0% to 23% of pixels with a channel at
+    // full scale, undoing 0.1.10.
+    //
+    // So the scale is capped at the value that lands the outermost channel *on*
+    // the curve's own output range rather than past it: the boost may spend
+    // headroom the curve left unused, and nothing more. `compress_gamut` still
+    // follows, as the guard for what the curve itself put out of range.
+    //
+    // The cap's floor is the scale the pixel would get with no saturation
+    // opinion at all, not 1.0. In the deep highlights `highlight_saturation`
+    // asks for less than 1.0, and a floor of 1.0 would *overrule* it — turning
+    // the guard into a way to push chroma up on exactly the pixels the preset
+    // wanted pulled in. Flooring at the unboosted scale means the cap can only
+    // ever withhold the boost, so a capped pixel renders as it did before the
+    // preset gained one.
+    let unboosted_scale = adaptive_vibrance * highlight_saturation;
+    let headroom_scale = {
+        let upper = if maximum > mapped_luminance {
+            (params.white_output_linear - mapped_luminance) / (maximum - mapped_luminance)
+        } else {
+            f32::INFINITY
+        };
+        let lower = if minimum < mapped_luminance {
+            (mapped_luminance - params.black_output_linear) / (mapped_luminance - minimum)
+        } else {
+            f32::INFINITY
+        };
+        upper.min(lower).max(unboosted_scale)
+    };
+
+    let chroma_scale = (params.saturation * unboosted_scale).min(headroom_scale);
 
     for channel in &mut rgb {
         *channel = mapped_luminance + (*channel - mapped_luminance) * chroma_scale;
@@ -200,16 +237,44 @@ fn render_pixel(source: [f32; 3], params: &ToneParams) -> [u16; 3] {
     ]
 }
 
-pub fn render(image: &LinearImage, params: &ToneParams) -> Rgb16Image {
+#[inline]
+fn render_pixel(source: [f32; 3], params: &ToneParams) -> [u16; 3] {
+    render_pixel_local(source, params, 0.0)
+}
+
+pub fn render(
+    image: &LinearImage,
+    params: &ToneParams,
+    local_tone: Option<&crate::localtone::LocalToneMap>,
+) -> Rgb16Image {
     let mut output = vec![0_u16; image.pixels.len() * 3];
 
-    output
-        .par_chunks_exact_mut(3)
-        .zip(image.pixels.par_iter())
-        .for_each(|(destination, source)| {
-            let rendered = render_pixel(*source, params);
-            destination.copy_from_slice(&rendered);
-        });
+    match local_tone {
+        Some(local_tone) => {
+            assert_eq!(
+                local_tone.dimensions(),
+                (image.width, image.height),
+                "local tone map dimensions must match the rendered image"
+            );
+            output
+                .par_chunks_exact_mut(3)
+                .zip(image.pixels.par_iter())
+                .zip(local_tone.corrections_ev().par_iter())
+                .for_each(|((destination, source), local_ev)| {
+                    let rendered = render_pixel_local(*source, params, *local_ev);
+                    destination.copy_from_slice(&rendered);
+                });
+        }
+        None => {
+            output
+                .par_chunks_exact_mut(3)
+                .zip(image.pixels.par_iter())
+                .for_each(|(destination, source)| {
+                    let rendered = render_pixel(*source, params);
+                    destination.copy_from_slice(&rendered);
+                });
+        }
+    }
 
     ImageBuffer::from_raw(image.width as u32, image.height as u32, output)
         .expect("rendered buffer dimensions are internally consistent")
@@ -367,6 +432,114 @@ mod tests {
         );
     }
 
+    /// The saturation boost must not be what blows a highlight. A saturated
+    /// bright pixel — a blue sky is the everyday case — has to come out below
+    /// full scale however much saturation the preset asks for.
+    #[test]
+    fn saturation_cannot_push_a_highlight_channel_to_full_scale() {
+        let sky = [0.60, 1.10, 4.40];
+        for saturation in [1.0, 1.22, 1.6, 3.0] {
+            let params = ToneParams {
+                saturation,
+                ..parameters_protected()
+            };
+            let rendered = render_pixel(sky, &params);
+            assert!(
+                rendered.iter().all(|channel| *channel < u16::MAX),
+                "saturation {saturation} clipped a channel: {rendered:?}"
+            );
+        }
+    }
+
+    /// The cap withholds a boost; it must never take away chroma the pixel had
+    /// without one, or a bright saturated subject would render flatter than it
+    /// does today.
+    #[test]
+    fn the_headroom_cap_never_removes_existing_chroma() {
+        let spread = |pixel: [u16; 3]| {
+            pixel.iter().copied().max().unwrap() - pixel.iter().copied().min().unwrap()
+        };
+        for source in [[0.60, 1.10, 4.40], [0.30, 0.22, 0.10], [0.9, 0.9, 0.2]] {
+            let plain = render_pixel(source, &parameters_protected());
+            let boosted = render_pixel(
+                source,
+                &ToneParams {
+                    saturation: 1.22,
+                    ..parameters_protected()
+                },
+            );
+            assert!(
+                spread(boosted) >= spread(plain),
+                "boosting saturation reduced chroma on {source:?}: {plain:?} -> {boosted:?}"
+            );
+        }
+    }
+
+    /// Raising saturation must never be what pins a channel at full scale.
+    ///
+    /// This is the invariant the Sony corpus caught: without the cap, `auto`'s
+    /// larger saturation took the worst frame from 0% to 23% of pixels with a
+    /// channel at full scale. It is checked over saturated colours at a range
+    /// of brightnesses, and under `highlight_norm` 0.0 as well as 1.0, because
+    /// only the protected curve keeps the brightest channel off the ceiling on
+    /// its own — the cap has to hold for the other one too.
+    #[test]
+    fn raising_saturation_never_adds_a_clipped_channel() {
+        let colours = [
+            [0.10, 0.55, 6.00],
+            [0.60, 1.10, 4.40],
+            [3.00, 0.40, 0.25],
+            [0.95, 0.90, 0.20],
+            [2.20, 2.00, 0.30],
+            [0.30, 0.22, 0.10],
+        ];
+        for base in [parameters(), parameters_protected()] {
+            let unopinionated = ToneParams {
+                saturation: 1.0,
+                highlight_desaturation: 0.16,
+                ..base
+            };
+            let boosted = ToneParams {
+                saturation: 1.22,
+                ..unopinionated
+            };
+            for colour in colours {
+                let plain = render_pixel(colour, &unopinionated);
+                let raised = render_pixel(colour, &boosted);
+                for channel in 0..3 {
+                    assert!(
+                        raised[channel] < u16::MAX || plain[channel] == u16::MAX,
+                        "saturation pinned channel {channel} of {colour:?}: \
+                         {plain:?} -> {raised:?} (highlight_norm {})",
+                        base.highlight_norm
+                    );
+                }
+            }
+        }
+    }
+
+    /// Where there is headroom the boost has to actually arrive, otherwise the
+    /// cap would have quietly disabled the preset it is protecting.
+    #[test]
+    fn a_midtone_with_headroom_still_gains_chroma() {
+        let midtone = [0.20, 0.16, 0.11];
+        let plain = render_pixel(midtone, &parameters_protected());
+        let boosted = render_pixel(
+            midtone,
+            &ToneParams {
+                saturation: 1.22,
+                ..parameters_protected()
+            },
+        );
+        let spread = |pixel: [u16; 3]| {
+            (pixel.iter().copied().max().unwrap() - pixel.iter().copied().min().unwrap()) as f32
+        };
+        assert!(
+            spread(boosted) > spread(plain) * 1.10,
+            "expected a real chroma gain, got {plain:?} -> {boosted:?}"
+        );
+    }
+
     /// The blend must not disturb midtones, which are what the exposure
     /// controller is actually anchored on.
     #[test]
@@ -374,5 +547,17 @@ mod tests {
         let plain = render_pixel([MID_GRAY; 3], &parameters());
         let protected = render_pixel([MID_GRAY; 3], &parameters_protected());
         assert_eq!(plain, protected);
+    }
+
+    #[test]
+    fn local_exposure_is_one_hue_preserving_rgb_gain() {
+        let source = [0.07, 0.18, 0.31];
+        let local_ev: f32 = 0.65;
+        let gain = local_ev.exp2();
+        let pre_scaled = [source[0] * gain, source[1] * gain, source[2] * gain];
+        assert_eq!(
+            render_pixel_local(source, &parameters_protected(), local_ev),
+            render_pixel(pre_scaled, &parameters_protected())
+        );
     }
 }

@@ -1,4 +1,4 @@
-raw-autotune 0.1.0 prototype
+raw-autotune 0.1.15
 
 1. Install Rust through rustup if `cargo --version` does not work.
 2. On Windows, double-click or run: build-release.bat

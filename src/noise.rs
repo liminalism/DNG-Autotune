@@ -471,7 +471,13 @@ mod tests {
     #[test]
     fn anisotropic_texture_is_measured_on_its_quiet_axis() {
         let stripes: Vec<f32> = (0..TILE * TILE)
-            .map(|i| if (i % TILE) % 2 == 0 { 0.0 } else { 500.0 })
+            .map(|i| {
+                if (i % TILE).is_multiple_of(2) {
+                    0.0
+                } else {
+                    500.0
+                }
+            })
             .collect();
         let (_, variance) = tile_statistics(&stripes).unwrap();
         assert!(variance < 1.0e-6, "stripes reported variance {variance}");

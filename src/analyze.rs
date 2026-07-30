@@ -100,6 +100,16 @@ fn derive_params(
     // `highlight_norm` trades highlight retention against punch: at 1.0 no
     // channel can clip, at 0.0 the curve is driven by luminance alone and
     // saturated highlights blow out.
+    //
+    // `saturation` was set by eye until 0.1.12, when 29 RAW+JPEG pairs made it
+    // measurable. Against them the old `auto` value of 1.02 rendered at 0.847
+    // of the camera's own saturation — a flat deficit, the same on both phone
+    // sources, which is the signature of a pipeline-wide shortfall rather than
+    // a scene-dependent one. Scaling by 1.20 lands `auto` at 1.017 of the
+    // camera while hard clipping stays at a 0.001% median against the camera's
+    // 1.076%. 1.30 was measurably worse: clipping rose to a 0.308% median.
+    // `punchy` moved by the same factor to keep it above `auto`; `neutral`
+    // keeps 1.00 because its documented job is to add no chroma opinion.
     let (
         black_output_linear,
         white_output_linear,
@@ -109,8 +119,8 @@ fn derive_params(
         highlight_norm,
     ) = match preset {
         Preset::Neutral => (0.0025, 0.965, 1.00, 0.00, 0.10, 1.00),
-        Preset::Auto => (0.0012, 0.985, 1.02, 0.08, 0.16, 0.90),
-        Preset::Punchy => (0.0008, 0.995, 1.06, 0.16, 0.13, 0.70),
+        Preset::Auto => (0.0012, 0.985, 1.22, 0.08, 0.16, 1.00),
+        Preset::Punchy => (0.0008, 0.995, 1.27, 0.16, 0.13, 0.70),
     };
 
     let black_output_ev = (black_output_linear / MID_GRAY).log2();
@@ -465,5 +475,37 @@ mod tests {
         let (_, biased) =
             analyze(&image, &AnalysisInputs::new(10_000, Preset::Auto, 0.75)).unwrap();
         assert!((biased.exposure_ev - base.exposure_ev - 0.75).abs() < 0.001);
+    }
+
+    /// The presets have to stay ordered in chroma for their names to mean
+    /// anything: `neutral` adds no opinion, `auto` is the one measured against
+    /// the camera-JPEG corpus, and `punchy` sits above it.
+    #[test]
+    fn preset_saturation_stays_ordered() {
+        let saturation = |preset| {
+            analyze(&graded_image(), &AnalysisInputs::new(10_000, preset, 0.0))
+                .unwrap()
+                .1
+                .saturation
+        };
+        let neutral = saturation(Preset::Neutral);
+        let auto = saturation(Preset::Auto);
+        let punchy = saturation(Preset::Punchy);
+
+        assert_eq!(neutral, 1.00);
+        assert!(
+            neutral < auto && auto < punchy,
+            "neutral {neutral} < auto {auto} < punchy {punchy}"
+        );
+    }
+
+    #[test]
+    fn auto_fully_protects_the_brightest_highlight_channel() {
+        let (_, params) = analyze(
+            &graded_image(),
+            &AnalysisInputs::new(10_000, Preset::Auto, 0.0),
+        )
+        .unwrap();
+        assert_eq!(params.highlight_norm, 1.0);
     }
 }

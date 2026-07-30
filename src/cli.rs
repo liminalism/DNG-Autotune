@@ -1,3 +1,4 @@
+use crate::reference::ReferenceSource;
 use crate::types::{OutputFormat, Preset, RunOptions};
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
@@ -69,10 +70,21 @@ pub struct Cli {
     #[arg(long, value_name = "STRENGTH", default_value_t = 0.0)]
     pub local_white_balance: f32,
 
+    /// Full-resolution local tone adaptation strength, 0 to 1.
+    /// Off by default. This is memory intensive; use --jobs 1 for large files.
+    #[arg(
+        long,
+        value_name = "STRENGTH",
+        default_value_t = 0.0,
+        allow_hyphen_values = true
+    )]
+    pub local_tone: f32,
+
     /// Take the exposure target from the camera's own embedded preview, 0 to 1.
-    /// Off by default: it changes the exposure of every file that has a preview.
-    #[arg(long, value_name = "STRENGTH", default_value_t = 0.0)]
-    pub preview_exposure: f32,
+    /// Automatic when omitted: full strength on files carrying a real preview,
+    /// and inert on files carrying only a thumbnail. Pass 0 to disable it.
+    #[arg(long, value_name = "STRENGTH")]
+    pub preview_exposure: Option<f32>,
 
     /// Scan the inputs, write a pooled sensor-noise profile to this path, and
     /// stop. Writes no images and never touches the output directory.
@@ -94,6 +106,33 @@ pub struct Cli {
     /// Works with --dry-run, which is the fast way to survey a large batch.
     #[arg(long, value_name = "FILE")]
     pub summary: Option<PathBuf>,
+
+    /// Measure each render against the camera's own JPEG of the same capture
+    /// and report the difference. Pairs by filename stem with a JPEG sitting
+    /// next to the RAW. Measurement only: it never changes what is rendered.
+    #[arg(long)]
+    pub reference: bool,
+
+    /// Look for the camera JPEGs in DIR rather than next to each RAW.
+    /// Implies --reference.
+    #[arg(long, value_name = "DIR")]
+    pub reference_dir: Option<PathBuf>,
+
+    /// Multiply the automatic chroma-noise-reduction strength. 1.0 is the
+    /// automatic decision, which is inert on clean frames; 0 disables it.
+    #[arg(long, value_name = "SCALE", default_value_t = 1.0)]
+    pub chroma_denoise: f32,
+
+    /// Multiply the automatic output-sharpening amount. 1.0 is the automatic
+    /// decision, which fades out on noisy frames; 0 disables it.
+    #[arg(long, value_name = "SCALE", default_value_t = 1.0)]
+    pub sharpen: f32,
+
+    /// Multiply the preset's saturation. 1.0 leaves every preset exactly as
+    /// tuned; this exists so the chroma path can be swept against a corpus of
+    /// RAW+JPEG pairs, the way --exposure-bias offsets the automatic exposure.
+    #[arg(long, value_name = "FACTOR", default_value_t = 1.0)]
+    pub saturation_scale: f32,
 }
 
 impl Cli {
@@ -116,9 +155,39 @@ impl Cli {
             "--local-white-balance must be between 0 and 1"
         );
         ensure!(
-            self.preview_exposure.is_finite() && (0.0..=1.0).contains(&self.preview_exposure),
+            self.local_tone.is_finite() && (0.0..=1.0).contains(&self.local_tone),
+            "--local-tone must be between 0 and 1"
+        );
+        ensure!(
+            self.preview_exposure
+                .is_none_or(|value| value.is_finite() && (0.0..=1.0).contains(&value)),
             "--preview-exposure must be between 0 and 1"
         );
+        ensure!(
+            self.saturation_scale.is_finite() && (0.0..=4.0).contains(&self.saturation_scale),
+            "--saturation-scale must be between 0 and 4"
+        );
+        ensure!(
+            self.chroma_denoise.is_finite() && (0.0..=2.0).contains(&self.chroma_denoise),
+            "--chroma-denoise must be between 0 and 2"
+        );
+        ensure!(
+            self.sharpen.is_finite() && (0.0..=3.0).contains(&self.sharpen),
+            "--sharpen must be between 0 and 3"
+        );
+
+        let reference = match self.reference_dir {
+            Some(directory) => {
+                ensure!(
+                    directory.is_dir(),
+                    "--reference-dir is not a directory: {}",
+                    directory.display()
+                );
+                ReferenceSource::Directory(directory)
+            }
+            None if self.reference => ReferenceSource::Sibling,
+            None => ReferenceSource::Disabled,
+        };
 
         let output_dir = self.output;
 
@@ -151,12 +220,79 @@ impl Cli {
                 recursive: !self.no_recursive,
                 dry_run: self.dry_run,
                 local_white_balance: self.local_white_balance,
+                local_tone: self.local_tone,
                 preview_exposure: self.preview_exposure,
                 noise_scan: self.noise_scan,
                 noise_profile: self.noise_profile,
                 pool_noise: self.pool_noise,
                 summary_path: self.summary,
+                reference,
+                saturation_scale: self.saturation_scale,
+                chroma_denoise: self.chroma_denoise,
+                sharpen: self.sharpen,
             },
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn options_with_local_tone(value: &str) -> Result<(Vec<PathBuf>, RunOptions)> {
+        Cli::try_parse_from(["raw-autotune", ".", "--local-tone", value])
+            .unwrap()
+            .into_options()
+    }
+
+    #[test]
+    fn local_tone_accepts_the_closed_unit_interval() {
+        assert_eq!(options_with_local_tone("0").unwrap().1.local_tone, 0.0);
+        assert_eq!(options_with_local_tone("1").unwrap().1.local_tone, 1.0);
+    }
+
+    /// Omitting the flag has to be distinguishable from passing 0, or the
+    /// automatic decision could not be turned off.
+    #[test]
+    fn preview_exposure_is_automatic_when_omitted_and_zero_disables_it() {
+        let options = |arguments: &[&str]| {
+            Cli::try_parse_from(arguments)
+                .unwrap()
+                .into_options()
+                .unwrap()
+                .1
+                .preview_exposure
+        };
+        assert_eq!(options(&["raw-autotune", "."]), None);
+        assert_eq!(
+            options(&["raw-autotune", ".", "--preview-exposure", "0"]),
+            Some(0.0)
+        );
+        assert_eq!(
+            options(&["raw-autotune", ".", "--preview-exposure", "0.5"]),
+            Some(0.5)
+        );
+    }
+
+    /// Rejection may happen in clap or in `into_options` — a leading minus is
+    /// an unknown argument before it is ever an out-of-range float. What must
+    /// not happen is a bad strength reaching the controller.
+    #[test]
+    fn preview_exposure_still_rejects_out_of_range_values() {
+        for value in ["-0.01", "1.01", "NaN", "inf"] {
+            let accepted = Cli::try_parse_from(["raw-autotune", ".", "--preview-exposure", value])
+                .is_ok_and(|cli| cli.into_options().is_ok());
+            assert!(!accepted, "{value} was accepted");
+        }
+    }
+
+    #[test]
+    fn local_tone_rejects_out_of_range_and_non_finite_values() {
+        for value in ["-0.01", "1.01", "NaN", "inf"] {
+            assert!(
+                options_with_local_tone(value).is_err(),
+                "{value} was accepted"
+            );
+        }
     }
 }

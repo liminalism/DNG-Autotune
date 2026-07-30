@@ -133,6 +133,44 @@ Metrics named but not implemented, worth considering:
   More general than what we need today, but it is the formal grounding under
   the LIP results above.
 
+## zhangfeng2015 — local tone mapping (implemented in 0.1.11, partially)
+
+The paper reproduces Reinhard's local photographic operator before combining
+its result with a global render through curvelet fusion. The OCR/LaTeX copy has
+several damaged equations; the page image in `research/zhangfeng.png` and the
+standard Reinhard form resolve them:
+
+```text
+Lbar = exp((1/N) * sum(log(delta + Lw)))
+L    = (a / Lbar) * Lw
+V    = abs(V1(s_i) - V1(s_i+1))
+       / (2^phi * a / s_i^2 + V1(s_i))
+V1   = L convolved with Gaussian(s_i)
+```
+
+`src/localtone.rs` implements that log-average normalization and adjacent-scale
+contrast test with `a=0.18`, `phi=8`, epsilon 0.05, and nine scales separated
+by 1.6. A three-box Gaussian approximation makes the full-resolution pyramid
+linear-time and deterministic.
+
+The implementation intentionally stops before two parts of the paper:
+
+1. It does not use `L/(1+V1)` as the final image. The existing global renderer
+   already handles dynamic-range compression and saturated highlights well.
+   The selected surround instead produces a bounded EV dodge/burn field, so
+   one hue-preserving RGB gain still feeds the established tone curve.
+2. It does not implement curvelet fusion. That stage is complex, costly, and
+   insufficiently specified for a defensible first pass; it would also mix two
+   complete rendered images when this project needs an auditable strength
+   control.
+
+Additional safeguards are project-specific: median anchoring prevents an
+overall exposure shift, a 0.15 EV dead band suppresses low-amplitude churn,
+corrections are capped at +1/-0.75 EV, shadow lift fades below the measured
+sensor noise floor, and small bright details are not lifted with a dark
+surround. This is Gaussian rather than edge-aware local adaptation, so it stays
+opt-in until a wider scene corpus can expose halos and semantic failures.
+
 ## kronander2013 — sensor noise model (acted on, partially)
 
 The paper's subject, HDR assembly from multiple exposures or sensors, does not

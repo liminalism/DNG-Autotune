@@ -6,7 +6,6 @@
 - Add regression RAW samples that can be redistributed.
 - Preserve EXIF and embed an sRGB ICC profile.
 - Add clearer collision reporting and user-selectable output naming templates.
-- Add a machine-readable batch summary.
 - Add optional scene-linear EXR or floating-point TIFF output.
 - Profile memory on 12 MP, 24 MP, and 50 MP files.
 
@@ -27,11 +26,11 @@
 - Sequence consistency for bursts and time-adjacent photographs.
 - User-tunable policy file.
 
-## 0.4: local adaptation
+## 0.4: stronger local adaptation
 
-- Edge-aware log-luminance base/detail decomposition.
-- Controlled shadow lift and highlight compression masks.
-- Halo checks and strength limits.
+- Replace the 0.1.11 Gaussian first pass with an edge-aware log-luminance
+  base/detail decomposition.
+- Add corpus-driven halo checks beyond the existing synthetic edge tests.
 - Face/skin-safe detail treatment, initially through heuristics.
 
 ## Deferred ONNX analysis

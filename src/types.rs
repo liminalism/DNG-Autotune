@@ -4,6 +4,12 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 pub const MID_GRAY: f32 = 0.18;
+/// Schema shared by per-image sidecars and batch summaries.
+///
+/// 4 added `measured.mean_saturation` and the `reference` block.
+/// 5 added the `chroma_denoise` block.
+/// 6 added `chroma_denoise.guided` and the `sharpen` block.
+pub const REPORT_SCHEMA_VERSION: u32 = 6;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -56,11 +62,24 @@ pub struct RunOptions {
     pub recursive: bool,
     pub dry_run: bool,
     pub local_white_balance: f32,
-    pub preview_exposure: f32,
+    pub local_tone: f32,
+    /// `None` means the automatic decision: [`crate::preview::AUTO_STRENGTH`]
+    /// on files whose embedded preview is a real rendering, and nothing at all
+    /// on files that only carry a thumbnail, since `preview::read` rejects
+    /// those. `Some` is the user overriding that.
+    pub preview_exposure: Option<f32>,
     pub noise_scan: Option<PathBuf>,
     pub noise_profile: Option<PathBuf>,
     pub pool_noise: bool,
     pub summary_path: Option<PathBuf>,
+    /// Where to find the camera's own JPEG of each capture, for measurement.
+    pub reference: crate::reference::ReferenceSource,
+    /// Multiplier on the preset's saturation; 1.0 is the preset as tuned.
+    pub saturation_scale: f32,
+    /// Multiplier on the automatic chroma-denoise strength; 1.0 is automatic.
+    pub chroma_denoise: f32,
+    /// Multiplier on the automatic output-sharpening amount; 1.0 is automatic.
+    pub sharpen: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -201,6 +220,19 @@ pub struct Sidecar {
     pub local_white_balance: Option<crate::whitebalance::LocalWhiteBalance>,
     /// The camera's own rendering, when it was read and used as the target.
     pub preview: Option<crate::preview::PreviewOracle>,
+    /// Full-resolution local tone adaptation, when requested.
+    pub local_tone: Option<crate::localtone::LocalToneReport>,
+    /// Chroma noise reduction, when the frame was noisy enough to need it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
+    /// Output sharpening, when the frame was clean enough to take it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sharpen: Option<crate::sharpen::SharpenReport>,
+    /// The camera's own JPEG of this capture, measured and differenced against
+    /// our own rendering. Present only when `--reference` asked for it and a
+    /// paired file was found.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<crate::reference::ReferenceReport>,
     pub analysis: AnalysisStats,
     pub parameters: ToneParams,
     pub limitations: Vec<String>,
@@ -264,6 +296,13 @@ pub struct ProcessReport {
     pub shot: Option<crate::shotinfo::ShotInfo>,
     /// The camera's own rendering, when it was read and used.
     pub preview: Option<crate::preview::PreviewOracle>,
+    pub local_tone: Option<crate::localtone::LocalToneReport>,
+    /// Chroma noise reduction, when one was applied.
+    pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
+    /// Output sharpening, when one was applied.
+    pub sharpen: Option<crate::sharpen::SharpenReport>,
+    /// The camera's own JPEG of this capture, measured against ours.
+    pub reference: Option<crate::reference::ReferenceReport>,
 }
 
 /// One row of the batch summary.
@@ -290,6 +329,14 @@ pub struct SummaryEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preview: Option<crate::preview::PreviewOracle>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub local_tone: Option<crate::localtone::LocalToneReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sharpen: Option<crate::sharpen::SharpenReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference: Option<crate::reference::ReferenceReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
 
@@ -312,8 +359,19 @@ pub struct BatchSummary {
     pub colourfulness: Option<Distribution>,
     /// Distribution of per-file `near_white_fraction`.
     pub near_white_fraction: Option<Distribution>,
+    pub luminance_entropy: Option<Distribution>,
+    pub average_gradient: Option<Distribution>,
     /// Distribution of the per-file SNR=10 crossing, in scene EV.
     pub snr10_ev: Option<Distribution>,
+    /// How many files `--reference` managed to pair with a camera JPEG.
+    pub reference_pairs: usize,
+    /// Ours minus the camera's, over the paired files. The exposure difference
+    /// is measured even under `--dry-run`; the rest needs a render.
+    pub reference_subject_ev_delta: Option<Distribution>,
+    pub reference_colourfulness_delta: Option<Distribution>,
+    pub reference_mean_level_delta: Option<Distribution>,
+    /// Our saturation divided by the camera's; 1.0 is a match.
+    pub reference_saturation_ratio: Option<Distribution>,
     /// Group key to frame count, for runs that pooled noise.
     pub pooled_groups: BTreeMap<String, usize>,
     pub files: Vec<SummaryEntry>,

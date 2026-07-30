@@ -55,13 +55,40 @@ const COMPRESSION_NONE: u32 = 1;
 const COMPRESSION_OLD_JPEG: u32 = 6;
 const COMPRESSION_JPEG: u32 = 7;
 
+/// Strength used when the caller has no opinion, i.e. the automatic decision.
+///
+/// Full strength, not a blend. Measured against 21 RAW+JPEG pairs whose files
+/// carry a real preview, the oracle at 1.0 places the subject within 0.12 EV of
+/// the camera's own JPEG on every one of them (mean 0.02 EV); at 0.5 it covers
+/// only half the error, and no frame was better at 0.5 than at 1.0. There is no
+/// evidence for a partial adoption, so the default does not invent one.
+pub const AUTO_STRENGTH: f32 = 1.0;
+
 /// Smallest preview worth measuring, in pixels.
 ///
-/// An absolute floor rather than a fraction of the raw: one test file offers only
-/// a 256x191 thumbnail (48 896 pixels), which is 6% of its raw dimensions but is
-/// still the only rendering that camera provides. A fractional rule would reject
-/// it for no benefit.
-const MIN_PREVIEW_PIXELS: usize = 30_000;
+/// This separates a rendering the vendor meant to be looked at from an index
+/// thumbnail, and the two do not overlap in practice. Across every source here:
+///
+/// ```text
+/// Samsung Expert RAW   50.0, 24.5, 12.5, 10.0 Mpx   rendering
+/// Sony A7C ARW                          1.745 Mpx   rendering
+/// ProShot                               0.049 Mpx   thumbnail (256x191)
+/// ```
+///
+/// 250 000 pixels, about 640x400, sits five times above the largest thumbnail
+/// and seven times below the smallest real preview — inside a 35x gap rather
+/// than fitted to either edge of it.
+///
+/// It was 30 000 until 0.1.13, which admitted ProShot's thumbnail. That looked
+/// harmless — "it is still the only rendering that camera provides" — but the
+/// pairs showed it is not a rendering at all: steering exposure by it made the
+/// median error *worse* on 21 ProShot pairs, while a real preview cut the error
+/// to near zero. Being deliberately blind to a thumbnail is the whole point.
+///
+/// An absolute floor rather than a fraction of the raw, because what is being
+/// asked is "was this meant to be viewed", which is a question about the image,
+/// not about its ratio to the sensor.
+const MIN_PREVIEW_PIXELS: usize = 250_000;
 /// Largest preview accepted, as a guard against a corrupt directory asking for a
 /// huge allocation.
 const MAX_PREVIEW_PIXELS: usize = 80_000_000;
@@ -206,8 +233,26 @@ fn candidate_from(ifd: &IFD) -> Option<Candidate> {
     })
 }
 
-/// Reduce a decoded RGB8 preview to display-EV statistics.
-fn measure(rgb: &image::RgbImage) -> Option<PreviewOracle> {
+/// Display-EV statistics of an 8-bit rendering, before any judgement about
+/// whether it is fit to steer exposure.
+///
+/// Split out of [`measure`] so [`crate::reference`] can measure a camera JPEG
+/// sitting next to the RAW with the *same* estimator the oracle uses. A
+/// comparison between two subject brightnesses only means something if both
+/// were measured the same way.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DisplayEv {
+    pub subject_ev: f32,
+    pub p05_ev: f32,
+    pub p50_ev: f32,
+    pub p95_ev: f32,
+    pub sampled_pixels: usize,
+    /// Fraction of samples pinned at pure black or pure white.
+    pub degenerate_fraction: f32,
+}
+
+/// Reduce a decoded RGB8 rendering to display-EV statistics.
+pub(crate) fn display_ev(rgb: &image::RgbImage) -> Option<DisplayEv> {
     let (width, height) = (rgb.width() as usize, rgb.height() as usize);
     let total = width.saturating_mul(height);
     if total == 0 {
@@ -260,9 +305,7 @@ fn measure(rgb: &image::RgbImage) -> Option<PreviewOracle> {
     if values.len() < 64 {
         return None;
     }
-    if degenerate as f32 / values.len() as f32 > MAX_DEGENERATE_FRACTION {
-        return None;
-    }
+    let degenerate_fraction = degenerate as f32 / values.len() as f32;
 
     values.sort_unstable_by(f32::total_cmp);
     centre.sort_unstable_by(f32::total_cmp);
@@ -278,9 +321,6 @@ fn measure(rgb: &image::RgbImage) -> Option<PreviewOracle> {
     let p05 = quantile(&values, 0.05);
     let p50 = quantile(&values, 0.50);
     let p95 = quantile(&values, 0.95);
-    if p95 - p05 < MIN_PREVIEW_RANGE_EV {
-        return None;
-    }
 
     let centre_median = if centre.is_empty() {
         p50
@@ -291,15 +331,36 @@ fn measure(rgb: &image::RgbImage) -> Option<PreviewOracle> {
     // The controller compares `target - subject_ev`, so the oracle has to be
     // measured with the *same* estimator. A plain median against a centre-weighted
     // subject would systematically double-count a centred bright subject.
+    Some(DisplayEv {
+        subject_ev: 0.60 * centre_median + 0.40 * p50,
+        p05_ev: p05,
+        p50_ev: p50,
+        p95_ev: p95,
+        sampled_pixels: values.len(),
+        degenerate_fraction,
+    })
+}
+
+/// Reduce a decoded RGB8 preview to the statistics the controller needs, or
+/// reject it as unfit to steer exposure.
+fn measure(rgb: &image::RgbImage) -> Option<PreviewOracle> {
+    let stats = display_ev(rgb)?;
+    if stats.degenerate_fraction > MAX_DEGENERATE_FRACTION {
+        return None;
+    }
+    if stats.p95_ev - stats.p05_ev < MIN_PREVIEW_RANGE_EV {
+        return None;
+    }
+
     Some(PreviewOracle {
         width: rgb.width(),
         height: rgb.height(),
         source: PreviewSource::JpegStrip, // replaced by the caller
-        subject_display_ev: 0.60 * centre_median + 0.40 * p50,
-        p05_display_ev: p05,
-        p50_display_ev: p50,
-        p95_display_ev: p95,
-        sampled_pixels: values.len(),
+        subject_display_ev: stats.subject_ev,
+        p05_display_ev: stats.p05_ev,
+        p50_display_ev: stats.p50_ev,
+        p95_display_ev: stats.p95_ev,
+        sampled_pixels: stats.sampled_pixels,
     })
 }
 
@@ -448,5 +509,30 @@ mod tests {
     #[test]
     fn missing_files_do_not_panic() {
         assert!(read(Path::new("no-such-file.ARW")).is_none());
+    }
+
+    /// The floor decides which files the automatic oracle acts on, so it is a
+    /// policy value, not an implementation detail. It has to stay inside the
+    /// gap between the largest thumbnail and the smallest real preview in the
+    /// corpus; anything outside it either steers exposure by a thumbnail or
+    /// throws away a usable rendering.
+    #[test]
+    fn the_preview_floor_separates_renderings_from_thumbnails() {
+        let largest_thumbnail = 256 * 192; // ProShot
+        let smallest_rendering = 1616 * 1080; // Sony A7C
+        assert!(
+            MIN_PREVIEW_PIXELS > largest_thumbnail,
+            "{MIN_PREVIEW_PIXELS} would admit a {largest_thumbnail}-pixel thumbnail"
+        );
+        assert!(
+            MIN_PREVIEW_PIXELS < smallest_rendering,
+            "{MIN_PREVIEW_PIXELS} would reject a {smallest_rendering}-pixel preview"
+        );
+    }
+
+    /// Full strength is the measured default; a partial one would be invented.
+    #[test]
+    fn the_automatic_strength_is_full() {
+        assert_eq!(AUTO_STRENGTH, 1.0);
     }
 }

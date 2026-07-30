@@ -134,16 +134,52 @@ fn process_job_inner(
             noise_floor: None,
             shot: None,
             preview: None,
+            local_tone: None,
+            chroma_denoise: None,
+            sharpen: None,
+            reference: None,
         });
     }
 
     eprintln!("PROCESS {}", job.input.display());
 
+    // Read and reduce before the raw decode, for the same reason the preview is
+    // read here: a 50-megapixel phone JPEG decodes to 150 MB, and holding that
+    // alongside the developer's own peak would double the high-water mark for
+    // no reason. Measurement only — nothing below this point renders differently
+    // because a reference was found.
+    let mut reference = options
+        .reference
+        .locate(&job.input)
+        .and_then(|path| crate::reference::read(&path));
+    if let Some(report) = &reference {
+        eprintln!(
+            "REF   {}: {} | {}x{} | subject {:+.2} EV | saturation {:.3} | colourfulness {:.1}",
+            job.input.display(),
+            report.path,
+            report.width,
+            report.height,
+            report.subject_display_ev,
+            report.measured.mean_saturation,
+            report.measured.colourfulness,
+        );
+    } else if options.reference.is_enabled() {
+        eprintln!("REF   {}: no paired camera JPEG", job.input.display());
+    }
+
+    // Since 0.1.13 the oracle is on by default, and the decision of whether it
+    // applies is made by `preview::read`: it returns nothing for a file whose
+    // only embedded image is a thumbnail, which is what makes "automatic" safe
+    // without the program having to recognise camera models.
+    let preview_strength = options
+        .preview_exposure
+        .unwrap_or(crate::preview::AUTO_STRENGTH);
+
     // Read before decoding the raw, and reduce to a handful of floats
     // immediately: peak memory then becomes the larger of the two stages rather
     // than their sum. A full-size preview decodes to about 150 MB, which is well
     // under rawler's own develop peak, so this costs nothing at the peak.
-    let preview = (options.preview_exposure > 0.0)
+    let preview = (preview_strength > 0.0)
         .then(|| crate::preview::read(&job.input))
         .flatten();
     if let Some(oracle) = &preview {
@@ -248,6 +284,27 @@ fn process_job_inner(
 
     let mut linear = orientation::apply_orientation(linear, source_orientation);
 
+    // Before the colour work below and before analysis, because chroma noise is
+    // colour as far as every later stage is concerned: it inflates the analyser's
+    // mean chroma, it is what the saturation boost multiplies, and it is what a
+    // multi-illuminant estimate would try to fit a light to.
+    let chroma_denoise = crate::chroma::apply(
+        &mut linear,
+        noise_floor.as_ref().map(|floor| floor.snr10_ev),
+        options.chroma_denoise,
+    );
+    if let Some(report) = &chroma_denoise {
+        eprintln!(
+            "CHROMA {}: strength {:.2} | radius {} px | SNR=10 at {:+.2} EV | chroma {:.5} -> {:.5}",
+            job.input.display(),
+            report.strength,
+            report.radius,
+            report.snr10_ev,
+            report.mean_chroma_before,
+            report.mean_chroma_after,
+        );
+    }
+
     // Applied to developed scene-linear RGB, on top of the camera's as-shot
     // white balance: this corrects the residual local cast that a single
     // global illuminant cannot.
@@ -269,7 +326,7 @@ fn process_job_inner(
     }
     let linear = linear;
 
-    let (analysis, parameters) = analyze::analyze(
+    let (analysis, mut parameters) = analyze::analyze(
         &linear,
         &analyze::AnalysisInputs {
             max_samples: options.max_samples,
@@ -277,9 +334,55 @@ fn process_job_inner(
             exposure_bias_ev: options.exposure_bias_ev,
             noise_floor_ev: noise_floor.as_ref().map(|floor| floor.snr1_ev),
             preview: preview.as_ref(),
-            preview_strength: options.preview_exposure,
+            preview_strength,
         },
     )?;
+
+    // Applied after the curve is solved rather than inside `derive_params`,
+    // because saturation is the one tone parameter nothing else is derived
+    // from: no exponent, no black point and no oracle inversion depends on it.
+    // At the default 1.0 the multiplication is exact, so output does not move.
+    parameters.saturation *= options.saturation_scale;
+    let parameters = parameters;
+
+    // The comparison the corpus work actually runs on. Available here, before
+    // anything is rendered, because the controller's target and the curve it
+    // will be mapped through are both already decided.
+    if let Some(report) = &mut reference {
+        report.compare(
+            crate::reference::predicted_subject_display_ev(analysis.target_median_ev, &parameters),
+            None,
+        );
+        eprintln!(
+            "REF   {}: subject {:+.2} EV vs camera {:+.2} EV ({:+.2})",
+            job.input.display(),
+            report.subject_display_ev + report.delta.subject_display_ev,
+            report.subject_display_ev,
+            report.delta.subject_display_ev,
+        );
+    }
+
+    let local_tone = if options.local_tone > 0.0 {
+        let map = crate::localtone::build(
+            &linear,
+            options.local_tone,
+            noise_floor.as_ref().map(|floor| floor.snr1_ev),
+        )?;
+        let report = map.report();
+        eprintln!(
+            "LOCAL {}: strength {:.2} | correction {:+.2}..{:+.2} EV | lift {:.1}% compress {:.1}%",
+            job.input.display(),
+            report.strength,
+            report.correction_min_ev,
+            report.correction_max_ev,
+            report.shadow_lift_fraction * 100.0,
+            report.highlight_compression_fraction * 100.0,
+        );
+        Some(map)
+    } else {
+        None
+    };
+    let local_tone_report = local_tone.as_ref().map(|map| map.report().clone());
 
     if options.dry_run {
         return Ok(ProcessReport {
@@ -299,12 +402,51 @@ fn process_job_inner(
             noise_floor: noise_floor.clone(),
             shot: shot.clone(),
             preview: preview.clone(),
+            local_tone: local_tone_report,
+            chroma_denoise,
+            sharpen: None,
+            reference,
         });
     }
 
-    let rendered = tone::render(&linear, &parameters);
+    let mut rendered = tone::render(&linear, &parameters, local_tone.as_ref());
+
+    // After the view transform, because acutance is a property of the displayed
+    // image, and before measurement, because the sharpened render is the output.
+    let sharpen = crate::sharpen::apply(
+        &mut rendered,
+        noise_floor.as_ref().map(|floor| floor.snr10_ev),
+        options.sharpen,
+    );
+    if let Some(report) = &sharpen {
+        eprintln!(
+            "SHARP {}: amount {:.2} | radius {} px | mean correction {:.5} | headroom-limited {:.3}%",
+            job.input.display(),
+            report.amount,
+            report.radius,
+            report.mean_correction,
+            report.headroom_limited_fraction * 100.0,
+        );
+    }
+    let rendered = rendered;
+
     // Measure before handing the buffer to the encoder, which consumes it.
     let output_stats = crate::metrics::OutputStats::measure(&rendered);
+    if let Some(report) = &mut reference {
+        report.compare(
+            crate::reference::predicted_subject_display_ev(analysis.target_median_ev, &parameters),
+            Some(&output_stats),
+        );
+        eprintln!(
+            "REF   {}: saturation {:.3} vs {:.3} (x{:.3}) | colourfulness {:+.1} | level {:+.1}",
+            job.input.display(),
+            output_stats.mean_saturation,
+            report.measured.mean_saturation,
+            report.delta.saturation_ratio.unwrap_or(f32::NAN),
+            report.delta.colourfulness.unwrap_or(f32::NAN),
+            report.delta.mean_level.unwrap_or(f32::NAN),
+        );
+    }
     output::save_image(&paths.image, rendered, options.format, options.jpeg_quality)?;
 
     if options.emit_baseline && (options.overwrite || !paths.baseline.exists()) {
@@ -319,7 +461,7 @@ fn process_job_inner(
 
     if options.write_sidecar {
         let sidecar = Sidecar {
-            schema_version: 1,
+            schema_version: crate::types::REPORT_SCHEMA_VERSION,
             application: "raw-autotune".to_string(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             input: job.input.to_string_lossy().into_owned(),
@@ -335,7 +477,11 @@ fn process_job_inner(
             noise_floor: noise_floor.clone(),
             shot: shot.clone(),
             local_white_balance: local_white_balance.clone(),
+            local_tone: local_tone_report.clone(),
+            chroma_denoise: chroma_denoise.clone(),
+            sharpen: sharpen.clone(),
             preview: preview.clone(),
+            reference: reference.clone(),
             analysis: analysis.clone(),
             parameters: parameters.clone(),
             limitations: vec![
@@ -367,6 +513,10 @@ fn process_job_inner(
         noise_floor,
         shot,
         preview,
+        local_tone: local_tone_report,
+        chroma_denoise,
+        sharpen,
+        reference,
     })
 }
 

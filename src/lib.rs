@@ -7,10 +7,12 @@
 //! actually uses.
 
 pub mod analyze;
+pub mod chroma;
 pub mod cli;
 pub mod files;
 pub mod levels;
 pub mod ljpeg;
+pub mod localtone;
 pub mod metrics;
 pub mod noise;
 pub mod noiseprofile;
@@ -19,6 +21,8 @@ pub mod output;
 pub mod pipeline;
 pub mod preview;
 pub mod redecode;
+pub mod reference;
+pub mod sharpen;
 pub mod shotinfo;
 pub mod tone;
 pub mod types;

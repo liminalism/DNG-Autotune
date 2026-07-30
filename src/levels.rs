@@ -49,7 +49,7 @@ fn collapse_black_levels(levels: &[f32], components: usize) -> Vec<f32> {
     // component's samples are every `pattern_cpp`-th entry. When the stored cpp
     // does not divide evenly into the image cpp, fall back to a flat average so
     // the result is still a defensible single level rather than a mislabeled one.
-    if levels.len() % components != 0 {
+    if !levels.len().is_multiple_of(components) {
         let mean = levels.iter().sum::<f32>() / levels.len() as f32;
         return vec![mean; components];
     }

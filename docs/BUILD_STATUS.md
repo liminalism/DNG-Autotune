@@ -2,6 +2,18 @@
 
 ## Verified
 
+Built, tested, linted, and batch-rendered on Linux with Rust 1.94.1
+(`x86_64-unknown-linux-gnu`) on 2026-07-28:
+
+```text
+cargo test --release                       # 83 passed
+cargo clippy --all-targets --release       # no warnings
+cargo fmt --check                          # clean
+cargo build --release                      # clean
+Sony A7C ARW auto-preset sweep             # 774/774 renders
+local-tone 268-file maximum-strength pass  # 268/268; 2.05 GiB peak RSS
+```
+
 Built and tested on Windows 11 with the pinned toolchain (Rust 1.89.0,
 `x86_64-pc-windows-msvc`):
 
@@ -56,7 +68,7 @@ any raw-autotune processing. It deliberately does *not* apply the repair in
 
 ## Not verified
 
-- Linux and macOS builds.
+- macOS builds.
 - Cameras other than the two Samsung models in the test batch.
 - Tiled lossless JPEG reassembly in `src/redecode.rs`: the code path exists and
   derives its geometry from `TileWidth`/`TileLength`, but every test file was

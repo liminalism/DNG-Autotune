@@ -1,0 +1,203 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{hyperref}
+\geometry{margin=1in}
+
+\begin{document}
+
+\title{Fusion of Global and Local Tone Mapping for High-Dynamic Range Images}
+\author{ZHANG Feng, LIU Ying, WU Shiqian, LIU Weihua}
+\date{}
+\maketitle
+
+\noindent School of Communication and Information Engineering, Xi'an University of Posts and Telecommunications, Xi'an 710121, China\\
+Email: fz0056@126.com
+
+\begin{abstract}
+High dynamic range (HDR) images, when displayed on ordinary dynamic range devices, have weakened visual effect. To relieve this problem, this paper proposes a new method which combines global and local tone mapping together, to produce HDR images with better visual effect. The first step is to convert a HDR image to ordinary dynamic range using either global mapping or local mapping, depending on the mean intensity of the image. Then, Curvelet transform is applied to the mapped result to obtain a set of transform coefficients which are fused. Finally, taking advantages of both global and local mapping methods, a high-quality image is obtained. Experimental results show that the processed method provides images with more details and better visual effect, compared with other mapping methods such as Reinhard tonal mapping.
+\end{abstract}
+
+\textbf{Keywords:} High dynamic range images, Global-based tone mapping, Local-based tone mapping, Curvelet transform.
+
+\section{Introduction}
+
+High dynamic range (HDR) imaging can show the actual dynamic range of natural scenes, which could generally meet nine orders of magnitude [1], and has a lot of details, realistic environment, and clear feeling. But the current display device only has two orders of magnitude, which belongs to the low dynamic range device, and cannot fully display the content of HDR images.
+
+If we want to display HDR images on a monitor or printer, we need tone mapping or tonal reconstruction. In essence, it is a tonal compression process, that is to say, it can retain image details and high quality information such as contrast and saturation while compressing the contrast ratio of HDR images.
+
+Literature [2] summarizes various HDR tone mapping algorithms. In literature [3], tone mapping was introduced to computer graphics. In literature [4], Reinhard proposed a tone mapping method based on photography in 2002; however, local tone mapping may produce halo phenomena when brightness points vary widely in the area. In literature [5], Kirk proposed a tone compression method based on visual perception against low-light scenarios. In literature [6], a global mapping method consistent with the human visual model was proposed, which can enhance local contrast and showed good properties in human perception and psychology. In literature [7], an HDR image visualization algorithm based on the iCAM framework was proposed, but it may lead to halo because of the spatial variability of iCAM. In literature [8], Kuang proposed a new local algorithm based on hierarchical image color appearance model and bilateral filtering technology. However, they considered the absolute change color of each pixel, without considering relative change between pixels, although human eyes are sensitive to relative change. In addition, bilateral filtering has detail reproduction defects. The above algorithms perform better only for one part of HDR images, either global or local.
+
+To obtain LDR images with high quality, this paper combines the advantages and disadvantages of global and local algorithms. The first step is to map the HDR image in both global and local methods by Reinhard algorithm respectively. Then Curvelet transform is performed on the result image. Because the global results are good in overall visual effect but poor in local contrast, while local results can keep good details but are complex and have many parameters, we extract the global low-frequency information as low frequency, and extract high frequency of the local and global information, then fuse them as high frequency, and reconstruct the image after combination.
+
+\section{Global tone mapping}
+
+In the global algorithm, the brightness of the image pixel logarithmic mean is the key to the image scene. First, we calculate the logarithmic mean of the whole image brightness:
+\begin{equation}
+L_W = \exp\left(\frac{1}{N}\sum_{x,y}\log\left(\delta + L(x,y)\right)\right)
+\end{equation}
+where $N$ is the total number of image pixels, $L(x,y)$ is the pixel value at position $(x,y)$, and $\delta$ is a small positive number used to avoid $\log 0$.
+
+Average pixel brightness is mapped to a key scene value:
+\begin{equation}
+L_d(x,y)=a\frac{L_W}{L(x,y)}
+\end{equation}
+where $a$ is an adjustable parameter in global tone mapping. Its value can be from 0 to 1. Experiments show that if the image is a normal brightness scene, $a=0.18$ is usually used, but if the image is a high brightness scene, it needs to be reduced below 0.18. Conversely, we need to increase the value of $a$, so it is called the proportionality constant of brightness.
+
+Formula (3) maps $L(x,y)$ to:
+\begin{equation}
+L_d(x,y)=\frac{L(x,y)}{1+L(x,y)}
+\end{equation}
+
+The above formula can be extended as a controlled function:
+\begin{equation}
+L_d(x,y)=\frac{L(x,y)\left(1+\frac{L(x,y)}{L_{\text{white}}^2}\right)}{1+L(x,y)}
+\end{equation}
+The default value of $L_{\text{white}}^2$ is $L_{\max}$, and good results can be obtained. Then index transform to (4) is expressed as:
+\begin{equation}
+L_{dr} = \rho(L_{\text{satu}})\,L_d(x,y)
+\end{equation}
+where $L_{\text{satu}}$ is an exponential transform parameter. The function of exponential transform is to extend high grayscale and compress low grayscale.
+
+\section{Local tone mapping}
+
+Reinhard proposed a shading-exposure local tone mapping algorithm to compress dynamic range [4]. Its basic idea is to find each pixel which does not exceed the threshold value around the contrast maximum surround field. It selects different $a$ according to its brightness of around-domain information.
+
+First, we need to find the target pixel radius of the surrounding domain:
+\begin{equation}
+H < V(x,y,s_{\max})
+\end{equation}
+When $s_{\max}$ gets the maximum value position $(x,y)$, the corresponding maximum brightness around-domain average pixel brightness is $V(x,y,s_{\max})$.
+
+The local mapping algorithm formula is:
+\begin{equation}
+L_d(x,y)=\frac{L(x,y)}{1+V(x,y,s_{\max})}
+\end{equation}
+
+\begin{equation}
+a_i=\frac{\left|V(x,y,s_i)-V(x,y,s_{i+1})\right|}{2^{i+1}}
+\end{equation}
+
+\begin{equation}
+V(x,y,s_i)=L(x,y)\circ G_i(h,v)
+\end{equation}
+where $M$ is a sharpening parameter in formula (8), which can enhance the edge detail contrast of the image. Experiments show that larger $M$ makes details clearer, and $M=8$ is best. If it is too large, halo appears. $G_i(h,v)$ is a Gaussian filter, where $h$ and $v$ are horizontal and vertical parameters, respectively. Finally, the compressed dynamic range is displayed using the exponential transform of equation (5).
+
+\section{Curvelet transform}
+
+E. J. Candes and D. L. Donoho proposed curvelet transform theory [9], which is the first generation curvelet. The first generation curvelet approximates curves by straight line blocks, then uses local ridgelets to analyze characteristics. In literature [10], the second generation curvelet was proposed. Fast curvelet transform algorithm is a simpler implementation.
+
+In literature [11], E. J. Candes proposed two fast discrete methods based on the second generation of curvelet transform: USFFT (Unequally-Spaced Fast Fourier Transform) and Wrapping (Wrapping of specially selected Fourier samples). For a 2D discrete signal $f(n_1,n_2)$, the definition of discrete curvelet transform is:
+\begin{equation}
+C(j,l,k)=\int \hat{f}(\omega)\,\hat{\psi}_{j,l,k}(\omega)\,d\omega
+\end{equation}
+Among them, $C(j,l,k)$ is the discrete curvelet transform, and $j,l,k$ are scale, direction, and displacement parameters, respectively. The support space of $\hat{\psi}_{j,l,k}$ is determined by the corresponding scale and direction, and $\hat{f}$ is the Fourier transform of discrete signal $f(n_1,n_2)$.
+
+\section{Fusion rule}
+
+The low frequency part adopts the coarse scales of the global image. The high frequency part adopts the weighted result. When the value of the corresponding fine scale varies widely, there may be noise, so the weights use 0.5 and 0.5. On the contrary, if global details are lost, the weights use 0.3 and 0.7. Therefore, it is necessary to make a threshold determination of the value. After many experiments, a threshold of 2000 is appropriate.
+
+\section{Experimental results}
+
+In this paper, five groups of HDR images were used, with significant differences in content and dynamic range. The experimental results analysis includes subjective evaluation and objective evaluation.
+
+\subsection{Subjective evaluation}
+
+It is easy to see from the experimental figures that details of local transformation are very good, but because there are many values close to or equal to zero in the dynamic range, the images are dark. The global transformation result has good visual perception, but the detail information is incomplete. The weighted average result is not clear enough. Curvelet fusion is a good combination between local transformation and global transformation.
+
+\subsection{Objective evaluation}
+
+The experiment uses image information entropy, image resolution, and peak signal-to-noise ratio as the image quality evaluation indices. The larger the entropy of the image, the greater the amount of information in the image.
+
+Information entropy formula is expressed as follows:
+\begin{equation}
+H=-\sum_{i=0}^{255} p_i \log(p_i)
+\end{equation}
+where $p_i$ is the probability of luminance equal to $i$ in an image.
+
+Image resolution can describe the tiny details of the image. We can use the average gradient method to measure:
+\begin{equation}
+\Lambda=\frac{1}{(R-1)(C-1)}\sum_{i=0}^{R-1}\sum_{j=0}^{C-1}
+\sqrt{\frac{(x_{i,j}-x_{i+1,j})^2+(x_{i,j}-x_{i,j+1})^2}{2}}
+\end{equation}
+where $x_{i,j}$ is the value of pixel of row $i$ and column $j$ in the image. $R$ and $C$ are the rows and columns of the image.
+
+Peak signal-to-noise ratio:
+\begin{equation}
+\text{PSNR}=10\log_{10}\left(\frac{MAX_I^2}{MSE}\right)
+=20\log_{10}\left(\frac{MAX_I}{\sqrt{MSE}}\right)
+\end{equation}
+where $MSE$ is the mean square error, and $MAX_I$ is the biggest value of image tone.
+
+\subsection{Objective results}
+
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+Image & Local & Global & Curvelet \\
+\hline
+Rosette & 3.7373 & 5.9565 & 7.5784 \\
+Memorial & 4.9379 & 7.7640 & 7.8059 \\
+Desk & 6.3138 & 7.4959 & 7.4884 \\
+Atrium & 6.5607 & 7.5666 & 7.4812 \\
+Window\_series & 4.2111 & 7.6172 & 7.6263 \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+Image & Local & Global & Curvelet \\
+\hline
+Rosette & 4.0067 & 5.9893 & 4.6633 \\
+Memorial & 2.7065 & 7.0396 & 5.3628 \\
+Desk & 7.4963 & 5.7064 & 6.0090 \\
+Atrium & 4.1003 & 6.0461 & 5.2329 \\
+Window\_series & 0.4369 & 1.8989 & 1.4472 \\
+\hline
+\end{tabular}
+\end{center}
+
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+Image & Local & Global & Curvelet \\
+\hline
+Rosette & 28.6376 & 32.2817 & 34.4595 \\
+Memorial & 30.5109 & 29.3408 & 31.6299 \\
+Desk & 25.6842 & 29.1404 & 29.4946 \\
+Atrium & 28.0478 & 27.5747 & 28.3621 \\
+Window\_series & 41.4244 & 39.2759 & 42.0204 \\
+\hline
+\end{tabular}
+\end{center}
+
+From Table 1, curvelet fusion has relatively balanced objective evaluation, and its subjective vision is very good. Table 1-1 shows that curvelet fusion has the largest value in most cases, and for the rest it is only slightly smaller than the maximum value. Table 1-2 shows that the value of $\Lambda$ for curvelet fusion is always between the maximum and minimum values. Table 1-3 shows that the PSNR of curvelet fusion is the largest.
+
+\section{Conclusion}
+
+In order to obtain a better effect, the Curvelet transform algorithm should be applied to the fusion reconstruction of mapping result, and then the coarse scale framework of the global algorithm part should be kept. The next work is to fuse the fine scale part of both global and local algorithms. Finally, the proposed method extracts partial algorithm information selectively. According to the experimental results, the image applying the new method keeps higher detail information and has a better visual effect.
+
+The algorithm can be applied in forensic cases or photography, and can also be used in other image processing procedures, such as image feature extraction and enhancement processing. The future work focuses on enhancing the existing algorithms and improving image quality.
+
+\section*{Acknowledgements}
+
+This work is supported by National Science Foundation of China (Grant No. 61202183, Grant No. 61371190), the international technology cooperation plan funded project in Shaanxi province, China (Grant No. 2013KW04-05, Grant No. 2014KW01-01), and Young Teacher Research Foundation of Xi'an University of Posts and Telecommunications (Grant No. ZL2013-04).
+
+\begin{thebibliography}{99}
+\bibitem{r1} Robertson M A, Borman S, Stevenson R L. Dynamic range improvement through multiple exposures[C]//Proc. of 1999 IEEE International Conference on Image Process. Kobe: IEEE, 1999:159--163.
+\bibitem{r2} WANG Zuo-sheng, ZOU Shao-fang, WANG Zhang-ye. Recent tone mapping techniques for high dynamic range images [J]. Computer application research, 2010, 27(7):2421--2424.
+\bibitem{r3} Tumblin J and Rushmeier H. Tone reproduction for realistic images [J]. IEEE Computer Graphics and Applications, 1993, 13(6):42--48.
+\bibitem{r4} Reinhard E, Stark M, Shirley P and Ferwerda J. Photographic tone reproduction for digital images [J]. ACM Trans. Graphics, 2002, 21(3):267--276.
+\bibitem{r5} Kirk A G, O'Brien. Perceptually based tone mapping for low-light conditions [J]. ACM Transactions on Graphics, 2011, 42:1--10.
+\bibitem{r6} Ferradans S, Bertalmio M, Provenzi E, et al. An analysis of visual adaptation and contrast perception for tone mapping [J]. Pattern Analysis and Machine Intelligence, 2011, 33(10):2002--2012.
+\bibitem{r7} Fairchild M D, Johnson G M. The iCAM framework for image appearance, difference and quality [J]. Journal of Electronic Imaging, 2004, 13(1):126--138.
+\bibitem{r8} Kuang J, Yamaguchi H, Liu C, Johnson G M, and Fairchild M D. Evaluating HDR rendering algorithms [J]. ACM Trans. Applied Perception, 2007, 4(9):1--27.
+\bibitem{r9} Candes E J. Monoscale Ridgelets for the Representation of Images with Edges [R]. Department of Statistics, Stanford University, Stanford, CA, 1999:1--26.
+\bibitem{r10} Donoho D L, Flesia A G. Digital Ridgelet Transform Based on True Ridge Functions [C]. In: Beyond Wavelets. Pittsburgh, PA, USA: Academic Press, 2002:1--33.
+\bibitem{r11} Candes E J, Demanet L, Donoho D L, et al. Fast Discrete Curvelet Transforms [R]. Applied and Computational Mathematics, California Institute of Technology, 2005:1--43.
+\end{thebibliography}
+
+\end{document}

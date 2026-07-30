@@ -1,6 +1,9 @@
-raw-autotune 0.1.0 source prototype package manifest
+raw-autotune 0.1.0 source prototype package manifest (legacy)
 Format: SHA256  bytes  relative-path
 PACKAGE_MANIFEST.txt is intentionally not self-hashed.
+
+This records the original 0.1.0 source archive only. It is not an integrity
+manifest for the current checkout or for 0.1.15 release packages.
 
 dce17670e1f8c3912b5e28b77a4b377d608a6e365abcb30d166d0f81791a4e75          95  .gitignore
 b0913b6a82343bd5704735d8b87c38d0d31a32673fc561eeb8e88857b1d3d2c7         612  CHANGELOG.md
