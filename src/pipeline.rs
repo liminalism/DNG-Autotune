@@ -1,15 +1,19 @@
 use crate::analyze;
+use crate::color::{ColorReport, RawColorPath};
 use crate::files;
 use crate::noiseprofile::{NoiseFloor, NoiseProfile};
 use crate::orientation;
 use crate::output;
 use crate::tone;
-use crate::types::{CameraMetadata, InputJob, LinearImage, ProcessReport, RunOptions, Sidecar};
+use crate::types::{
+    CameraMetadata, GuidanceMode, InputJob, LinearImage, ProcessReport, RunOptions, Sidecar,
+};
 use anyhow::{Context, Result, anyhow, bail};
 use rawler::RawImage;
 use rawler::imgop::develop::{Intermediate, ProcessingStep, RawDevelop};
 use std::any::Any;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::Path;
 use std::time::Instant;
 
 fn panic_text(payload: Box<dyn Any + Send>) -> String {
@@ -55,6 +59,10 @@ fn develop_linear(raw: &RawImage) -> Result<LinearImage> {
     // Rawler 0.7.2 exposes `RawDevelop` as a plain step list. `ProcessingStep::SRgb`
     // is deliberately omitted so this crate receives scene-linear RGB and applies its
     // own view transform and transfer function.
+    //
+    // `Calibrate` is still in the list here, clipping and all. That is what
+    // `--raw-color-path owned` exists to replace; this function is the control
+    // arm of the A/B and so must not move. See `crate::color`.
     let developer = RawDevelop {
         steps: vec![
             ProcessingStep::Rescale,
@@ -88,6 +96,123 @@ fn develop_linear(raw: &RawImage) -> Result<LinearImage> {
             bail!("Rawler returned an unsupported four-channel developed image")
         }
     }
+}
+
+/// Develop to scene-linear RGB through whichever colour path was asked for.
+fn develop(raw: &RawImage, options: &RunOptions) -> Result<(LinearImage, ColorReport)> {
+    match options.raw_color_path {
+        RawColorPath::Rawler => Ok((develop_linear(raw)?, ColorReport::rawler(raw))),
+        RawColorPath::Owned => crate::color::develop(
+            raw,
+            crate::color::DevelopOptions {
+                working_space: options.working_space,
+                sub_black: options.sub_black,
+            },
+        ),
+    }
+}
+
+/// Write one scene-linear intermediate out for inspection.
+///
+/// Deliberately rendered through [`tone::render_baseline`], which applies the
+/// transfer function and nothing else: a stage dump has to show what the data at
+/// that point actually contains, not what the tone controller would like to make
+/// of it. Values outside `[0, 1]` are therefore clipped *in the dump only* —
+/// which on the owned path is exactly the highlight information the Rawler path
+/// destroys for real, so comparing the two paths' `01-scene-linear` dumps shows
+/// the loss directly.
+///
+/// Best effort: a failed dump is reported and ignored, never allowed to fail the
+/// file it was diagnosing.
+fn dump_stage(
+    directory: &Path,
+    input: &Path,
+    stage: &str,
+    image: &LinearImage,
+    working_to_display: Option<&crate::color::Matrix3>,
+) {
+    let stem = input
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "unnamed".to_string());
+    let path = directory.join(format!("{stem}-{stage}.png"));
+
+    let write = || -> Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let rendered = tone::render_baseline(image, working_to_display);
+        rendered.save(&path)?;
+        Ok(())
+    };
+
+    match write() {
+        Ok(()) => eprintln!("DUMP  {}: {}", input.display(), path.display()),
+        Err(error) => eprintln!(
+            "DUMP  {}: could not write {}: {error}",
+            input.display(),
+            path.display()
+        ),
+    }
+}
+
+/// What this rendering is honestly not, recorded in every sidecar.
+///
+/// Conditional on the colour path since 0.1.17: the standing "no wide-gamut
+/// working space" caveat is simply false under `--raw-color-path owned
+/// --working-space rec2020`, and a limitations list that lies in one
+/// configuration is worse than none.
+fn limitations(options: &RunOptions) -> Vec<String> {
+    let mut limitations =
+        vec!["global analysis only; no face, subject, scene, or depth model".to_string()];
+
+    match options.raw_color_path {
+        RawColorPath::Rawler => limitations.push(
+            "uses Rawler's linear-sRGB calibration path, which clips out-of-gamut channels \
+             and rewrites every pixel above 1.0 before this program sees it"
+                .to_string(),
+        ),
+        RawColorPath::Owned => {
+            limitations.push(format!(
+                "owned colour path in {}; no ForwardMatrix, CameraCalibration, AnalogBalance, \
+                 dual-illuminant interpolation or chromatic adaptation transform",
+                options.working_space.as_str()
+            ));
+            // Conditional on the policy since 0.1.18: the rescale is this
+            // program's own now (`crate::rescale`), so attributing the clip to
+            // Rawler would be wrong, and asserting it happens at all would be
+            // false under `--sub-black preserve`.
+            if options.sub_black != crate::rescale::SubBlack::Preserve {
+                limitations.push(format!(
+                    "--sub-black {}: sensor samples below the black level are clipped to zero \
+                     before demosaic, which rectifies the noise floor and leaves a small \
+                     positive pedestal where the scene is black",
+                    options.sub_black.as_str()
+                ));
+            }
+        }
+    }
+
+    limitations.extend([
+        "no explicit lens correction or camera-specific DCP look table".to_string(),
+        "no dedicated highlight reconstruction; luma noise is not reduced".to_string(),
+    ]);
+
+    if options.write_metadata {
+        // The EXIF copy is not total, and the two gaps are worth naming rather
+        // than letting a reader assume the output is a full metadata clone.
+        limitations.extend([
+            "MakerNotes are not copied: vendor blobs contain absolute file offsets, \
+             so relocating them corrupts them"
+                .to_string(),
+            "PNG carries its EXIF in an eXIf chunk, which many readers — including \
+             Windows' own — ignore; JPEG and TIFF are read everywhere"
+                .to_string(),
+        ]);
+    } else {
+        limitations.push("--no-metadata: output carries no EXIF and no colour profile".to_string());
+    }
+    limitations
 }
 
 pub fn process_job(
@@ -138,6 +263,8 @@ fn process_job_inner(
             chroma_denoise: None,
             sharpen: None,
             reference: None,
+            color: None,
+            guidance_mode: None,
         });
     }
 
@@ -154,12 +281,12 @@ fn process_job_inner(
         .and_then(|path| crate::reference::read(&path));
     if let Some(report) = &reference {
         eprintln!(
-            "REF   {}: {} | {}x{} | subject {:+.2} EV | saturation {:.3} | colourfulness {:.1}",
+            "REF   {}: {} | {}x{} | key {:+.2} EV | saturation {:.3} | colourfulness {:.1}",
             job.input.display(),
             report.path,
             report.width,
             report.height,
-            report.subject_display_ev,
+            report.center_weighted_key_display_ev,
             report.measured.mean_saturation,
             report.measured.colourfulness,
         );
@@ -184,12 +311,12 @@ fn process_job_inner(
         .flatten();
     if let Some(oracle) = &preview {
         eprintln!(
-            "PREV  {}: {}x{} {:?} | subject {:+.2} EV",
+            "PREV  {}: {}x{} {:?} | key {:+.2} EV",
             job.input.display(),
             oracle.width,
             oracle.height,
             oracle.source,
-            oracle.subject_display_ev
+            oracle.center_weighted_key_display_ev
         );
     }
 
@@ -262,8 +389,38 @@ fn process_job_inner(
     };
     let source_orientation = raw.orientation;
 
-    let mut linear = develop_linear(&raw)?;
+    let (mut linear, color) = develop(&raw, options)?;
     drop(raw);
+
+    // `None` whenever the working space already has sRGB primaries, which is the
+    // default and every configuration shipped before 0.1.17 — so the render is
+    // byte-identical there. Rawler's `Calibrate` emits sRGB primaries regardless
+    // of what `--working-space` says, so converting its output would be a second,
+    // unearned transform.
+    let working_to_display = options
+        .working_space
+        .to_display()
+        .filter(|_| options.raw_color_path == RawColorPath::Owned);
+
+    eprintln!(
+        "COLOR {}: {} path | {} | illuminant {}{}",
+        job.input.display(),
+        color.path.as_str(),
+        color.working_space.as_str(),
+        color.illuminant,
+        match &color.clip_cost {
+            Some(cost) => format!(
+                " | rawler's clip would have moved {:.3}% of pixels ({:.3}% negative, \
+                 {:.3}% above 1.0), mean {:.5}, max {:.4}",
+                cost.altered_fraction * 100.0,
+                cost.negative_fraction * 100.0,
+                cost.above_one_fraction * 100.0,
+                cost.mean_abs_delta,
+                cost.max_abs_delta,
+            ),
+            None => String::new(),
+        }
+    );
 
     // DNG BaselineExposure is defined as an offset to the scene-linear data
     // before the default rendering. Applying it here, rather than folding it
@@ -283,6 +440,16 @@ fn process_job_inner(
     }
 
     let mut linear = orientation::apply_orientation(linear, source_orientation);
+
+    if let Some(directory) = &options.dump_stages {
+        dump_stage(
+            directory,
+            &job.input,
+            "01-scene-linear",
+            &linear,
+            working_to_display.as_ref(),
+        );
+    }
 
     // Before the colour work below and before analysis, because chroma noise is
     // colour as far as every later stage is concerned: it inflates the analyser's
@@ -305,6 +472,16 @@ fn process_job_inner(
         );
     }
 
+    if let Some(directory) = &options.dump_stages {
+        dump_stage(
+            directory,
+            &job.input,
+            "02-after-chroma",
+            &linear,
+            working_to_display.as_ref(),
+        );
+    }
+
     // Applied to developed scene-linear RGB, on top of the camera's as-shot
     // white balance: this corrects the residual local cast that a single
     // global illuminant cannot.
@@ -324,6 +501,17 @@ fn process_job_inner(
             }
         );
     }
+
+    if let Some(directory) = &options.dump_stages {
+        dump_stage(
+            directory,
+            &job.input,
+            "03-after-local-wb",
+            &linear,
+            working_to_display.as_ref(),
+        );
+    }
+
     let linear = linear;
 
     let (analysis, mut parameters) = analyze::analyze(
@@ -338,6 +526,15 @@ fn process_job_inner(
         },
     )?;
 
+    // Exactly the condition `analyze` itself uses to decide whether to invert
+    // the oracle's target through the curve, so the recorded mode cannot drift
+    // from the decision it describes.
+    let guidance_mode = if preview.is_some() && preview_strength > 0.0 {
+        GuidanceMode::PreviewGuided
+    } else {
+        GuidanceMode::Independent
+    };
+
     // Applied after the curve is solved rather than inside `derive_params`,
     // because saturation is the one tone parameter nothing else is derived
     // from: no exponent, no black point and no oracle inversion depends on it.
@@ -350,15 +547,18 @@ fn process_job_inner(
     // will be mapped through are both already decided.
     if let Some(report) = &mut reference {
         report.compare(
-            crate::reference::predicted_subject_display_ev(analysis.target_median_ev, &parameters),
+            crate::reference::predicted_center_weighted_key_display_ev(
+                analysis.target_median_ev,
+                &parameters,
+            ),
             None,
         );
         eprintln!(
-            "REF   {}: subject {:+.2} EV vs camera {:+.2} EV ({:+.2})",
+            "REF   {}: key {:+.2} EV vs camera {:+.2} EV ({:+.2})",
             job.input.display(),
-            report.subject_display_ev + report.delta.subject_display_ev,
-            report.subject_display_ev,
-            report.delta.subject_display_ev,
+            report.center_weighted_key_display_ev + report.delta.center_weighted_key_display_ev,
+            report.center_weighted_key_display_ev,
+            report.delta.center_weighted_key_display_ev,
         );
     }
 
@@ -406,10 +606,26 @@ fn process_job_inner(
             chroma_denoise,
             sharpen: None,
             reference,
+            color: Some(color),
+            guidance_mode: Some(guidance_mode),
         });
     }
 
-    let mut rendered = tone::render(&linear, &parameters, local_tone.as_ref());
+    // Read after the dry-run return: a dry run writes no file, so there is
+    // nothing to tag. `SourceMetadata::read` is best effort and never fails — a
+    // file whose EXIF cannot be parsed still gets Software, Orientation,
+    // ColorSpace and the ICC profile, which is what a library needs least
+    // wrongly.
+    let exif = options
+        .write_metadata
+        .then(|| crate::metadata::SourceMetadata::read(&job.input));
+
+    let mut rendered = tone::render(
+        &linear,
+        &parameters,
+        local_tone.as_ref(),
+        working_to_display.as_ref(),
+    );
 
     // After the view transform, because acutance is a property of the displayed
     // image, and before measurement, because the sharpened render is the output.
@@ -434,28 +650,60 @@ fn process_job_inner(
     let output_stats = crate::metrics::OutputStats::measure(&rendered);
     if let Some(report) = &mut reference {
         report.compare(
-            crate::reference::predicted_subject_display_ev(analysis.target_median_ev, &parameters),
+            crate::reference::predicted_center_weighted_key_display_ev(
+                analysis.target_median_ev,
+                &parameters,
+            ),
             Some(&output_stats),
         );
         eprintln!(
-            "REF   {}: saturation {:.3} vs {:.3} (x{:.3}) | colourfulness {:+.1} | level {:+.1}",
+            "REF   {}: saturation {:.3} vs {:.3} (x{:.3}) | highlight x{:.3} | colourfulness {:+.1} | level {:+.1}",
             job.input.display(),
             output_stats.mean_saturation,
             report.measured.mean_saturation,
             report.delta.saturation_ratio.unwrap_or(f32::NAN),
+            report.delta.highlight_saturation_ratio.unwrap_or(f32::NAN),
             report.delta.colourfulness.unwrap_or(f32::NAN),
             report.delta.mean_level.unwrap_or(f32::NAN),
         );
+
+        // The axis the 0.1.17 A/B was missing: whether our colour *is* the
+        // camera's colour, not merely as saturated. Declining is reported, never
+        // silently recorded as agreement.
+        match report.compare_pixels(&rendered) {
+            Ok(()) => {
+                if let Some(hue) = &report.delta.hue {
+                    eprintln!(
+                        "HUE   {}: median {:.2}\u{b0} | p90 {:.2}\u{b0} | max {:.2}\u{b0} | chroma x{:.3} | {} of {} grid px",
+                        job.input.display(),
+                        hue.median_degrees,
+                        hue.p90_degrees,
+                        hue.max_degrees,
+                        hue.chroma_ratio,
+                        hue.comparable_pixels,
+                        hue.grid_width * hue.grid_height,
+                    );
+                }
+            }
+            Err(reason) => eprintln!("HUE   {}: not compared, {reason}", job.input.display()),
+        }
     }
-    output::save_image(&paths.image, rendered, options.format, options.jpeg_quality)?;
+    output::save_image_with_metadata(
+        &paths.image,
+        rendered,
+        options.format,
+        options.jpeg_quality,
+        exif.as_ref(),
+    )?;
 
     if options.emit_baseline && (options.overwrite || !paths.baseline.exists()) {
-        let baseline = tone::render_baseline(&linear);
-        output::save_image(
+        let baseline = tone::render_baseline(&linear, working_to_display.as_ref());
+        output::save_image_with_metadata(
             &paths.baseline,
             baseline,
             options.format,
             options.jpeg_quality,
+            exif.as_ref(),
         )?;
     }
 
@@ -482,16 +730,12 @@ fn process_job_inner(
             sharpen: sharpen.clone(),
             preview: preview.clone(),
             reference: reference.clone(),
+            color: color.clone(),
+            guidance_mode,
+            controller_version: crate::types::CONTROLLER_VERSION.to_string(),
             analysis: analysis.clone(),
             parameters: parameters.clone(),
-            limitations: vec![
-                "global analysis only; no face, subject, scene, or depth model".to_string(),
-                "uses Rawler's linear-sRGB calibration path; no wide-gamut working space"
-                    .to_string(),
-                "no explicit lens correction or camera-specific DCP look table".to_string(),
-                "no dedicated highlight reconstruction or profiled denoising".to_string(),
-                "output metadata/EXIF is not copied in v0.1".to_string(),
-            ],
+            limitations: limitations(options),
         };
         output::save_sidecar(&paths.sidecar, &sidecar)?;
     }
@@ -517,6 +761,8 @@ fn process_job_inner(
         chroma_denoise,
         sharpen,
         reference,
+        color: Some(color),
+        guidance_mode: Some(guidance_mode),
     })
 }
 

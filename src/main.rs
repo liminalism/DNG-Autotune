@@ -9,6 +9,48 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
+/// Reference measures collected for one guidance mode, before they become
+/// distributions.
+///
+/// Exists so the independent and preview-guided halves of the scorecard are
+/// accumulated by identical code — a split whose two sides are computed
+/// differently would be worse than no split at all.
+#[derive(Default)]
+struct GuidanceAccumulator {
+    files: usize,
+    reference_pairs: usize,
+    center_weighted_key_ev: Vec<f32>,
+    saturation_ratio: Vec<f32>,
+    highlight_saturation_ratio: Vec<f32>,
+    colourfulness: Vec<f32>,
+    mean_level: Vec<f32>,
+    hue_median: Vec<f32>,
+    hue_p90: Vec<f32>,
+    hue_mean: Vec<f32>,
+}
+
+impl GuidanceAccumulator {
+    fn finish(self) -> types::GuidanceScorecard {
+        types::GuidanceScorecard {
+            files: self.files,
+            reference_pairs: self.reference_pairs,
+            center_weighted_key_ev_delta: types::Distribution::from_samples(
+                self.center_weighted_key_ev,
+            ),
+            saturation_ratio: types::Distribution::from_samples(self.saturation_ratio),
+            highlight_saturation_ratio: types::Distribution::from_samples(
+                self.highlight_saturation_ratio,
+            ),
+            colourfulness_delta: types::Distribution::from_samples(self.colourfulness),
+            mean_level_delta: types::Distribution::from_samples(self.mean_level),
+            hue_pairs: self.hue_median.len(),
+            hue_median_degrees: types::Distribution::from_samples(self.hue_median),
+            hue_p90_degrees: types::Distribution::from_samples(self.hue_p90),
+            hue_mean_degrees: types::Distribution::from_samples(self.hue_mean),
+        }
+    }
+}
+
 /// Run `work` over every job on `worker_count` threads, returning results in
 /// job order regardless of completion order.
 fn run_over_jobs<T, F>(jobs: &[types::InputJob], worker_count: usize, work: F) -> Vec<T>
@@ -144,10 +186,23 @@ fn run() -> Result<i32> {
     let mut snr10 = Vec::new();
     let mut pooled_groups: BTreeMap<String, usize> = BTreeMap::new();
     let mut reference_pairs = 0_usize;
-    let mut reference_subject_ev = Vec::new();
+    let mut reference_center_weighted_key_ev = Vec::new();
     let mut reference_colourfulness = Vec::new();
     let mut reference_mean_level = Vec::new();
     let mut reference_saturation_ratio = Vec::new();
+    let mut reference_highlight_saturation_ratio = Vec::new();
+    let mut reference_hue_median = Vec::new();
+    let mut reference_hue_p90 = Vec::new();
+    let mut reference_hue_mean = Vec::new();
+    let mut guidance_mode_counts: BTreeMap<String, usize> = BTreeMap::new();
+    // The split scorecard `docs/REVIEW-2026-07-30.md` asks for: the same
+    // reference measures accumulated separately per guidance mode, so a run can
+    // say whether the controller's own judgement improved without the answer
+    // being diluted by however many files happened to carry a usable preview.
+    let mut split: BTreeMap<&'static str, GuidanceAccumulator> = BTreeMap::new();
+    let mut clip_altered = Vec::new();
+    let mut clip_mean_abs_delta = Vec::new();
+    let mut nondeterministic_illuminant_files = 0_usize;
 
     for (job, result) in jobs.iter().zip(results) {
         match result {
@@ -172,6 +227,8 @@ fn run() -> Result<i32> {
                     chroma_denoise: report.chroma_denoise,
                     sharpen: report.sharpen,
                     reference: report.reference,
+                    color: report.color,
+                    guidance_mode: report.guidance_mode,
                     error: None,
                 });
             }
@@ -214,10 +271,55 @@ fn run() -> Result<i32> {
                 }
                 if let Some(reference) = &report.reference {
                     reference_pairs += 1;
-                    reference_subject_ev.push(reference.delta.subject_display_ev);
+                    reference_center_weighted_key_ev
+                        .push(reference.delta.center_weighted_key_display_ev);
                     reference_colourfulness.extend(reference.delta.colourfulness);
                     reference_mean_level.extend(reference.delta.mean_level);
                     reference_saturation_ratio.extend(reference.delta.saturation_ratio);
+                    reference_highlight_saturation_ratio
+                        .extend(reference.delta.highlight_saturation_ratio);
+                    if let Some(hue) = &reference.delta.hue {
+                        reference_hue_median.push(hue.median_degrees);
+                        reference_hue_p90.push(hue.p90_degrees);
+                        reference_hue_mean.push(hue.mean_degrees);
+                    }
+                }
+                if let Some(mode) = report.guidance_mode {
+                    *guidance_mode_counts
+                        .entry(mode.as_str().to_string())
+                        .or_default() += 1;
+                    let accumulator = split.entry(mode.as_str()).or_default();
+                    accumulator.files += 1;
+                    if let Some(reference) = &report.reference {
+                        accumulator.reference_pairs += 1;
+                        accumulator
+                            .center_weighted_key_ev
+                            .push(reference.delta.center_weighted_key_display_ev);
+                        accumulator
+                            .saturation_ratio
+                            .extend(reference.delta.saturation_ratio);
+                        accumulator
+                            .highlight_saturation_ratio
+                            .extend(reference.delta.highlight_saturation_ratio);
+                        accumulator
+                            .colourfulness
+                            .extend(reference.delta.colourfulness);
+                        accumulator.mean_level.extend(reference.delta.mean_level);
+                        if let Some(hue) = &reference.delta.hue {
+                            accumulator.hue_median.push(hue.median_degrees);
+                            accumulator.hue_p90.push(hue.p90_degrees);
+                            accumulator.hue_mean.push(hue.mean_degrees);
+                        }
+                    }
+                }
+                if let Some(color) = &report.color {
+                    if color.illuminant == "nondeterministic" {
+                        nondeterministic_illuminant_files += 1;
+                    }
+                    if let Some(cost) = &color.clip_cost {
+                        clip_altered.push(cost.altered_fraction);
+                        clip_mean_abs_delta.push(cost.mean_abs_delta);
+                    }
                 }
                 entries.push(types::SummaryEntry {
                     input: report.input.to_string_lossy().into_owned(),
@@ -241,6 +343,8 @@ fn run() -> Result<i32> {
                     chroma_denoise: report.chroma_denoise,
                     sharpen: report.sharpen,
                     reference: report.reference,
+                    color: report.color,
+                    guidance_mode: report.guidance_mode,
                     error: None,
                 });
             }
@@ -265,6 +369,8 @@ fn run() -> Result<i32> {
                     chroma_denoise: None,
                     sharpen: None,
                     reference: None,
+                    color: None,
+                    guidance_mode: None,
                     error: Some(format!("{error:#}")),
                 });
             }
@@ -276,20 +382,92 @@ fn run() -> Result<i32> {
         completed, skipped, failed
     );
 
-    if options.reference.is_enabled() {
-        let median =
-            |values: &[f32]| types::Distribution::from_samples(values.to_vec()).map(|d| d.median);
+    let median =
+        |values: &[f32]| types::Distribution::from_samples(values.to_vec()).map(|d| d.median);
+
+    if !guidance_mode_counts.is_empty() {
         println!(
-            "reference: {} of {} paired | median subject {:+.2} EV | saturation x{} | colourfulness {} | level {}",
+            "guidance: {}",
+            guidance_mode_counts
+                .iter()
+                .map(|(mode, count)| format!("{count} {mode}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    if options.reference.is_enabled() {
+        println!(
+            "reference: {} of {} paired | median key {:+.2} EV | saturation x{} | colourfulness {} | level {}",
             reference_pairs,
             completed,
-            median(&reference_subject_ev).unwrap_or(f32::NAN),
+            median(&reference_center_weighted_key_ev).unwrap_or(f32::NAN),
             median(&reference_saturation_ratio)
                 .map_or_else(|| "-".to_string(), |value| format!("{value:.3}")),
             median(&reference_colourfulness)
                 .map_or_else(|| "-".to_string(), |value| format!("{value:+.1}")),
             median(&reference_mean_level)
                 .map_or_else(|| "-".to_string(), |value| format!("{value:+.1}")),
+        );
+
+        // The split, printed even when one side is empty: an absent
+        // independent-Auto row is itself the finding that a run measured only
+        // the program's ability to follow the vendor.
+        for mode in [
+            types::GuidanceMode::Independent,
+            types::GuidanceMode::PreviewGuided,
+        ] {
+            let Some(accumulator) = split.get(mode.as_str()) else {
+                continue;
+            };
+            println!(
+                "  {:>15}: {} files, {} paired | median key {} EV | saturation x{}",
+                mode.as_str(),
+                accumulator.files,
+                accumulator.reference_pairs,
+                median(&accumulator.center_weighted_key_ev)
+                    .map_or_else(|| "-".to_string(), |value| format!("{value:+.2}")),
+                median(&accumulator.saturation_ratio)
+                    .map_or_else(|| "-".to_string(), |value| format!("{value:.3}")),
+            );
+        }
+
+        // The axis the 0.1.17 A/B lacked. Printed separately from the saturation
+        // rows because it answers a different question: not "as colourful as the
+        // camera" but "the same colour as the camera".
+        if !reference_hue_median.is_empty() {
+            println!(
+                "hue: {} of {} pairs comparable | median {}\u{b0} | p90 {}\u{b0} | mean {}\u{b0} | highlight saturation x{}",
+                reference_hue_median.len(),
+                reference_pairs,
+                median(&reference_hue_median)
+                    .map_or_else(|| "-".to_string(), |value| format!("{value:.2}")),
+                median(&reference_hue_p90)
+                    .map_or_else(|| "-".to_string(), |value| format!("{value:.2}")),
+                median(&reference_hue_mean)
+                    .map_or_else(|| "-".to_string(), |value| format!("{value:.2}")),
+                median(&reference_highlight_saturation_ratio)
+                    .map_or_else(|| "-".to_string(), |value| format!("{value:.3}")),
+            );
+        }
+    }
+
+    // The measurement the owned colour path exists to produce.
+    if !clip_altered.is_empty() {
+        println!(
+            "clip cost: rawler's Calibrate would have rewritten a median {:.3}% of pixels \
+             (max {:.3}%), median mean movement {:.5}",
+            median(&clip_altered).unwrap_or(f32::NAN) * 100.0,
+            clip_altered.iter().copied().fold(0.0_f32, f32::max) * 100.0,
+            median(&clip_mean_abs_delta).unwrap_or(f32::NAN),
+        );
+    }
+
+    if nondeterministic_illuminant_files > 0 {
+        println!(
+            "warning: {nondeterministic_illuminant_files} file(s) carry several calibration \
+             matrices and no D65 one, so rawler's Calibrate picks between them by HashMap order \
+             and does not develop them reproducibly. Use --raw-color-path owned for those files."
         );
     }
 
@@ -298,6 +476,9 @@ fn run() -> Result<i32> {
             schema_version: types::REPORT_SCHEMA_VERSION,
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             preset: options.preset,
+            controller_version: types::CONTROLLER_VERSION.to_string(),
+            raw_color_path: options.raw_color_path,
+            working_space: options.working_space,
             dry_run: options.dry_run,
             total: entries.len(),
             completed,
@@ -311,7 +492,9 @@ fn run() -> Result<i32> {
             average_gradient: types::Distribution::from_samples(average_gradient),
             snr10_ev: types::Distribution::from_samples(snr10),
             reference_pairs,
-            reference_subject_ev_delta: types::Distribution::from_samples(reference_subject_ev),
+            reference_center_weighted_key_ev_delta: types::Distribution::from_samples(
+                reference_center_weighted_key_ev,
+            ),
             reference_colourfulness_delta: types::Distribution::from_samples(
                 reference_colourfulness,
             ),
@@ -319,6 +502,25 @@ fn run() -> Result<i32> {
             reference_saturation_ratio: types::Distribution::from_samples(
                 reference_saturation_ratio,
             ),
+            reference_highlight_saturation_ratio: types::Distribution::from_samples(
+                reference_highlight_saturation_ratio,
+            ),
+            reference_hue_pairs: reference_hue_median.len(),
+            reference_hue_median_degrees: types::Distribution::from_samples(reference_hue_median),
+            reference_hue_p90_degrees: types::Distribution::from_samples(reference_hue_p90),
+            reference_hue_mean_degrees: types::Distribution::from_samples(reference_hue_mean),
+            guidance_mode_counts,
+            independent: split
+                .remove(types::GuidanceMode::Independent.as_str())
+                .unwrap_or_default()
+                .finish(),
+            preview_guided: split
+                .remove(types::GuidanceMode::PreviewGuided.as_str())
+                .unwrap_or_default()
+                .finish(),
+            clip_altered_fraction: types::Distribution::from_samples(clip_altered),
+            clip_mean_abs_delta: types::Distribution::from_samples(clip_mean_abs_delta),
+            nondeterministic_illuminant_files,
             pooled_groups,
             files: entries,
         };

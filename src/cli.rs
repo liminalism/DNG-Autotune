@@ -1,4 +1,6 @@
+use crate::color::{RawColorPath, WorkingSpace};
 use crate::reference::ReferenceSource;
+use crate::rescale::SubBlack;
 use crate::types::{OutputFormat, Preset, RunOptions};
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
@@ -85,6 +87,79 @@ pub struct Cli {
     /// and inert on files carrying only a thumbnail. Pass 0 to disable it.
     #[arg(long, value_name = "STRENGTH")]
     pub preview_exposure: Option<f32>,
+
+    /// Ignore the camera's embedded preview entirely and let the controller
+    /// decide exposure on its own. Equivalent to --preview-exposure 0, named for
+    /// what it is for: the independent-Auto column of the scorecard, which
+    /// measures this program's own judgement rather than its ability to follow
+    /// the vendor's.
+    #[arg(long, conflicts_with = "preview_exposure")]
+    pub no_preview: bool,
+
+    /// Which colour conversion to develop through.
+    ///
+    /// `owned` is the default since 0.1.18: it uses the same matrix composition
+    /// Rawler does but discards nothing. `rawler` is Rawler's `Calibrate`, which
+    /// clips out-of-gamut channels to zero and replaces every pixel above 1.0
+    /// with a colour/norm average, rewriting most of the highlight range of most
+    /// frames before this program sees it. It is kept as the control arm of the
+    /// A/B, and for reproducing pre-0.1.18 output.
+    ///
+    /// The flip was made on the scorecard, as `docs/REVIEW-2026-07-30.md` required:
+    /// `owned` beats `rawler` on local detail (84 frames better, 24 worse) and on
+    /// hue against the camera (a median 0.9 degrees closer over the 30 most
+    /// out-of-gamut frames), ties on crushed shadows, and loses only on
+    /// `luminance_entropy` — by a median of four millionths of a bit, on a metric
+    /// this project has twice recorded as not validly one-directional.
+    #[arg(long, value_enum, default_value = "owned")]
+    pub raw_color_path: RawColorPath,
+
+    /// Linear RGB space the owned colour path works in. Ignored by
+    /// --raw-color-path rawler, which is hardcoded to sRGB primaries.
+    ///
+    /// `srgb` keeps the owned path a controlled comparison against Rawler.
+    /// `rec2020` is wide enough to hold essentially every real camera colour, so
+    /// the intermediate stages see far fewer out-of-gamut channels.
+    #[arg(long, value_enum, default_value = "srgb")]
+    pub working_space: WorkingSpace,
+
+    /// What the owned colour path does with sensor samples below the black level.
+    ///
+    /// `preserve` is the default. `clip` zeroes sub-black but is otherwise
+    /// correct; `rawler-compat` additionally reproduces `RawImage::apply_scaling`
+    /// bit for bit, defects included, and exists as the control arm that proved the
+    /// port faithful. Hidden because the last two are diagnostics, not settings.
+    ///
+    /// **Why `preserve` won, and why the metrics said otherwise.** Clipping
+    /// sub-black rectifies the sensor noise floor, which lifts each channel's mean
+    /// above true black. White balance then multiplies that pedestal unequally — on
+    /// an A7C, red by about 2.3 and blue by 1.6 against green at 1.0 — so the
+    /// shadows acquire a **magenta cast**. It is plainly visible on a night frame
+    /// with 28% sub-black samples: the whole lower half of the image is tinted, and
+    /// the darkest crop is a field of magenta speckle. Under `preserve` the noise
+    /// stays symmetric about zero, averages neutral, and the cast is simply gone.
+    ///
+    /// The scorecard argued against this. `crushed_fraction` gets *worse* on 18 of
+    /// 108 frames, and `mean_level` falls by up to 14. Both are real and both are
+    /// the metric describing the fix rather than a defect: what turns black is
+    /// noise that carried no detail, and it previously turned into coloured haze
+    /// instead. Structure is unchanged — rock and foliage texture survive the switch
+    /// intact. This is the case `docs/PLAN.md` means by "read the number, then open
+    /// the pair".
+    #[arg(long, value_enum, default_value = "preserve", hide = true)]
+    pub sub_black: SubBlack,
+
+    /// Write the scene-linear intermediate at each pipeline stage into DIR, as
+    /// plain sRGB-encoded PNGs with no tone curve applied. Diagnostic only; it
+    /// never changes what is rendered.
+    #[arg(long, value_name = "DIR")]
+    pub dump_stages: Option<PathBuf>,
+
+    /// Do not copy the source EXIF or embed an sRGB ICC profile in the output.
+    /// The pixels are unaffected either way; this only strips the tags, which
+    /// leaves a photo library with no capture date, camera or lens to show.
+    #[arg(long)]
+    pub no_metadata: bool,
 
     /// Scan the inputs, write a pooled sensor-noise profile to this path, and
     /// stop. Writes no images and never touches the output directory.
@@ -221,7 +296,19 @@ impl Cli {
                 dry_run: self.dry_run,
                 local_white_balance: self.local_white_balance,
                 local_tone: self.local_tone,
-                preview_exposure: self.preview_exposure,
+                // `--no-preview` is the same decision as `--preview-exposure 0`;
+                // clap rejects passing both, so this cannot silently override a
+                // strength the user asked for.
+                preview_exposure: if self.no_preview {
+                    Some(0.0)
+                } else {
+                    self.preview_exposure
+                },
+                raw_color_path: self.raw_color_path,
+                working_space: self.working_space,
+                sub_black: self.sub_black,
+                dump_stages: self.dump_stages,
+                write_metadata: !self.no_metadata,
                 noise_scan: self.noise_scan,
                 noise_profile: self.noise_profile,
                 pool_noise: self.pool_noise,

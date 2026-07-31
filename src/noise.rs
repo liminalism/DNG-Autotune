@@ -221,13 +221,24 @@ fn choose_plane(raw: &RawImage) -> Plane {
     }
 }
 
+/// One sample from the raw buffer, converted to `f32` in place.
+///
+/// `collect_tiles` used to convert the *whole* sample array to `Vec<f32>`
+/// up front — an extra ~200MB, live for the whole scan, on a 50MP frame —
+/// before ever touching the handful of samples a tile actually needs.
+/// Reading through the source buffer index-by-index instead does the same
+/// per-element conversion (`as f32` for `Integer`, a plain copy for `Float`)
+/// without ever materializing the intermediate copy.
+#[inline]
+fn sample_at(data: &RawImageData, index: usize) -> Option<f32> {
+    match data {
+        RawImageData::Integer(values) => values.get(index).map(|v| *v as f32),
+        RawImageData::Float(values) => values.get(index).copied(),
+    }
+}
+
 /// Collect (mean, variance) pairs from tiles of a single colour plane.
 fn collect_tiles(raw: &RawImage) -> Vec<(f32, f32)> {
-    let samples: Vec<f32> = match &raw.data {
-        RawImageData::Integer(values) => values.iter().map(|v| *v as f32).collect(),
-        RawImageData::Float(values) => values.clone(),
-    };
-
     let cpp = raw.cpp.max(1);
     let stride = raw.width * cpp;
     let plane = choose_plane(raw);
@@ -249,8 +260,8 @@ fn collect_tiles(raw: &RawImage) -> Vec<(f32, f32)> {
                 for column in 0..TILE {
                     let x = plane.origin_x + (tile_x * TILE + column) * plane.step_x;
                     let index = y * stride + x * cpp + plane.channel;
-                    if let Some(value) = samples.get(index) {
-                        buffer.push(*value);
+                    if let Some(value) = sample_at(&raw.data, index) {
+                        buffer.push(value);
                     }
                 }
             }
@@ -410,6 +421,110 @@ pub fn estimate(raw: &RawImage) -> Option<NoiseEstimate> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rawler::cfa::PlaneColor;
+    use rawler::decoders::Camera;
+    use rawler::rawimage::{BlackLevel, CFAConfig, WhiteLevel};
+    use rawler::{CFA, Orientation};
+    use std::collections::HashMap;
+
+    /// Build a minimal synthetic RGGB-Bayer `RawImage` for exercising
+    /// `collect_tiles`/`fit`/`estimate` without a real file. Fields that
+    /// `noise::estimate` and its helpers never read (camera identity,
+    /// colour matrices, crop/active areas, ...) are filled with inert
+    /// placeholders.
+    fn synthetic_bayer_raw(
+        width: usize,
+        height: usize,
+        black: u32,
+        white: u32,
+        pixels: Vec<u16>,
+    ) -> RawImage {
+        assert_eq!(
+            pixels.len(),
+            width * height,
+            "pixel buffer must match width*height"
+        );
+        let cfa = CFA::new("RGGB");
+        let colors = PlaneColor::new("RGGB");
+        RawImage {
+            camera: Camera::default(),
+            make: String::new(),
+            model: String::new(),
+            clean_make: String::new(),
+            clean_model: String::new(),
+            width,
+            height,
+            cpp: 1,
+            bps: 16,
+            wb_coeffs: [1.0, 1.0, 1.0, 1.0],
+            whitelevel: WhiteLevel::new(vec![white]),
+            blacklevel: BlackLevel::new(&[black], 1, 1, 1),
+            xyz_to_cam: [[0.0; 3]; 4],
+            photometric: RawPhotometricInterpretation::Cfa(CFAConfig::new(&cfa, &colors)),
+            active_area: None,
+            crop_area: None,
+            blackareas: Vec::new(),
+            orientation: Orientation::Normal,
+            data: RawImageData::Integer(pixels),
+            color_matrix: HashMap::new(),
+            dng_tags: HashMap::new(),
+        }
+    }
+
+    /// Deterministic pixel field: a horizontal ramp (affine in `x`, constant
+    /// in `y`, so the second difference in `tile_statistics` cancels it
+    /// exactly in both directions) plus small pseudo-random per-pixel noise
+    /// of roughly constant amplitude. That gives `fit` real brightness
+    /// leverage and a real noise floor to recover without needing to model
+    /// an actual sensor.
+    fn synthetic_bayer_pixels(width: usize, height: usize) -> Vec<u16> {
+        let mut pixels = Vec::with_capacity(width * height);
+        for y in 0..height {
+            for x in 0..width {
+                let column = x as f32 / (width - 1) as f32;
+                let base = 300.0 + column * 7700.0;
+                let mut state =
+                    (x as u32).wrapping_mul(0x9E37_79B1) ^ (y as u32).wrapping_mul(0x85EB_CA77);
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                let noise = (((state >> 8) as f32 / 16_777_216.0) - 0.5) * 12.0;
+                let value = (base + noise).round().clamp(0.0, 16_383.0);
+                pixels.push(value as u16);
+            }
+        }
+        pixels
+    }
+
+    /// Pins `collect_tiles`'s output through the full fit, so restructuring
+    /// it to stop materializing a full-length `Vec<f32>` copy of the raw
+    /// buffer (see the module's memory note) cannot silently change the
+    /// noise model that feeds `snr10_ev`/`snr1_ev` downstream, which in turn
+    /// drive the chroma denoiser and sharpening. Values were captured from
+    /// the implementation before that restructuring and must match bit for
+    /// bit: the change alters how samples are read, never what is computed
+    /// from them.
+    #[test]
+    fn collect_tiles_result_is_pinned_for_a_synthetic_image() {
+        let (width, height) = (480, 480);
+        let raw = synthetic_bayer_raw(
+            width,
+            height,
+            0,
+            16_383,
+            synthetic_bayer_pixels(width, height),
+        );
+
+        let estimate = estimate(&raw).expect("synthetic image should yield an estimate");
+
+        // Captured from the pre-restructuring implementation. Exact equality
+        // (not a tolerance) is the point: same tiles, same order, same
+        // arithmetic must mean the identical f32 result.
+        assert_eq!(estimate.tiles_used, 870);
+        assert_eq!(estimate.shot_slope, 4.011277e-5);
+        assert_eq!(estimate.read_variance, 6.8368053);
+        assert_eq!(estimate.snr1_ev, -10.139309);
+        assert_eq!(estimate.snr10_ev, -6.817281);
+        assert_eq!(estimate.saturation, 16383.0);
+    }
 
     #[test]
     fn snr_crossing_is_consistent_with_the_model() {

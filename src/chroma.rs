@@ -1,8 +1,8 @@
 //! Chroma noise reduction, scaled by the frame's own noise model.
 //!
-//! `docs/PLAN.md` §4 puts profiled denoising second in the 0.2 quality list and
-//! says to do "chroma first — chroma noise is what makes high-ISO look broken;
-//! luma denoising can be gentler". The 42 Sony pairs added in 0.1.14 turned that
+//! `docs/PLAN.md` makes high-ISO presentability its fourth criterion, and the
+//! roadmap said to do "chroma first — chroma noise is what makes high-ISO look
+//! broken; luma denoising can be gentler". The 42 Sony pairs added in 0.1.14 turned that
 //! from a plausible claim into a measured one: at ISO 1600 and above this
 //! program renders at 2.2x the camera's `mean_saturation`, and a 1:1 crop shows
 //! why — the extra "saturation" is red and green speckle in the shadows, which

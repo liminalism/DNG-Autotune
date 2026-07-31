@@ -154,16 +154,62 @@ fn derive_params(
 /// target. The motivating file needs about 3.5 EV, so a tighter cap would clip
 /// exactly the case the oracle exists for.
 const MAX_ORACLE_DEVIATION_EV: f32 = 4.0;
+/// Most curve solves the oracle may perform, counting the original re-solve.
+///
+/// A fixed cap rather than iterate-to-convergence keeps the loop deterministic
+/// even on a curve where the fixed point oscillates; four is enough for the
+/// shoulder cases observed (`_DSC1291` converges on the second).
+const ORACLE_RESOLVE_LIMIT: usize = 4;
+/// Upward target movement below which the re-solve loop stops.
+///
+/// Also the guarantee that old output does not move: any frame whose second
+/// inversion does not ask for at least this much *more brightness* keeps the
+/// first solution untouched, which is bit-for-bit the pre-iteration behaviour
+/// — including every night frame, where the pre-iteration behaviour is the
+/// paired-validated one.
+const ORACLE_RESOLVE_CONVERGED_EV: f32 = 0.01;
 /// Absolute bounds on an oracle-derived target, deliberately asymmetric.
 ///
 /// A vendor rendering a scene well below middle grey is the legitimate night
 /// case. A vendor rendering it more than a stop *above* middle grey is far more
-/// likely an HDR-fused or blown preview, which is the failure worth refusing.
+/// likely an HDR-fused or blown preview, which is the failure worth refusing —
+/// *unless* the raw statistics independently say the scene is bright, in which
+/// case the preview is corroborated rather than suspect and the ceiling rises
+/// (see [`oracle_target_ceiling_ev`]).
 const ORACLE_TARGET_FLOOR_EV: f32 = -4.0;
 const ORACLE_TARGET_CEILING_EV: f32 = 1.0;
+/// Extra ceiling headroom, in EV, once the key score fully corroborates.
+///
+/// Sized from the first paired high-key frame (`_DSC1291`: the camera renders
+/// the subject at +1.63 EV, unclipped, and the +1.0 ceiling was leaving our
+/// render 0.42 EV darker) with margin for brighter scenes such as snow, while
+/// still refusing the multi-stop targets a blown preview would ask for.
+const CORROBORATED_CEILING_EXTRA_EV: f32 = 1.0;
+/// Key-score span over which the extra headroom ramps in.
+///
+/// The start is [`classify_tonality`]'s high-key threshold: below it the raw
+/// statistics do not call the scene bright and the original suspicion stands in
+/// full. Ramped rather than switched, like the chroma strength, so two frames a
+/// hair apart in key score cannot render visibly differently.
+const CEILING_CORROBORATION_START: f32 = 0.32;
+const CEILING_CORROBORATION_FULL: f32 = 0.60;
+
+/// Ceiling for an oracle-derived target, given the frame's own key score.
+///
+/// The 16 corpus files where the +1.0 ceiling binds split exactly along this
+/// line: ten are independently classified high-key by the raw statistics —
+/// bright preview corroborated, ceiling raised — and six are not, for which
+/// the original blown-preview suspicion stands and the +1.0 cap holds.
+fn oracle_target_ceiling_ev(key_score: f32) -> f32 {
+    let ramp = ((key_score - CEILING_CORROBORATION_START)
+        / (CEILING_CORROBORATION_FULL - CEILING_CORROBORATION_START))
+        .clamp(0.0, 1.0);
+    let corroboration = ramp * ramp * (3.0 - 2.0 * ramp);
+    ORACLE_TARGET_CEILING_EV + corroboration * CORROBORATED_CEILING_EXTRA_EV
+}
 
 /// Bound an oracle-derived target against the controller's own target.
-fn guard_oracle_target(wanted: f32, key_target_ev: f32) -> f32 {
+fn guard_oracle_target(wanted: f32, key_target_ev: f32, key_score: f32) -> f32 {
     if !wanted.is_finite() {
         return key_target_ev;
     }
@@ -172,7 +218,7 @@ fn guard_oracle_target(wanted: f32, key_target_ev: f32) -> f32 {
             key_target_ev - MAX_ORACLE_DEVIATION_EV,
             key_target_ev + MAX_ORACLE_DEVIATION_EV,
         )
-        .clamp(ORACLE_TARGET_FLOOR_EV, ORACLE_TARGET_CEILING_EV)
+        .clamp(ORACLE_TARGET_FLOOR_EV, oracle_target_ceiling_ev(key_score))
 }
 
 /// Everything `analyze` needs beyond the image itself.
@@ -298,7 +344,7 @@ pub fn analyze(
 
     // Center weighting is intentionally modest. It helps common portraits and
     // backlit subjects without claiming to be semantic subject detection.
-    let subject_ev = 0.60 * center_median + 0.40 * p50;
+    let center_weighted_key_ev = 0.60 * center_median + 0.40 * p50;
     let key_target_ev = match preset {
         Preset::Neutral => key_score * 0.35,
         Preset::Auto => key_score * 0.65,
@@ -306,7 +352,8 @@ pub fn analyze(
     };
 
     let mut target_median_ev = key_target_ev;
-    let mut exposure_ev = (target_median_ev - subject_ev + exposure_bias_ev).clamp(-5.0, 5.0);
+    let mut exposure_ev =
+        (target_median_ev - center_weighted_key_ev + exposure_bias_ev).clamp(-5.0, 5.0);
 
     let mut stats = AnalysisStats {
         sampled_pixels: valid,
@@ -330,16 +377,41 @@ pub fn analyze(
 
     // The preview oracle works in display EV, so it needs a curve to invert
     // through. Solve once with the key-score target, adopt the oracle's target,
-    // then re-solve. One fixed re-solve rather than iterating to convergence:
-    // deterministic by construction, and `derive_params` is pure algebra, so the
-    // cost is negligible next to the sampling loop above.
+    // then re-solve. In the curve's linear region one re-solve is exact and the
+    // loop below stops after it, reproducing the single-solve output bit for
+    // bit. High-key frames live on the shoulder, where re-solving reshapes the
+    // curve and the inversion's promise no longer holds — the first paired
+    // high-key frame landed 0.24 EV under the oracle's ask this way — so the
+    // target is re-inverted through each fresh curve for as long as doing so
+    // asks for a brighter placement (and only brighter; see below).
+    // The iteration cap is fixed, not convergence-timed, so the loop is
+    // deterministic by construction, and `derive_params` is pure algebra, so
+    // the cost is negligible next to the sampling loop above.
     if let Some(oracle) = inputs.preview.filter(|_| inputs.preview_strength > 0.0) {
-        let wanted = crate::tone::inverse_map_ev(oracle.subject_display_ev, &params);
-        let guarded = guard_oracle_target(wanted, key_target_ev);
-        target_median_ev = key_target_ev + inputs.preview_strength * (guarded - key_target_ev);
-        exposure_ev = (target_median_ev - subject_ev + exposure_bias_ev).clamp(-5.0, 5.0);
-        stats.target_median_ev = target_median_ev;
-        params = derive_params(&stats, preset, exposure_ev, noise_floor_ev);
+        for iteration in 0..ORACLE_RESOLVE_LIMIT {
+            let wanted =
+                crate::tone::inverse_map_ev(oracle.center_weighted_key_display_ev, &params);
+            let guarded = guard_oracle_target(wanted, key_target_ev, key_score);
+            let next = key_target_ev + inputs.preview_strength * (guarded - key_target_ev);
+            // The first pass is unconditional — it is the pre-existing single
+            // re-solve. Later passes run only while the target is still moving
+            // *brighter*. The asymmetry is deliberate and mirrors the
+            // floor/ceiling bounds above: the paired high-key frame showed the
+            // one-solve undershoot leaves a corroborated bright scene 0.24 EV
+            // dark, but on night frames the same undershoot is what kept the
+            // render away from vendor JPEGs the 0.1.14 pairs proved wrong —
+            // iterating downward re-approaches exactly the rendering
+            // `MAX_ORACLE_DEVIATION_EV` exists to refuse. Dark-side behaviour
+            // therefore stays bit-for-bit what the night pairs validated.
+            if iteration > 0 && next - target_median_ev < ORACLE_RESOLVE_CONVERGED_EV {
+                break;
+            }
+            target_median_ev = next;
+            exposure_ev =
+                (target_median_ev - center_weighted_key_ev + exposure_bias_ev).clamp(-5.0, 5.0);
+            stats.target_median_ev = target_median_ev;
+            params = derive_params(&stats, preset, exposure_ev, noise_floor_ev);
+        }
     }
 
     Ok((stats, params))
@@ -350,10 +422,55 @@ mod tests {
     use super::*;
 
     fn constant_image(value: f32) -> LinearImage {
-        LinearImage {
-            width: 64,
-            height: 64,
-            pixels: vec![[value; 3]; 64 * 64],
+        LinearImage::new(64, 64, vec![[value; 3]; 64 * 64]).unwrap()
+    }
+
+    /// A bright preview with nothing in the raw statistics to back it up is
+    /// the blown/HDR-fused case the ceiling exists for: still clamped to +1.0.
+    #[test]
+    fn an_uncorroborated_bright_oracle_target_is_clamped() {
+        assert_eq!(guard_oracle_target(2.5, 0.0, 0.0), ORACLE_TARGET_CEILING_EV);
+        // At the high-key threshold itself the extension is still exactly zero.
+        assert_eq!(
+            guard_oracle_target(2.5, 0.0, CEILING_CORROBORATION_START),
+            ORACLE_TARGET_CEILING_EV
+        );
+    }
+
+    /// The paired case that motivated the extension: `_DSC1291`, key score
+    /// 0.54, camera subject at +1.63 EV, unclipped. The raw statistics
+    /// corroborate the bright preview, so the oracle may follow it.
+    #[test]
+    fn a_corroborated_high_key_target_passes_the_old_ceiling() {
+        let guarded = guard_oracle_target(1.63, 0.35, 0.54);
+        assert!(
+            (guarded - 1.63).abs() < 1.0e-6,
+            "corroborated +1.63 EV target was clamped to {guarded}"
+        );
+    }
+
+    /// Corroboration buys one extra stop, never unbounded trust: even a
+    /// fully high-key frame refuses a multi-stop preview target.
+    #[test]
+    fn even_full_corroboration_is_bounded() {
+        assert_eq!(
+            guard_oracle_target(3.5, 1.5, 1.0),
+            ORACLE_TARGET_CEILING_EV + CORROBORATED_CEILING_EXTRA_EV
+        );
+    }
+
+    /// The ceiling must be continuous in the key score — two frames a hair
+    /// apart in brightness may not render visibly differently.
+    #[test]
+    fn the_ceiling_ramp_is_continuous_and_monotonic() {
+        let mut previous = oracle_target_ceiling_ev(0.0);
+        let mut score = 0.0f32;
+        while score < 1.0 {
+            let next = oracle_target_ceiling_ev(score);
+            assert!(next >= previous, "ceiling fell as key score rose");
+            assert!(next - previous < 0.02, "ceiling jumped at score {score}");
+            previous = next;
+            score += 0.002;
         }
     }
 
@@ -377,11 +494,7 @@ mod tests {
                 [value; 3]
             })
             .collect();
-        LinearImage {
-            width: 64,
-            height: 64,
-            pixels,
-        }
+        LinearImage::new(64, 64, pixels).unwrap()
     }
 
     /// A noise floor above the darkest percentile must raise the black point,

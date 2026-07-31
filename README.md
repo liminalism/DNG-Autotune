@@ -1,4 +1,4 @@
-# raw-autotune 0.1.15
+# raw-autotune 0.1.18
 
 `raw-autotune` is a small Rust command-line RAW developer intended for testing a
 standalone, batch-oriented equivalent of the useful part of a photo editor's
@@ -9,17 +9,26 @@ This is a **workable first version**, not a Lightroom or darktable replacement.
 It currently:
 
 1. decodes DNG and other camera RAW formats through Rawler;
-2. normalizes sensor black/white levels;
-3. demosaics Bayer and supported X-Trans inputs;
-4. applies the camera's as-shot white balance and available color matrix into linear sRGB;
+2. normalizes sensor black/white levels itself, keeping sub-black samples;
+3. demosaics Bayer inputs through Rawler's PPG;
+4. applies the camera's as-shot white balance and colour matrix itself, into
+   scene-linear RGB, discarding nothing — no gamut clip, no highlight rewrite;
 5. samples scene-linear RGB statistics;
 6. estimates exposure, usable black/white EV limits, contrast, saturation, and
    vibrance;
-7. optionally builds a full-resolution, multi-scale local exposure map;
-8. applies a hue-preserving, middle-gray-anchored view transform;
-9. writes 16-bit TIFF/PNG or 8-bit JPEG;
-10. writes a JSON sidecar containing all measured statistics and selected
-   parameters.
+7. reduces chroma noise and sharpens, both scaled by the frame's own fitted
+   sensor-noise model;
+8. optionally builds a full-resolution, multi-scale local exposure map;
+9. applies a hue-preserving, middle-gray-anchored view transform;
+10. writes 16-bit TIFF/PNG or 8-bit JPEG, with the source EXIF and an sRGB ICC
+    profile;
+11. writes a JSON sidecar containing all measured statistics and selected
+    parameters.
+
+Everything from the black level onward is this program's own; Rawler supplies the
+container parsing, the camera database, the decompression and the demosaic. See
+"Owning the colour conversion" below for why that boundary moved, and what it
+bought.
 
 No ONNX model is required. Neural pre-analysis is deliberately deferred.
 
@@ -333,12 +342,110 @@ The measure to steer colour by is `saturation_ratio` — ours divided by the
 camera's, where 1.0 is a match. It is a ratio of ratios, so unlike
 colourfulness it does not move when the two renderings differ in brightness.
 
+Two companions to it, added in 0.1.18 because the whole-frame figure turns out to
+be blind to things that matter:
+
+- **`highlight_saturation_ratio`** restricts the same comparison to pixels above
+  0.7 luminance. On the current corpus the whole-frame ratio is 1.05 — nearly a
+  perfect match — while the highlight band is **1.53**. The camera desaturates its
+  shoulder hard and this program does not. That is a difference of intent, not an
+  error, so it is reported rather than corrected.
+- **`hue`** compares the two renderings *per pixel* in Oklab, on a canonical
+  512-pixel grid that both are box-averaged onto. Aggregate statistics cannot see
+  a hue shift, because a frame's mean hue is whatever colour covers most of it.
+  The comparison declines when the two renderings are different crops, and says so
+  rather than reporting a zero.
+
+Read the hue numbers with `mean_degrees`, not `median_degrees`. A colour change
+usually affects a minority of pixels, so a real improvement can leave the median
+untouched: between the two colour paths the corpus median hue change is 0.00° while
+the best single frame improves by 26°.
+
 For visual triage, `tools/contact-sheet.py` turns a summary into an HTML page
 of side-by-side pairs with the numbers under each, worst-first:
 
 ```bash
 tools/contact-sheet.py out/summary.json --output out/sheet.html
 ```
+
+### Two scorecards, not one
+
+The preview oracle borrows the camera's judgement about a scene, which is free
+and worth having — but it means a pooled median cannot distinguish "the
+controller got better at judging scenes" from "more files happened to carry a
+usable preview". So every summary splits its reference measures by
+`guidance_mode`, and each sidecar records which mode its file used:
+
+- `independent` — the controller chose the exposure target by itself, because the
+  file carries no usable preview or the oracle was switched off;
+- `preview_guided` — the camera's embedded preview supplied the target.
+
+`--no-preview` renders the independent arm deliberately, and
+`tools/contact-sheet.py --guidance independent` sheets it alone. Report both.
+
+## Owning the colour conversion
+
+Since 0.1.18 the program owns everything from black-level normalization onward
+except the demosaic itself. That was not always so: it used to develop through
+Rawler's `Rescale` and `Calibrate`, and both destroyed data before this program saw
+it. `Calibrate`'s per-pixel tail clips out-of-gamut channels to zero and rewrites
+every pixel with a channel above 1.0 — which, after as-shot white balance, is much
+of the highlight range of many frames. `Rescale` clips sensor samples below the
+black level, rectifying the noise floor so that a black region cannot render black.
+
+`--raw-color-path` selects between them, and **`owned` is the default**:
+
+```bash
+# The default. Same matrix composition Rawler uses, nothing discarded.
+raw-autotune folder --output out --format jpeg
+
+# The control arm, and how to reproduce pre-0.1.18 output.
+raw-autotune folder --output out --format jpeg --raw-color-path rawler
+```
+
+The default was flipped on measurement, not preference — see below.
+
+`--working-space` chooses the linear RGB space the owned path converts into:
+`srgb` (the default) or `rec2020`, wide enough to hold nearly every real camera
+colour. It has no effect on the Rawler path, which is hardcoded to sRGB primaries.
+BT.2020 was measured and is *not* clearly better: it wins on near-white but gives
+back local detail for no additional hue accuracy, so it stays opt-in.
+
+On the owned path each sidecar's `color` block reports what the clipping would
+have cost: the fraction of pixels Rawler's operator would have moved, split by
+cause, and how far. Over the current corpus that is a median of 0.215% of pixels
+but a maximum of 66% — most frames barely care, and a minority are wrecked.
+
+The owned path lost on crushed shadows in 0.1.17, and the reason turned out to be a
+real defect downstream rather than a scoring quirk: `luminance` is a signed sum, so
+a pixel with a large negative channel has negative luminance, and the tone curve's
+chroma anchor clamped that to 0 — which made the gamut compressor's scale exactly 0
+and zeroed every channel, including the positive ones. 0.1.18 floors that anchor at
+the curve's own black point, and the regression is gone: `crushed_fraction` is now a
+108-way tie where it was 21 losses, with the local-detail win intact, and the owned
+path is measurably **closer to the camera's hue** than rawler on the frames where
+the clip acts (median −0.905° over the 30 most out-of-gamut frames).
+`clip_cost.negative_luminance_fraction` reports the population that was affected and
+predicted the regression exactly.
+
+With that fixed, `owned` beats `rawler` on the scorecard, which is what earned it the
+default: 84 frames better and 24 worse on local detail, a 108-way tie on crushed
+shadows, and closer hue. Its only loss is `luminance_entropy` — by a median of four
+millionths of a bit against a scale of 7.5, on a metric whose maximiser is histogram
+equalisation. See `CHANGELOG.md` 0.1.18 and `docs/STATUS.md`.
+
+Sub-black sensor samples are also kept rather than clipped, which is what lets a
+black region render black. That one was decided by looking, against the metrics:
+clipping rectifies the noise floor, and since white balance then multiplies red by
+about 2.3 and blue by 1.6 against green at 1.0, the residue is a **magenta cast
+across the shadows** — obvious on a night frame, and invisible to every axis on the
+scorecard. Three of the four axes actually got *worse* when it was fixed, because
+what turns black is noise that used to turn into coloured haze. `--sub-black clip`
+restores the old behaviour if you need it.
+
+`--dump-stages DIR` writes the scene-linear intermediate at each pipeline stage
+as plain sRGB-encoded PNGs with no tone curve applied, which is how to compare
+the two paths' highlights by eye.
 
 ## Presets
 
@@ -364,6 +471,31 @@ restrained, but it is more likely to overprocess difficult files.
 `--saturation-scale` multiplies whichever preset is in use. It exists so the
 chroma path can be swept against a corpus of RAW+JPEG pairs, the way
 `--exposure-bias` offsets the automatic exposure; 1.0 is the preset as tuned.
+
+## Metadata in the output
+
+Output is written to be a drop-in replacement for the camera's own JPEG in a
+photo library, so it carries the capture metadata: date and time with its
+sub-second and time-zone companions, make, model, the lens group, exposure time,
+aperture, ISO, focal length, the metering/flash/exposure-program group, artist
+and copyright, and the whole GPS block when the source has one. `Software` is set
+to `raw-autotune <version>`, and a generated sRGB v2 ICC profile is embedded.
+JPEG gets APP1/APP2, TIFF an ExifIFD plus GPSInfo, PNG `eXIf` plus `iCCP`.
+
+Three things to know:
+
+- **Orientation is written as 1, deliberately.** The pixels are already rotated
+  upright by the time they are encoded, so copying the source's orientation tag
+  would rotate the image a second time in every viewer.
+- **PNG's EXIF is widely ignored.** `eXIf` is a 2017 addition and reader support
+  is thin — Windows' own property handlers do not read it. The ICC profile in
+  `iCCP` is universally supported. Prefer JPEG or TIFF if a library has to see
+  the tags.
+- **MakerNotes are not copied.** Vendor note blobs contain absolute file offsets,
+  so relocating them into a different container corrupts them.
+
+`--no-metadata` writes no EXIF and no profile, which restores the exact bytes
+earlier versions produced. The pixels are identical either way.
 
 ## Output layout
 
@@ -435,7 +567,6 @@ That distinction matters because each failure belongs to a different subsystem.
 - robust clipped-highlight reconstruction;
 - lens distortion/vignetting/chromatic-aberration correction;
 - DCP hue/saturation maps and camera looks;
-- embedded ICC profile and copied EXIF metadata;
 - scene-linear EXR export;
 - GPU processing;
 - GUI.
@@ -444,5 +575,21 @@ See `docs/ROADMAP.md`, `docs/KNOWN_LIMITATIONS.md`, and `docs/BUILD_STATUS.md`.
 
 ## Licensing
 
-The project source is MIT-licensed. It depends on Rawler, which is LGPL-2.1.
+The project source is licensed **AGPL-3.0-or-later** (see `LICENSE`). It depends
+on Rawler, which is LGPL-2.1 — linking that from a copyleft program is exactly
+what the LGPL is for, so nothing special is required.
+
+It was MIT until 0.1.18. The change is deliberate: this program interfaces with a
+codebase of GPL-family RAW tooling, and matching their licence removes a standing
+constraint rather than adding one. Concretely, it means the demosaic quality work
+that `docs/REVIEW-2026-07-30.md` rejected on licence grounds — RawTherapee's RCD
+and AMaZE, and darktable's algorithms, all GPL-3 — is now an engineering decision
+instead of a legal one. Versions already distributed remain available under MIT to
+whoever received them; that cannot be and is not being retracted.
+
+One clause worth knowing rather than discovering: AGPL §13 requires offering source
+to users who interact with the program *over a network*. This is a local batch CLI,
+so it never triggers, and in practice the licence behaves as GPL-3 here. It would
+start to matter if the program were ever put behind a service.
+
 Read `THIRD_PARTY.md` before distributing compiled binaries.

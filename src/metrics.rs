@@ -17,12 +17,101 @@ const TARGET_SAMPLES: usize = 250_000;
 /// a channel at 98% is already visually white but is not literally clipped.
 const NEAR_WHITE: u16 = (0.98 * u16::MAX as f32) as u16;
 
+/// Largest 16-bit channel value that still writes as 0 in an 8-bit deliverable,
+/// and smallest that writes as 255.
+///
+/// `output.rs` converts with `(value + 128) / 257`, so `value <= 128` becomes 0 and
+/// `value >= 65407` becomes 255. Those are the thresholds
+/// [`OutputStats::crushed_fraction`] and [`OutputStats::clipped_fraction`] use.
+///
+/// They used to be `== 0` and `== u16::MAX`, which was an apples-to-oranges
+/// comparison: our own render is measured in 16 bits while the camera's JPEG is
+/// measured in 8 by [`OutputStats::measure_rgb8`], so the old test asked our side
+/// for a channel of exactly 0/65535 while asking the camera's for 0/255. A pixel
+/// at 40/65535 is black in every file this program writes, and was counted as not
+/// crushed.
+///
+/// **Be precise about what fixing it changed, because it is less than it sounds.**
+/// On the 106-pair corpus it changed *nothing*: `clipped_fraction` stayed at 94
+/// wins, 10 ties, 2 losses and `crushed_fraction` at 40/66/0, with identical
+/// medians. Real renderings put very few pixels in the 1..=128 and 65407..=65534
+/// bands, so the two thresholds agree in practice and no previous conclusion about
+/// the colour paths moves.
+///
+/// Where it does bite is exactly where those bands get populated on purpose:
+/// `--sub-black preserve` crushes shadows on 18 of 108 frames (0 better, 18 worse,
+/// median +0.13pp, worst +1.67pp) under these thresholds, against 1 frame at
+/// +0.000004 under the old ones. That cost was invisible before and is the kind of
+/// thing this statistic exists to catch.
+///
+/// The `sampled_pixels`, entropy and gradient statistics are unaffected, and
+/// nothing about the rendered image changes.
+const DISPLAY_BLACK_CEILING: u16 = 128;
+const DISPLAY_WHITE_FLOOR: u16 = 65_407;
+
 /// Fraction of full scale a pixel must reach before its saturation is measured.
 ///
 /// `(max - min) / max` is a ratio of two small numbers in the deep shadows,
 /// where sensor and codec noise dominate both, so including those pixels
 /// measures the noise rather than the rendering.
 const SATURATION_FLOOR: f32 = 0.05;
+
+/// Luminance, as a fraction of full scale, above which a pixel counts as a
+/// highlight for [`OutputStats::mean_saturation_highlight`].
+///
+/// 0.7 rather than something nearer white because the question this answers is
+/// about the *shoulder* of the curve, where a rendering either holds a saturated
+/// colour together or lets it wash out. Set it at 0.95 and the statistic would
+/// describe only pixels that are already nearly white, where every rendering
+/// agrees; set it at 0.5 and it stops being about highlights at all.
+const HIGHLIGHT_FLOOR: f32 = 0.70;
+
+/// Saturation restricted to highlights, accumulated once and shared by both
+/// bit-depth paths.
+///
+/// The two `measure*` functions below are otherwise duplicated verbatim, which is
+/// how [`mean_saturation`](OutputStats::mean_saturation) and its neighbours came
+/// to be expressed in two different numeric scales. New statistics go through a
+/// helper like this one on normalized `0..=1` input instead, so there is exactly
+/// one definition to read and the 8- and 16-bit answers cannot drift apart.
+#[derive(Default)]
+struct HighlightSaturation {
+    sum: f64,
+    count: usize,
+}
+
+impl HighlightSaturation {
+    /// `normalized` is one pixel with every channel on `0..=1`.
+    #[inline]
+    fn add(&mut self, normalized: [f32; 3]) {
+        let luminance = 0.2126 * normalized[0] + 0.7152 * normalized[1] + 0.0722 * normalized[2];
+        if luminance < HIGHLIGHT_FLOOR {
+            return;
+        }
+        let maximum = normalized[0].max(normalized[1]).max(normalized[2]);
+        if maximum <= 0.0 {
+            return;
+        }
+        let minimum = normalized[0].min(normalized[1]).min(normalized[2]);
+        self.sum += f64::from((maximum - minimum) / maximum);
+        self.count += 1;
+    }
+
+    /// Zero when the frame has no highlights at all, which is a meaningful
+    /// answer rather than a missing one: a night frame has no shoulder to
+    /// describe.
+    fn finish(&self) -> f32 {
+        if self.count == 0 {
+            0.0
+        } else {
+            (self.sum / self.count as f64) as f32
+        }
+    }
+
+    fn count(&self) -> usize {
+        self.count
+    }
+}
 
 /// Objective statistics for one rendered image.
 #[derive(Debug, Clone, Serialize)]
@@ -31,14 +120,18 @@ pub struct OutputStats {
     /// literature. Higher is more colourful; roughly 0 (greyscale) to ~110
     /// (extremely vivid). Reported to correlate above 90% with human ranking.
     pub colourfulness: f32,
-    /// Fraction of sampled pixels with at least one channel at full scale.
-    /// Hard clipping: information is definitively gone.
+    /// Fraction of sampled pixels with at least one channel that writes as 255 in
+    /// an 8-bit deliverable. Hard clipping: information is definitively gone.
+    ///
+    /// Measured at display precision, not at 16-bit exactness — see
+    /// [`DISPLAY_WHITE_FLOOR`] for why that distinction was a bug worth fixing.
     pub clipped_fraction: f32,
     /// Fraction of sampled pixels with at least one channel at or above
     /// [`NEAR_WHITE`]. This is the measure the tone curve is judged on, since a
     /// blown highlight reads as white well before it literally clips.
     pub near_white_fraction: f32,
-    /// Fraction of sampled pixels with every channel at zero.
+    /// Fraction of sampled pixels whose every channel writes as 0 in an 8-bit
+    /// deliverable. See [`DISPLAY_BLACK_CEILING`].
     pub crushed_fraction: f32,
     /// Mean of all channels, on the 0-255 scale.
     pub mean_level: f32,
@@ -53,6 +146,22 @@ pub struct OutputStats {
     /// what makes it the right measure for steering the chroma path against a
     /// reference rendering.
     pub mean_saturation: f32,
+    /// [`mean_saturation`](Self::mean_saturation) restricted to pixels whose
+    /// luminance is above [`HIGHLIGHT_FLOOR`].
+    ///
+    /// Added in 0.1.18 to settle a question the whole-frame figure cannot answer.
+    /// `docs/REVIEW-2026-07-30.md` suspected the `auto` preset's 1.20 saturation
+    /// multiplier of being a compensation for Rawler's highlight desaturation, and
+    /// the 0.1.17 A/B appeared to exonerate it: the whole-frame ratio against the
+    /// camera moved only 1.046 -> 1.050. But the desaturation is confined to the
+    /// pixels above 1.0 in scene-linear — a median 0.009% of a frame — and a mean
+    /// over every pixel is nearly blind to an effect that small. This statistic
+    /// looks where the effect actually lives.
+    pub mean_saturation_highlight: f32,
+    /// How many sampled pixels the highlight figure is averaged over. Read it
+    /// before reading the figure: a low count means the frame has no shoulder and
+    /// the number describes almost nothing.
+    pub highlight_pixels: usize,
     /// Shannon entropy of sampled 8-bit luminance values.
     pub luminance_entropy: f32,
     /// Mean adjacent-pixel luminance gradient on the 0-255 scale.
@@ -126,15 +235,25 @@ impl OutputStats {
         let mut saturation_count = 0usize;
         let saturation_floor = SATURATION_FLOOR * u16::MAX as f32;
         let mut luminance_histogram = [0_u64; 256];
+        let mut highlight = HighlightSaturation::default();
+        let inverse_full_scale = 1.0 / u16::MAX as f32;
 
         for pixel in image.as_raw().chunks_exact(3).step_by(stride) {
-            if pixel.contains(&u16::MAX) {
+            highlight.add([
+                pixel[0] as f32 * inverse_full_scale,
+                pixel[1] as f32 * inverse_full_scale,
+                pixel[2] as f32 * inverse_full_scale,
+            ]);
+            if pixel.iter().any(|channel| *channel >= DISPLAY_WHITE_FLOOR) {
                 clipped += 1;
             }
             if pixel.iter().any(|channel| *channel >= NEAR_WHITE) {
                 near_white += 1;
             }
-            if pixel.iter().all(|channel| *channel == 0) {
+            if pixel
+                .iter()
+                .all(|channel| *channel <= DISPLAY_BLACK_CEILING)
+            {
                 crushed += 1;
             }
             let maximum = pixel.iter().copied().max().unwrap_or(0) as f32;
@@ -198,6 +317,8 @@ impl OutputStats {
             mean_level: (total_level / (sampled_pixels.max(1) as f64 * 3.0)) as f32
                 * (255.0 / u16::MAX as f32),
             mean_saturation: (saturation_sum / saturation_count.max(1) as f64) as f32,
+            mean_saturation_highlight: highlight.finish(),
+            highlight_pixels: highlight.count(),
             luminance_entropy,
             average_gradient: (gradient_sum / gradient_count.max(1) as f64) as f32,
             sampled_pixels,
@@ -233,8 +354,10 @@ impl OutputStats {
         let mut saturation_sum = 0.0f64;
         let mut saturation_count = 0usize;
         let mut luminance_histogram = [0_u64; 256];
+        let mut highlight = HighlightSaturation::default();
 
         for pixel in &samples {
+            highlight.add(pixel.map(|channel| channel / 255.0));
             if pixel.contains(&255.0) {
                 clipped += 1;
             }
@@ -299,6 +422,8 @@ impl OutputStats {
             crushed_fraction: crushed as f32 / divisor,
             mean_level: (total_level / (sampled_pixels.max(1) as f64 * 3.0)) as f32,
             mean_saturation: (saturation_sum / saturation_count.max(1) as f64) as f32,
+            mean_saturation_highlight: highlight.finish(),
+            highlight_pixels: highlight.count(),
             luminance_entropy,
             average_gradient: (gradient_sum / gradient_count.max(1) as f64) as f32,
             sampled_pixels,
@@ -410,6 +535,134 @@ mod tests {
         assert!((from_eight.mean_saturation - from_sixteen.mean_saturation).abs() < 1.0e-4);
         assert!((from_eight.average_gradient - from_sixteen.average_gradient).abs() < 0.01);
         assert!((from_eight.luminance_entropy - from_sixteen.luminance_entropy).abs() < 0.01);
+        assert_eq!(from_eight.highlight_pixels, from_sixteen.highlight_pixels);
+        assert!(
+            (from_eight.mean_saturation_highlight - from_sixteen.mean_saturation_highlight).abs()
+                < 1.0e-4
+        );
+    }
+
+    /// The two paths must agree on `crushed_fraction` and `clipped_fraction` too.
+    ///
+    /// They did not until 0.1.18, and the disagreement was not cosmetic: our own
+    /// render was tested for a channel of exactly 0/65535 while the camera's JPEG
+    /// was tested for 0/255, so the same picture scored differently depending on
+    /// which side of the comparison it was on. Both of those axes are ones the
+    /// paired scorecard claims wins on, and the asymmetry flattered us on both.
+    ///
+    /// Deliberately a separate test from
+    /// `the_eight_and_sixteen_bit_paths_agree`, which omitted these two fractions
+    /// and so could never have caught it.
+    #[test]
+    fn the_two_paths_agree_on_crushed_and_clipped() {
+        // Content chosen to straddle both thresholds: some pixels land on display
+        // black, some on display white, most in between.
+        let eight = ImageBuffer::from_fn(64, 48, |x, y| {
+            let level = match (x + y) % 4 {
+                0 => 0_u8,
+                1 => 255,
+                2 => 17,
+                _ => 200,
+            };
+            Rgb([level, level, level])
+        });
+        let sixteen: Rgb16Image = ImageBuffer::from_fn(64, 48, |x, y| {
+            let pixel = eight.get_pixel(x, y).0;
+            Rgb([
+                u16::from(pixel[0]) * 257,
+                u16::from(pixel[1]) * 257,
+                u16::from(pixel[2]) * 257,
+            ])
+        });
+
+        let from_eight = OutputStats::measure_rgb8(&eight);
+        let from_sixteen = OutputStats::measure(&sixteen);
+
+        assert!(
+            (from_eight.crushed_fraction - from_sixteen.crushed_fraction).abs() < 1.0e-6,
+            "crushed disagrees: 8-bit {} vs 16-bit {}",
+            from_eight.crushed_fraction,
+            from_sixteen.crushed_fraction
+        );
+        assert!(
+            (from_eight.clipped_fraction - from_sixteen.clipped_fraction).abs() < 1.0e-6,
+            "clipped disagrees: 8-bit {} vs 16-bit {}",
+            from_eight.clipped_fraction,
+            from_sixteen.clipped_fraction
+        );
+        assert!(
+            from_sixteen.crushed_fraction > 0.2,
+            "the test content should crush"
+        );
+        assert!(
+            from_sixteen.clipped_fraction > 0.2,
+            "the test content should clip"
+        );
+    }
+
+    /// A 16-bit value just above zero is still black in the file the user gets, so
+    /// it must count as crushed. This is the case the old `== 0` test missed, and
+    /// the reason a shadow-heavy frame read as 0.011% crushed while its delivered
+    /// 8-bit rendering was 5.34% black.
+    #[test]
+    fn a_pixel_that_writes_as_black_counts_as_crushed() {
+        for level in [0_u16, 1, 100, DISPLAY_BLACK_CEILING] {
+            let image = ImageBuffer::from_pixel(8, 8, Rgb([level; 3]));
+            assert_eq!(
+                OutputStats::measure(&image).crushed_fraction,
+                1.0,
+                "16-bit {level} writes as 8-bit 0 and must count as crushed"
+            );
+        }
+        // One step above the ceiling writes as 1, which is not black.
+        let image = ImageBuffer::from_pixel(8, 8, Rgb([DISPLAY_BLACK_CEILING + 1; 3]));
+        assert_eq!(OutputStats::measure(&image).crushed_fraction, 0.0);
+
+        // And the same at the top end.
+        for level in [u16::MAX, DISPLAY_WHITE_FLOOR] {
+            let image = ImageBuffer::from_pixel(8, 8, Rgb([level; 3]));
+            assert_eq!(OutputStats::measure(&image).clipped_fraction, 1.0);
+        }
+        let image = ImageBuffer::from_pixel(8, 8, Rgb([DISPLAY_WHITE_FLOOR - 1; 3]));
+        assert_eq!(OutputStats::measure(&image).clipped_fraction, 0.0);
+    }
+
+    /// The highlight figure must describe highlights and nothing else, or the
+    /// question it was added to answer — whether the 1.20 saturation multiplier
+    /// compensates in the shoulder — gets a whole-frame answer under a new name.
+    #[test]
+    fn highlight_saturation_looks_only_at_highlights() {
+        // A dark saturated red: strongly coloured, but far below the floor.
+        let dark = ImageBuffer::from_pixel(8, 8, Rgb([20_000_u16, 0, 0]));
+        let stats = OutputStats::measure(&dark);
+        assert_eq!(stats.highlight_pixels, 0);
+        assert_eq!(stats.mean_saturation_highlight, 0.0);
+        // ...while the whole-frame figure does see it, which is the contrast.
+        assert!((stats.mean_saturation - 1.0).abs() < 1.0e-6);
+
+        // A saturated colour just *below* the floor is excluded, which pins the
+        // threshold rather than merely exercising it: luminance here is 0.693.
+        let shoulder = ImageBuffer::from_pixel(8, 8, Rgb([u16::MAX, 40_000, 40_000]));
+        assert_eq!(OutputStats::measure(&shoulder).highlight_pixels, 0);
+
+        // A bright saturated colour is counted, and reports its real ratio.
+        // Luminance 0.753, comfortably over the floor.
+        let bright = ImageBuffer::from_pixel(8, 8, Rgb([u16::MAX, 45_000, 45_000]));
+        let stats = OutputStats::measure(&bright);
+        assert_eq!(stats.highlight_pixels, 64);
+        let expected = (u16::MAX as f32 - 45_000.0) / u16::MAX as f32;
+        assert!(
+            (stats.mean_saturation_highlight - expected).abs() < 1.0e-3,
+            "got {}, expected {expected}",
+            stats.mean_saturation_highlight
+        );
+
+        // A bright neutral is counted but contributes no saturation, so a frame
+        // of blown white reads as 0 rather than as missing.
+        let white = ImageBuffer::from_pixel(8, 8, Rgb([60_000_u16; 3]));
+        let stats = OutputStats::measure(&white);
+        assert_eq!(stats.highlight_pixels, 64);
+        assert!(stats.mean_saturation_highlight < 1.0e-6);
     }
 
     #[test]

@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Build an ours-vs-camera contact sheet from a raw-autotune batch summary.
 
-`docs/PLAN.md` §2 asks for "a tiny HTML contact-sheet generator (ours vs camera
-JPEG, sidecar stats under each pair) for fast visual triage". This is it. The
-numbers come from the summary the program already writes, so this script never
+The numbers come from the summary the program already writes, so this script never
 re-renders anything and never re-measures anything: it resizes images and lays
 them out. If a number here disagrees with the program, the program is right.
+
+Why it exists: `docs/PLAN.md` records that "the camera JPEG is a reference, not
+ground truth" — the scene classes where this controller is weakest are the same
+ones where the vendor is weakest, so the metrics are least trustworthy exactly
+where they matter most. Read the number, then open the pair. This is how you open
+the pair.
 
 Usage:
     raw-autotune raw/pairs --output out --format jpeg --reference \\
@@ -42,10 +46,16 @@ def deviation(entry):
     if not reference:
         return -1.0
     delta = reference.get("delta", {})
-    score = abs(delta.get("subject_display_ev", 0.0)) / 0.33
+    score = abs(delta.get("center_weighted_key_display_ev", 0.0)) / 0.33
     ratio = delta.get("saturation_ratio")
     if ratio:
         score = max(score, abs(ratio - 1.0) / 0.10)
+    # Hue joined the sort in 0.1.18. Five degrees of median hue error is treated
+    # as about as wrong as a third of a stop, on the same reasoning as above: the
+    # exchange rate only has to be defensible enough to rank, not exact.
+    hue = (delta.get("hue") or {}).get("median_degrees")
+    if hue:
+        score = max(score, hue / 5.0)
     return score
 
 
@@ -106,13 +116,13 @@ def cell(entry, reference, sheet_dir, thumbs, width):
     table = "".join(
         [
             row(
-                "subject EV",
-                (reference or {}).get("subject_display_ev", 0.0)
-                + delta.get("subject_display_ev", 0.0)
+                "key EV",
+                (reference or {}).get("center_weighted_key_display_ev", 0.0)
+                + delta.get("center_weighted_key_display_ev", 0.0)
                 if reference
                 else None,
-                (reference or {}).get("subject_display_ev"),
-                delta.get("subject_display_ev"),
+                (reference or {}).get("center_weighted_key_display_ev"),
+                delta.get("center_weighted_key_display_ev"),
                 "{:+.2f}",
             ),
             row(
@@ -120,6 +130,29 @@ def cell(entry, reference, sheet_dir, thumbs, width):
                 measured.get("mean_saturation"),
                 theirs_measured.get("mean_saturation"),
                 delta.get("mean_saturation"),
+            ),
+            row(
+                "highlight sat.",
+                measured.get("mean_saturation_highlight"),
+                theirs_measured.get("mean_saturation_highlight"),
+                delta.get("highlight_saturation_ratio"),
+            ),
+            # Hue is not a difference of two per-frame numbers, so it does not fit
+            # the ours/theirs/delta shape: it is a per-pixel comparison on a
+            # canonical grid, summarised. Shown in the delta column alone.
+            row(
+                "hue delta (deg)",
+                None,
+                None,
+                (delta.get("hue") or {}).get("median_degrees"),
+                "{:.2f}",
+            ),
+            row(
+                "hue p90 (deg)",
+                None,
+                None,
+                (delta.get("hue") or {}).get("p90_degrees"),
+                "{:.2f}",
             ),
             row(
                 "colourfulness",
@@ -202,6 +235,14 @@ def main():
         help="worst-first (default) or by filename",
     )
     parser.add_argument("--limit", type=int, help="only include the first N files after sorting")
+    parser.add_argument(
+        "--guidance",
+        choices=("all", "independent", "preview_guided"),
+        default="all",
+        help="only include files developed in this guidance mode. 'independent' is "
+        "the column that measures the controller's own judgement rather than its "
+        "ability to follow the camera's preview (see docs/PLAN.md 4b)",
+    )
     arguments = parser.parse_args()
 
     with open(arguments.summary) as handle:
@@ -213,6 +254,10 @@ def main():
     os.makedirs(thumbs, exist_ok=True)
 
     files = [entry for entry in summary["files"] if entry.get("status") == "completed"]
+    if arguments.guidance != "all":
+        files = [
+            entry for entry in files if entry.get("guidance_mode") == arguments.guidance
+        ]
     if arguments.sort == "deviation":
         files.sort(key=deviation, reverse=True)
     else:
@@ -224,17 +269,49 @@ def main():
         cell(entry, entry.get("reference"), sheet_dir, thumbs, arguments.width) for entry in files
     ]
 
-    def median(key):
-        distribution = summary.get(key)
+    def median(key, source=None):
+        distribution = (source if source is not None else summary).get(key)
         return f"{distribution['median']:+.3f}" if distribution else "n/a"
+
+    # The split scorecard, printed as two rows rather than one pooled number: a
+    # pooled median cannot distinguish the controller getting better at judging
+    # scenes from more files happening to carry a usable preview.
+    def scorecard_row(name):
+        block = summary.get(name) or {}
+        if not block.get("files"):
+            return ""
+        return (
+            f"<br><b>{name.replace('_', '-')}</b>: {block['files']} file(s), "
+            f"{block.get('reference_pairs', 0)} paired &middot; "
+            f"key EV {median('center_weighted_key_ev_delta', block)} &middot; "
+            f"saturation {median('saturation_ratio', block)} &middot; "
+            f"hue {median('hue_median_degrees', block)}&deg; "
+            f"({block.get('hue_pairs', 0)} comparable)"
+        )
+
+    colour = summary.get("raw_color_path", "rawler")
+    clip = summary.get("clip_altered_fraction")
+    clip_note = (
+        f"<br>rawler's Calibrate would have rewritten a median "
+        f"{clip['median'] * 100:.3f}% of pixels per frame (max {clip['max'] * 100:.3f}%)"
+        if clip
+        else ""
+    )
 
     head = (
         f"<p class='summary'>raw-autotune {summary['application_version']} &middot; "
-        f"preset {summary['preset']} &middot; {len(files)} file(s) &middot; "
+        f"preset {summary['preset']} &middot; controller "
+        f"{summary.get('controller_version', '?')} &middot; colour path {colour}"
+        f"/{summary.get('working_space', 'srgb')} &middot; {len(files)} file(s) &middot; "
         f"{summary.get('reference_pairs', 0)} paired<br>"
-        f"median subject EV delta {median('reference_subject_ev_delta')} &middot; "
+        f"median key EV delta {median('reference_center_weighted_key_ev_delta')} &middot; "
         f"saturation ratio {median('reference_saturation_ratio')} &middot; "
-        f"colourfulness delta {median('reference_colourfulness_delta')}</p>"
+        f"highlight {median('reference_highlight_saturation_ratio')} &middot; "
+        f"hue {median('reference_hue_median_degrees')}&deg; "
+        f"({summary.get('reference_hue_pairs', 0)} of "
+        f"{summary.get('reference_pairs', 0)} comparable) &middot; "
+        f"colourfulness delta {median('reference_colourfulness_delta')}"
+        f"{scorecard_row('independent')}{scorecard_row('preview_guided')}{clip_note}</p>"
     )
 
     with open(sheet, "w") as handle:

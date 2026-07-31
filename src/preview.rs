@@ -119,7 +119,7 @@ pub struct PreviewOracle {
     pub source: PreviewSource,
     /// Subject brightness in display EV relative to middle grey, measured with
     /// the same centre weighting the analyzer applies to the raw.
-    pub subject_display_ev: f32,
+    pub center_weighted_key_display_ev: f32,
     pub p05_display_ev: f32,
     pub p50_display_ev: f32,
     pub p95_display_ev: f32,
@@ -242,7 +242,7 @@ fn candidate_from(ifd: &IFD) -> Option<Candidate> {
 /// were measured the same way.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct DisplayEv {
-    pub subject_ev: f32,
+    pub center_weighted_key_ev: f32,
     pub p05_ev: f32,
     pub p50_ev: f32,
     pub p95_ev: f32,
@@ -328,11 +328,11 @@ pub(crate) fn display_ev(rgb: &image::RgbImage) -> Option<DisplayEv> {
         quantile(&centre, 0.50)
     };
 
-    // The controller compares `target - subject_ev`, so the oracle has to be
+    // The controller compares `target - center_weighted_key_ev`, so the oracle has to be
     // measured with the *same* estimator. A plain median against a centre-weighted
     // subject would systematically double-count a centred bright subject.
     Some(DisplayEv {
-        subject_ev: 0.60 * centre_median + 0.40 * p50,
+        center_weighted_key_ev: 0.60 * centre_median + 0.40 * p50,
         p05_ev: p05,
         p50_ev: p50,
         p95_ev: p95,
@@ -356,7 +356,7 @@ fn measure(rgb: &image::RgbImage) -> Option<PreviewOracle> {
         width: rgb.width(),
         height: rgb.height(),
         source: PreviewSource::JpegStrip, // replaced by the caller
-        subject_display_ev: stats.subject_ev,
+        center_weighted_key_display_ev: stats.center_weighted_key_ev,
         p05_display_ev: stats.p05_ev,
         p50_display_ev: stats.p50_ev,
         p95_display_ev: stats.p95_ev,
@@ -473,9 +473,9 @@ mod tests {
         }
         let oracle = measure(&image).unwrap();
         assert!(
-            oracle.subject_display_ev.abs() < 0.05,
+            oracle.center_weighted_key_display_ev.abs() < 0.05,
             "middle grey measured {} EV",
-            oracle.subject_display_ev
+            oracle.center_weighted_key_display_ev
         );
     }
 
@@ -491,7 +491,7 @@ mod tests {
                     image.put_pixel(127 - x, y, Rgb([level.saturating_sub(40); 3]));
                 }
             }
-            measure(&image).unwrap().subject_display_ev
+            measure(&image).unwrap().center_weighted_key_display_ev
         };
         assert!(build(60) < build(190));
     }

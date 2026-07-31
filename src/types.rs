@@ -1,6 +1,8 @@
 use clap::ValueEnum;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 
 pub const MID_GRAY: f32 = 0.18;
@@ -9,7 +11,57 @@ pub const MID_GRAY: f32 = 0.18;
 /// 4 added `measured.mean_saturation` and the `reference` block.
 /// 5 added the `chroma_denoise` block.
 /// 6 added `chroma_denoise.guided` and the `sharpen` block.
-pub const REPORT_SCHEMA_VERSION: u32 = 6;
+/// 7 added the `color` block, `guidance_mode` and `controller_version`, and
+///   renamed every `subject_*` field to `center_weighted_key_*`.
+/// 8 added `measured.mean_saturation_highlight`/`highlight_pixels`, the
+///   `reference.delta.hue` block and `highlight_saturation_ratio`, and
+///   `color.clip_cost.negative_luminance_fraction`.
+/// 9 added the `color.rescale` block, present only on the owned colour path,
+///   which owns black/white normalization from 0.1.18 on.
+pub const REPORT_SCHEMA_VERSION: u32 = 9;
+
+/// Name for the exposure controller's current behaviour, frozen at the colour
+/// path's correctness boundary.
+///
+/// `docs/REVIEW-2026-07-30.md` adopts a freeze: no new exposure heuristics until
+/// the colour core lands, because every constant tuned against the clipped path
+/// may be a compensation for the clipping. Recording the label in every sidecar
+/// is what makes a later comparison against a `v2` controller mechanical rather
+/// than archaeological — the corpus grades already on disk say which controller
+/// produced them.
+pub const CONTROLLER_VERSION: &str = "v1";
+
+/// Whether the exposure target came from this program's own analysis or from the
+/// camera's rendering of the same frame.
+///
+/// The corpus work has to keep these apart. `docs/PLAN.md`, "borrow the
+/// judgement, beat the rendering", sets out why:
+/// the preview oracle borrows the camera's *judgement* about a scene, which is
+/// free and caps nothing, but a scorecard that mixes guided and unguided frames
+/// cannot say whether this program's own judgement is improving. So the mode is
+/// recorded per file rather than inferred from whether a flag was passed —
+/// `--preview-exposure` is automatic, so the answer differs file by file within
+/// one run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GuidanceMode {
+    /// The controller chose the exposure target with no reference to the
+    /// camera's own rendering — either the file carries no usable preview, or
+    /// the oracle was switched off.
+    Independent,
+    /// The camera's embedded preview supplied the target the subject was placed
+    /// at.
+    PreviewGuided,
+}
+
+impl GuidanceMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Independent => "independent",
+            Self::PreviewGuided => "preview_guided",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -68,6 +120,21 @@ pub struct RunOptions {
     /// on files that only carry a thumbnail, since `preview::read` rejects
     /// those. `Some` is the user overriding that.
     pub preview_exposure: Option<f32>,
+    /// Which colour conversion to develop through.
+    pub raw_color_path: crate::color::RawColorPath,
+    /// Linear RGB space the owned colour path works in.
+    pub working_space: crate::color::WorkingSpace,
+    /// What the owned colour path does with sub-black sensor samples. Defaults
+    /// to bit-for-bit Rawler compatibility, so owning the rescale step does not
+    /// move any output until the change is measured on its own.
+    pub sub_black: crate::rescale::SubBlack,
+    /// Where to write per-stage scene-linear dumps, when asked for.
+    pub dump_stages: Option<PathBuf>,
+    /// Copy the source EXIF into the output and embed the sRGB ICC profile.
+    /// On by default: `docs/PLAN.md` criterion 2 counts this as the product,
+    /// not polish, because a photo library with no capture metadata sorts an
+    /// archive by file modification date.
+    pub write_metadata: bool,
     pub noise_scan: Option<PathBuf>,
     pub noise_profile: Option<PathBuf>,
     pub pool_noise: bool,
@@ -95,14 +162,50 @@ pub struct OutputPaths {
     pub baseline: PathBuf,
 }
 
+/// Sensor channel space: demosaiced, black/white-level normalized, but with no
+/// white balance and no colour matrix applied. Not displayable and not
+/// analysable — the numbers mean "how much light this photosite's filter let
+/// through", which is camera-specific.
+#[derive(Debug, Clone, Copy)]
+pub struct CameraRgb;
+
+/// Scene-referred linear RGB in the working space: white-balanced, matrixed,
+/// unbounded above, and possibly negative where a colour falls outside the
+/// working space's gamut. Everything from analysis to the tone curve's input
+/// lives here.
+#[derive(Debug, Clone, Copy)]
+pub struct SceneLinear;
+
+/// A pixel buffer tagged with the colour space its numbers are in.
+///
+/// The phantom parameter is the point: before this existed, "camera RGB",
+/// "scene-linear sRGB" and "scene-linear working space" were all `Vec<[f32; 3]>`
+/// and the stage order was enforced by comments. Handing the analyser
+/// un-white-balanced sensor data would have compiled and produced a plausible-
+/// looking wrong answer. Now it does not compile.
+///
+/// There is deliberately no `DisplayLinear` or `Encoded` marker: the render path
+/// takes scene-linear straight to encoded `u16` inside `tone::render_pixel_local`
+/// without ever materializing a display-linear buffer, and the encoded stage
+/// already has a distinct type in `tone::Rgb16Image`. Markers with no
+/// inhabitants would be decoration.
+///
+/// There is also deliberately no escape hatch — no `retag`, no way to relabel a
+/// buffer without rebuilding it. One was written first and turned out to have no
+/// caller, which is the useful result: every place the colour space changes also
+/// changes the numbers, so a reinterpret-in-place would only ever have been a
+/// way to skip a conversion by mistake. [`Image::map_into`] is that rule turned
+/// into a signature rather than an exception to it: it changes the marker, and it
+/// cannot be called without supplying the transform that changes the numbers.
 #[derive(Debug, Clone)]
-pub struct LinearImage {
+pub struct Image<S> {
     pub width: usize,
     pub height: usize,
     pub pixels: Vec<[f32; 3]>,
+    space: PhantomData<S>,
 }
 
-impl LinearImage {
+impl<S> Image<S> {
     pub fn new(width: usize, height: usize, pixels: Vec<[f32; 3]>) -> anyhow::Result<Self> {
         anyhow::ensure!(
             pixels.len() == width.saturating_mul(height),
@@ -116,9 +219,39 @@ impl LinearImage {
             width,
             height,
             pixels,
+            space: PhantomData,
         })
     }
+
+    /// Rewrite every pixel and retag the buffer as a different colour space.
+    ///
+    /// In place, and that is the whole reason it exists. The owned colour path
+    /// used to demosaic into one `Vec<[f32; 3]>` and then `collect()` the
+    /// converted pixels into a second one — 600 MB each on a 50 megapixel Expert
+    /// RAW, both alive at the same moment. Reusing the allocation removes one of
+    /// them, which bears directly on the `--jobs 8` exhaustion recorded in
+    /// `docs/STATUS.md`.
+    ///
+    /// Each pixel's result depends only on itself, so the parallel rewrite is
+    /// deterministic regardless of how rayon splits it.
+    pub fn map_into<T, F>(mut self, op: F) -> Image<T>
+    where
+        F: Fn([f32; 3]) -> [f32; 3] + Send + Sync,
+    {
+        self.pixels
+            .par_iter_mut()
+            .for_each(|pixel| *pixel = op(*pixel));
+        Image {
+            width: self.width,
+            height: self.height,
+            pixels: self.pixels,
+            space: PhantomData,
+        }
+    }
 }
+
+/// What the analyser, the local operators and the tone curve all work on.
+pub type LinearImage = Image<SceneLinear>;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -233,6 +366,15 @@ pub struct Sidecar {
     /// paired file was found.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reference: Option<crate::reference::ReferenceReport>,
+    /// Which colour path developed this file, on what calibration data, and —
+    /// on the owned path — what Rawler's clipping would have cost.
+    pub color: crate::color::ColorReport,
+    /// Whether this file's exposure target was the controller's own or the
+    /// camera's. Recorded per file because the decision is automatic and so
+    /// differs within a single run.
+    pub guidance_mode: GuidanceMode,
+    /// Frozen name for the controller that produced these parameters.
+    pub controller_version: String,
     pub analysis: AnalysisStats,
     pub parameters: ToneParams,
     pub limitations: Vec<String>,
@@ -303,6 +445,10 @@ pub struct ProcessReport {
     pub sharpen: Option<crate::sharpen::SharpenReport>,
     /// The camera's own JPEG of this capture, measured against ours.
     pub reference: Option<crate::reference::ReferenceReport>,
+    /// Which colour path ran. `None` for a skipped file, which was never decoded.
+    pub color: Option<crate::color::ColorReport>,
+    /// `None` for a skipped file, where no exposure decision was taken.
+    pub guidance_mode: Option<GuidanceMode>,
 }
 
 /// One row of the batch summary.
@@ -337,7 +483,50 @@ pub struct SummaryEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reference: Option<crate::reference::ReferenceReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<crate::color::ColorReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guidance_mode: Option<GuidanceMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// One half of the split scorecard: everything measured over the files that were
+/// developed in a single guidance mode.
+///
+/// The split is the point. `docs/REVIEW-2026-07-30.md` adopts separating
+/// independent-Auto from preview-guided evaluation, because a pooled median
+/// cannot distinguish "the controller is getting better at judging scenes" from
+/// "more files happened to carry a usable preview this run". Run the corpus twice
+/// — once plainly, once with `--no-preview` — and the `independent` block is the
+/// column that measures this program's own judgement.
+#[derive(Debug, Default, Serialize)]
+pub struct GuidanceScorecard {
+    /// Files developed in this mode.
+    pub files: usize,
+    /// Of those, how many had a camera JPEG to be measured against.
+    pub reference_pairs: usize,
+    /// Ours minus the camera's, in display EV.
+    pub center_weighted_key_ev_delta: Option<Distribution>,
+    /// Ours divided by the camera's; 1.0 is a match.
+    pub saturation_ratio: Option<Distribution>,
+    /// The same ratio over highlights only, which is where Rawler's clipping
+    /// desaturates and where the whole-frame figure is nearly blind.
+    pub highlight_saturation_ratio: Option<Distribution>,
+    pub colourfulness_delta: Option<Distribution>,
+    pub mean_level_delta: Option<Distribution>,
+    /// Distribution of the per-file median hue difference against the camera, in
+    /// degrees. The axis the 0.1.17 A/B lacked.
+    pub hue_median_degrees: Option<Distribution>,
+    /// ...and of the per-file 90th percentile, which is where a gamut-mapping
+    /// failure shows up: hue errors concentrate in the out-of-gamut minority, so a
+    /// median can hold still while the tail moves a long way.
+    pub hue_p90_degrees: Option<Distribution>,
+    /// Per-file mean hue difference. See `HueComparison::mean_degrees` for why
+    /// this matters more than the median on this axis.
+    pub hue_mean_degrees: Option<Distribution>,
+    /// How many of `reference_pairs` could actually be compared per pixel. A gap
+    /// means renderings of different crops, which the comparison refuses.
+    pub hue_pairs: usize,
 }
 
 /// Machine-readable report for a whole run, written by `--summary`.
@@ -349,6 +538,11 @@ pub struct BatchSummary {
     pub schema_version: u32,
     pub application_version: String,
     pub preset: Preset,
+    /// Frozen name for the controller this run used.
+    pub controller_version: String,
+    /// Colour path the run was invoked with, and its working space.
+    pub raw_color_path: crate::color::RawColorPath,
+    pub working_space: crate::color::WorkingSpace,
     pub dry_run: bool,
     pub total: usize,
     pub completed: usize,
@@ -367,11 +561,38 @@ pub struct BatchSummary {
     pub reference_pairs: usize,
     /// Ours minus the camera's, over the paired files. The exposure difference
     /// is measured even under `--dry-run`; the rest needs a render.
-    pub reference_subject_ev_delta: Option<Distribution>,
+    pub reference_center_weighted_key_ev_delta: Option<Distribution>,
     pub reference_colourfulness_delta: Option<Distribution>,
     pub reference_mean_level_delta: Option<Distribution>,
     /// Our saturation divided by the camera's; 1.0 is a match.
     pub reference_saturation_ratio: Option<Distribution>,
+    /// The same, over highlights only.
+    pub reference_highlight_saturation_ratio: Option<Distribution>,
+    /// Per-file median hue difference against the camera, in degrees.
+    pub reference_hue_median_degrees: Option<Distribution>,
+    pub reference_hue_p90_degrees: Option<Distribution>,
+    pub reference_hue_mean_degrees: Option<Distribution>,
+    /// Of `reference_pairs`, how many were comparable per pixel.
+    pub reference_hue_pairs: usize,
+    /// How many files landed in each guidance mode.
+    pub guidance_mode_counts: BTreeMap<String, usize>,
+    /// The same reference measures as above, but over only the files whose
+    /// exposure the controller decided by itself.
+    pub independent: GuidanceScorecard,
+    /// ...and over only the files that followed the camera's preview.
+    pub preview_guided: GuidanceScorecard,
+    /// Distribution of the owned colour path's `clip_cost.altered_fraction`:
+    /// what share of each frame Rawler's `Calibrate` would have rewritten.
+    /// Present only on `--raw-color-path owned`.
+    pub clip_altered_fraction: Option<Distribution>,
+    /// Distribution of `clip_cost.mean_abs_delta` — how far, on average, each
+    /// channel would have moved.
+    pub clip_mean_abs_delta: Option<Distribution>,
+    /// Files whose calibration matrix Rawler would have chosen
+    /// nondeterministically, because they carry several matrices and no D65 one.
+    /// Any number above zero means the default path is not reproducible on those
+    /// files and they should be developed with `--raw-color-path owned`.
+    pub nondeterministic_illuminant_files: usize,
     /// Group key to frame count, for runs that pooled noise.
     pub pooled_groups: BTreeMap<String, usize>,
     pub files: Vec<SummaryEntry>,

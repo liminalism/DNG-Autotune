@@ -21,9 +21,24 @@
 //!
 //! **Chromatic only.** The paper notes its correction "will always increase the
 //! lightness of the pixel". Here exposure is the tone controller's job, so each
-//! white point is normalized to unit luminance. Since luminance is linear, a
-//! weighted blend of unit-luminance white points also has unit luminance, and
-//! the correction moves colour without moving exposure.
+//! white point is normalized to unit luminance before use — and a weighted
+//! blend of unit-luminance white points has unit luminance too, since
+//! luminance is linear (checked by `white_points_carry_unit_luminance` below).
+//!
+//! That is *not* enough to make the correction exposure-neutral, though: the
+//! correction below **divides** each channel by the blended white point, and
+//! the reciprocal of a unit-luminance vector does not itself carry unit
+//! luminance in general. Concretely, for weights `c_i` summing to 1 and
+//! `w_i > 0` with `sum(c_i * w_i) == 1`, convexity of `1/x` gives (Jensen)
+//! `sum(c_i / w_i) >= 1 / sum(c_i * w_i) == 1`, with equality only when every
+//! `w_i` is equal, i.e. `w` is neutral. So dividing by a non-neutral,
+//! unit-luminance white point *raises* the pixel's luminance, in proportion to
+//! how non-neutral the local light is — an exposure change hiding inside a
+//! colour operator, which is exactly what this module claims not to do.
+//! `apply` therefore rescales every corrected pixel back to its
+//! pre-correction luminance after the division (see `luminance_restore_gain`);
+//! that restore step, not the unit-luminance normalization by itself, is what
+//! actually makes the correction move colour without moving exposure.
 //!
 //! # Why it only acts on mixed lighting
 //!
@@ -78,6 +93,14 @@ const MAX_ILLUMINANT_CAST: f32 = 0.22;
 const NEUTRAL: (f32, f32) = (1.0 / 3.0, 1.0 / 3.0);
 /// Approximate pixels sampled when searching for lights.
 const TARGET_SAMPLES: usize = 200_000;
+/// Regularization used when restoring a pixel's luminance after the
+/// per-channel division in [`apply`]; see [`luminance_restore_gain`].
+///
+/// Small next to any real pixel value (linear samples on the test corpus run
+/// from about 0.01 to a few), so it leaves the restore for ordinary pixels
+/// unaffected to well under float roundoff, while still bounding the gain
+/// applied to pixels whose luminance sits at or near zero.
+const LUMINANCE_RESTORE_EPS: f32 = 1.0e-4;
 
 /// One detected illuminant.
 #[derive(Debug, Clone, Serialize)]
@@ -348,6 +371,47 @@ fn blended_white_point(
     blended
 }
 
+/// Gain that restores a pixel's luminance from `after` back to `before`.
+///
+/// The per-channel division in [`apply`] changes a pixel's luminance unless
+/// the divisor happens to be neutral (see the module doc). Multiplying the
+/// whole pixel by `before / after` restores it exactly, because luminance is
+/// linear: `luminance(k * p) == k * luminance(p)`.
+///
+/// That plain ratio is not safe as written: `after` can be zero, and once
+/// channels are allowed to go negative (planned for the owned-colour path) a
+/// pixel can approach zero luminance from either side, not just from above.
+/// Clamping `after` away from zero would dodge the blow-up but jumps the
+/// moment the clamp engages — worse, clamping via `after.abs().max(eps)`
+/// loses the sign at `after == 0`, so the gain would flip discontinuously as
+/// `after` crosses zero. Instead this uses the damped reciprocal
+/// `x / (x^2 + eps^2)`: it agrees with `1/x` to within `(eps/x)^2` once `|x|`
+/// clears `eps`, and — being an odd, smooth function of `after` — passes
+/// through zero continuously instead of jumping, so there is no seam in the
+/// restored image at the pixels where the guard actually matters.
+///
+/// The one exact special case is `before == after`: there the division did
+/// not move the pixel's luminance at all (typically because the local white
+/// point was already neutral, or `strength` dialed it to neutral), so the
+/// true restore gain is exactly 1 — not the regularized formula's
+/// approximation of it — and using the exact value here is what keeps a
+/// strictly neutral correction a bit-exact no-op, matching what the
+/// undivided-by-luminance code already got right.
+///
+/// `before` or `after` being non-finite means the pixel was already garbage
+/// going in (not something this operator can cause); the gain is left at 1
+/// so the restore step does not manufacture a new NaN out of an existing one.
+#[inline]
+fn luminance_restore_gain(before: f32, after: f32) -> f32 {
+    if !before.is_finite() || !after.is_finite() {
+        return 1.0;
+    }
+    if before == after {
+        return 1.0;
+    }
+    before * after / (after * after + LUMINANCE_RESTORE_EPS * LUMINANCE_RESTORE_EPS)
+}
+
 /// Apply a local white balance to `image` in place.
 ///
 /// `strength` interpolates between no correction and the full blend. Returns
@@ -380,13 +444,29 @@ pub fn apply(image: &mut LinearImage, strength: f32) -> Option<LocalWhiteBalance
                 let x = (offset % width) as f32 * inverse_width;
                 let y = (offset / width) as f32 * inverse_height;
                 let white = blended_white_point(&lights, &light_chroma, x, y, *pixel);
+                let before = luminance(*pixel);
 
                 for channel in 0..3 {
-                    // Dial between neutral and the blended white point.
+                    // Dial between neutral and the blended white point. This
+                    // is where `strength` acts, before the division; the
+                    // luminance restore below sees only its result, so it
+                    // composes correctly at every strength — including 0,
+                    // where the divisor is exactly 1.0 for every channel, the
+                    // pixel is untouched, and `luminance_restore_gain` takes
+                    // its `before == after` fast path.
                     let divisor = 1.0 + (white[channel] - 1.0) * strength;
                     if divisor > 1.0e-4 {
                         pixel[channel] /= divisor;
                     }
+                }
+
+                // The division above is not luminance-preserving on its own
+                // (see the module doc); restore it so the operator moves
+                // colour without moving exposure.
+                let after = luminance(*pixel);
+                let gain = luminance_restore_gain(before, after);
+                for channel in pixel.iter_mut() {
+                    *channel *= gain;
                 }
             });
     }
@@ -411,11 +491,7 @@ mod tests {
         let pixels = (0..width * height)
             .map(|index| f(index % width, index / width))
             .collect();
-        LinearImage {
-            width,
-            height,
-            pixels,
-        }
+        LinearImage::new(width, height, pixels).unwrap()
     }
 
     #[test]
@@ -479,6 +555,139 @@ mod tests {
         for light in detect(&image).unwrap() {
             let value = luminance(light.white_point);
             assert!((value - 1.0).abs() < 1.0e-4, "luminance {value}");
+        }
+    }
+
+    /// The bug this module used to have, at the level of the maths: the
+    /// *reciprocal* of a unit-luminance, non-neutral white point does not
+    /// itself carry unit luminance. `white_points_carry_unit_luminance` above
+    /// shows a light's own white point is unit luminance; this shows dividing
+    /// by it is not exposure-neutral on its own — which is why `apply` now
+    /// restores luminance after the division instead of relying on the
+    /// unit-luminance normalization alone.
+    #[test]
+    fn dividing_by_a_unit_luminance_white_point_is_not_luminance_preserving() {
+        let raw = [1.3f32, 1.0, 0.7]; // an arbitrary non-neutral colour
+        let scale = luminance(raw);
+        let white_point = [raw[0] / scale, raw[1] / scale, raw[2] / scale];
+        assert!(
+            (luminance(white_point) - 1.0).abs() < 1.0e-6,
+            "sanity: white point must be unit luminance"
+        );
+
+        let reciprocal = [
+            1.0 / white_point[0],
+            1.0 / white_point[1],
+            1.0 / white_point[2],
+        ];
+        let reciprocal_luminance = luminance(reciprocal);
+        assert!(
+            (reciprocal_luminance - 1.0).abs() > 1.0e-3,
+            "a non-neutral white point's reciprocal should not be unit \
+             luminance, but got {reciprocal_luminance}"
+        );
+        // Jensen's inequality on the convex 1/x: the reciprocal's luminance
+        // can only be pulled up from 1, never down. This is the exposure
+        // increase the module doc now describes, and `apply` corrects for.
+        assert!(reciprocal_luminance > 1.0, "got {reciprocal_luminance}");
+    }
+
+    /// When the division does not move a pixel's luminance at all (the
+    /// divisor was exactly 1.0 for every channel — a neutral local white
+    /// point, or `strength == 0`), the restore must be an exact no-op, not
+    /// merely close: this is the case the pre-restore code already got
+    /// right, and it must not regress to a near-miss.
+    #[test]
+    fn neutral_division_is_an_exact_restore_no_op() {
+        let pixel = [0.42f32, 0.17, 0.83];
+        let before = luminance(pixel);
+        let after = luminance(pixel); // stand-in for a divisor of exactly 1.0
+        assert_eq!(luminance_restore_gain(before, after), 1.0);
+    }
+
+    /// The owned-colour path (`src/color.rs`, `--raw-color-path owned`) stops
+    /// clipping out-of-gamut colours, so a pixel's luminance can be negative,
+    /// or `before`/`after` can straddle zero on opposite sides. The gain must
+    /// stay finite in both cases and must not flip sign discontinuously at
+    /// the crossing — see the damped-reciprocal reasoning on
+    /// `luminance_restore_gain`.
+    #[test]
+    fn restore_gain_is_finite_across_negative_and_near_zero_luminance() {
+        // Negative target luminance reached from a positive `after`: finite,
+        // and the restored luminance actually lands on `before`.
+        let gain = luminance_restore_gain(-0.4, 0.6);
+        assert!(gain.is_finite());
+        assert!((gain * 0.6 - (-0.4)).abs() < 1.0e-3, "gain {gain}");
+
+        // `after` exactly zero: the plain ratio `before / after` would be
+        // infinite; the regularized gain must not be.
+        assert!(luminance_restore_gain(0.5, 0.0).is_finite());
+
+        // `after` sampled just below and just above zero: `x / (x^2 + eps^2)`
+        // is an odd function of `after`, so the gain should be (anti)symmetric
+        // across the crossing rather than jumping — the near-zero-luminance
+        // pixel gets a large but finite, smoothly sign-flipping multiplier on
+        // either side, not a step.
+        let just_below = luminance_restore_gain(0.5, -1.0e-5);
+        let just_above = luminance_restore_gain(0.5, 1.0e-5);
+        assert!(just_below.is_finite() && just_above.is_finite());
+        assert!(
+            (just_below + just_above).abs() < 1.0e-2,
+            "gain should flip sign smoothly across after == 0: {just_below} vs {just_above}"
+        );
+    }
+
+    /// Correcting must preserve each pixel's own luminance, across both
+    /// strongly saturated and near-neutral colours — not just the (unit
+    /// luminance, by construction) light white points themselves.
+    #[test]
+    fn correction_preserves_luminance_for_saturated_and_near_neutral_colours() {
+        let mut image = image_from(128, 128, |x, y| {
+            let level = 0.3 + 0.7 * (y as f32 / 127.0);
+            let (r_ratio, b_ratio) = match x / 32 {
+                0 => (1.35, 0.65), // strongly warm
+                1 => (0.65, 1.35), // strongly cool
+                2 => (1.04, 0.97), // near neutral, warm-leaning
+                _ => (0.97, 1.04), // near neutral, cool-leaning
+            };
+            [level * r_ratio, level, level * b_ratio]
+        });
+        let before = image.pixels.clone();
+        let result = apply(&mut image, 1.0).unwrap();
+        assert!(result.applied, "expected a correction to run");
+
+        for (index, (pre, post)) in before.iter().zip(image.pixels.iter()).enumerate() {
+            let l0 = luminance(*pre);
+            let l1 = luminance(*post);
+            assert!(
+                (l0 - l1).abs() < 1.0e-4,
+                "pixel {index}: {pre:?} -> {post:?}, luminance {l0} vs {l1}"
+            );
+        }
+    }
+
+    /// The restore must compose correctly at every strength, not just full
+    /// strength: `strength` is baked into the divisor before the restore
+    /// runs, so the restore should hold for whatever pixel that divisor
+    /// produced.
+    #[test]
+    fn correction_preserves_luminance_at_partial_strength() {
+        let mut image = image_from(128, 128, |x, y| {
+            let level = 0.3 + 0.7 * (y as f32 / 127.0);
+            if x < 64 {
+                [level * 1.30, level, level * 0.70]
+            } else {
+                [level * 0.70, level, level * 1.30]
+            }
+        });
+        let before = image.pixels.clone();
+        let result = apply(&mut image, 0.5).unwrap();
+        assert!(result.applied);
+
+        for (pre, post) in before.iter().zip(image.pixels.iter()) {
+            let l0 = luminance(*pre);
+            let l1 = luminance(*post);
+            assert!((l0 - l1).abs() < 1.0e-4, "luminance {l0} vs {l1}");
         }
     }
 

@@ -1,10 +1,10 @@
 [package]
 name = "raw-autotune"
-version = "0.1.15"
+version = "0.1.18"
 edition = "2024"
 rust-version = "1.89"
 description = "A small batch RAW developer with deterministic automatic exposure and tone mapping"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 repository = ""
 publish = false
 

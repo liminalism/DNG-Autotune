@@ -132,14 +132,46 @@ fn compress_gamut(mut rgb: [f32; 3], anchor: f32) -> [f32; 3] {
     rgb
 }
 
+/// Convert working-space linear RGB to display (sRGB primaries) linear RGB.
+///
+/// Applied at the very top of the render, before anything measures the pixel, so
+/// every stage below stays exactly the code it was when the working space and
+/// the display space were the same thing. That placement is not just
+/// convenience: what actually clips is a *display* channel, so the highlight
+/// protection and `compress_gamut` have to be reasoning about display channels
+/// to do their jobs. Doing the conversion later would leave them protecting a
+/// wide-gamut maximum that is not the one at risk.
+///
+/// Order does not matter against the exposure gain — both are linear — so
+/// folding this in after the gain rather than before it costs nothing.
 #[inline]
-fn render_pixel_local(source: [f32; 3], params: &ToneParams, local_ev: f32) -> [u16; 3] {
+fn to_display(rgb: [f32; 3], matrix: &crate::color::Matrix3) -> [f32; 3] {
+    [
+        matrix[0][0] * rgb[0] + matrix[0][1] * rgb[1] + matrix[0][2] * rgb[2],
+        matrix[1][0] * rgb[0] + matrix[1][1] * rgb[1] + matrix[1][2] * rgb[2],
+        matrix[2][0] * rgb[0] + matrix[2][1] * rgb[1] + matrix[2][2] * rgb[2],
+    ]
+}
+
+#[inline]
+fn render_pixel_local(
+    source: [f32; 3],
+    params: &ToneParams,
+    local_ev: f32,
+    working_to_display: Option<&crate::color::Matrix3>,
+) -> [u16; 3] {
     let exposure_gain = (params.exposure_ev + local_ev).exp2();
     let exposed = [
         source[0] * exposure_gain,
         source[1] * exposure_gain,
         source[2] * exposure_gain,
     ];
+    // `None` when the working space already has sRGB primaries, which is the
+    // default: no matrix, no arithmetic, byte-identical to before this existed.
+    let exposed = match working_to_display {
+        Some(matrix) => to_display(exposed, matrix),
+        None => exposed,
+    };
 
     let source_luminance = luminance(exposed).max(1.0e-8);
     let maximum_channel = exposed[0].max(exposed[1]).max(exposed[2]).max(1.0e-8);
@@ -176,7 +208,24 @@ fn render_pixel_local(source: [f32; 3], params: &ToneParams, local_ev: f32) -> [
     // Chroma work still anchors on the pixel's own rendered luminance, so the
     // norm blend changes how far highlights are rolled back but not the hue or
     // the relationship between the channels.
-    let mapped_luminance = luminance(rgb).clamp(0.0, 1.0);
+    //
+    // The floor is `black_output_linear`, not 0, and that detail is load-bearing.
+    // `luminance` is a *signed* weighted sum, so a pixel with a large enough
+    // negative channel — which the owned colour path produces by design, for
+    // colours outside the working space's gamut — has negative luminance. Clamped
+    // to 0 it anchored `compress_gamut` at exactly zero, whose scale is then
+    // `anchor / (anchor - min)` = `0 / |min|` = 0, multiplying *every* channel by
+    // zero and collapsing the pixel to pure black — including its positive
+    // channels. Rawler's per-channel clip keeps those, so on that cohort the
+    // owned path was strictly more destructive than the clip it replaced. That is
+    // the whole of the `crushed_fraction` regression the 0.1.17 A/B measured, and
+    // `crate::color`'s `negative_luminance_fraction` predicted it exactly: zero
+    // false positives and zero false negatives over 108 frames.
+    //
+    // Flooring here also removes a plain inconsistency. `mapped_norm` above is
+    // already clamped into `[black_output_linear, white_output_linear]`, so the
+    // curve and the chroma anchor disagreed about where black is. They now agree.
+    let mapped_luminance = luminance(rgb).clamp(params.black_output_linear, 1.0);
 
     let normalized_highlight = (output_ev / params.white_output_ev.max(1.0e-4)).clamp(0.0, 1.0);
     let highlight_saturation = 1.0 - params.highlight_desaturation * normalized_highlight.powi(2);
@@ -237,15 +286,22 @@ fn render_pixel_local(source: [f32; 3], params: &ToneParams, local_ev: f32) -> [
     ]
 }
 
+/// One pixel, no local correction, no working-space conversion.
+///
+/// Test-only since 0.1.17: `render` calls `render_pixel_local` directly so it can
+/// thread the working-space matrix through, and every invariant test below is
+/// about the sRGB-working-space case, which is what this spells.
+#[cfg(test)]
 #[inline]
 fn render_pixel(source: [f32; 3], params: &ToneParams) -> [u16; 3] {
-    render_pixel_local(source, params, 0.0)
+    render_pixel_local(source, params, 0.0, None)
 }
 
 pub fn render(
     image: &LinearImage,
     params: &ToneParams,
     local_tone: Option<&crate::localtone::LocalToneMap>,
+    working_to_display: Option<&crate::color::Matrix3>,
 ) -> Rgb16Image {
     let mut output = vec![0_u16; image.pixels.len() * 3];
 
@@ -261,7 +317,8 @@ pub fn render(
                 .zip(image.pixels.par_iter())
                 .zip(local_tone.corrections_ev().par_iter())
                 .for_each(|((destination, source), local_ev)| {
-                    let rendered = render_pixel_local(*source, params, *local_ev);
+                    let rendered =
+                        render_pixel_local(*source, params, *local_ev, working_to_display);
                     destination.copy_from_slice(&rendered);
                 });
         }
@@ -270,7 +327,7 @@ pub fn render(
                 .par_chunks_exact_mut(3)
                 .zip(image.pixels.par_iter())
                 .for_each(|(destination, source)| {
-                    let rendered = render_pixel(*source, params);
+                    let rendered = render_pixel_local(*source, params, 0.0, working_to_display);
                     destination.copy_from_slice(&rendered);
                 });
         }
@@ -280,13 +337,20 @@ pub fn render(
         .expect("rendered buffer dimensions are internally consistent")
 }
 
-pub fn render_baseline(image: &LinearImage) -> Rgb16Image {
+pub fn render_baseline(
+    image: &LinearImage,
+    working_to_display: Option<&crate::color::Matrix3>,
+) -> Rgb16Image {
     let mut output = vec![0_u16; image.pixels.len() * 3];
 
     output
         .par_chunks_exact_mut(3)
         .zip(image.pixels.par_iter())
         .for_each(|(destination, source)| {
+            let source = match working_to_display {
+                Some(matrix) => to_display(*source, matrix),
+                None => *source,
+            };
             destination[0] = to_u16(srgb_encode(source[0]));
             destination[1] = to_u16(srgb_encode(source[1]));
             destination[2] = to_u16(srgb_encode(source[2]));
@@ -556,8 +620,58 @@ mod tests {
         let gain = local_ev.exp2();
         let pre_scaled = [source[0] * gain, source[1] * gain, source[2] * gain];
         assert_eq!(
-            render_pixel_local(source, &parameters_protected(), local_ev),
+            render_pixel_local(source, &parameters_protected(), local_ev, None),
             render_pixel(pre_scaled, &parameters_protected())
         );
+    }
+
+    /// A wide working space must be a change of coordinates, not a change of
+    /// colour: the *same colour* expressed in BT.2020 has to render to the same
+    /// output pixel as it does in sRGB. If this fails, `--working-space rec2020`
+    /// is silently shifting hue and the A/B against the Rawler path is measuring
+    /// two things at once.
+    #[test]
+    fn a_wide_working_space_renders_the_same_colour_the_same_way() {
+        use crate::color::WorkingSpace;
+
+        let rec2020_to_display = WorkingSpace::Rec2020
+            .to_display()
+            .expect("BT.2020 needs a conversion");
+
+        // Invert it so a target sRGB colour can be expressed in BT.2020 first.
+        let display_to_rec2020 =
+            crate::color::invert3(rec2020_to_display).expect("the conversion is invertible");
+
+        // A neutral midtone, a saturated sky, and an out-of-sRGB-gamut green.
+        for srgb in [[MID_GRAY; 3], [0.60, 1.10, 4.40], [0.05, 0.90, 0.10]] {
+            let as_rec2020 = [
+                display_to_rec2020[0][0] * srgb[0]
+                    + display_to_rec2020[0][1] * srgb[1]
+                    + display_to_rec2020[0][2] * srgb[2],
+                display_to_rec2020[1][0] * srgb[0]
+                    + display_to_rec2020[1][1] * srgb[1]
+                    + display_to_rec2020[1][2] * srgb[2],
+                display_to_rec2020[2][0] * srgb[0]
+                    + display_to_rec2020[2][1] * srgb[1]
+                    + display_to_rec2020[2][2] * srgb[2],
+            ];
+
+            let direct = render_pixel_local(srgb, &parameters_protected(), 0.0, None);
+            let converted = render_pixel_local(
+                as_rec2020,
+                &parameters_protected(),
+                0.0,
+                Some(&rec2020_to_display),
+            );
+
+            for channel in 0..3 {
+                let difference = direct[channel].abs_diff(converted[channel]);
+                assert!(
+                    difference < 96,
+                    "channel {channel} of {srgb:?} rendered as {direct:?} in sRGB but \
+                     {converted:?} via BT.2020 (difference {difference} of 65535)"
+                );
+            }
+        }
     }
 }

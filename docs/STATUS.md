@@ -1,6 +1,6 @@
-# Status and handoff — raw-autotune 0.1.14
+# Status and handoff — raw-autotune 0.1.18
 
-Updated 2026-07-28. Scope as stated: the program has to work on **Samsung S24+
+Updated 2026-07-30. Scope as stated: the program has to work on **Samsung S24+
 Expert RAW**, **ProShot** output, and **Sony A7C ARW**. This records how far
 that is, what to run, and what is left.
 
@@ -13,14 +13,26 @@ the preview oracle became automatic.
 
 | Target | Files on hand | Paired JPEG | State | Invocation |
 |---|---|---|---|---|
-| A7C ARW | 313 | 55 | **Works.** 313/313 render, 0 failures | defaults |
-| ProShot DNG | 39 | 35 | **Works.** 39/39 render | defaults |
-| S24+ Expert RAW | 9 | 8 | **Works.** 9/9 render | defaults |
-| S24+ Pro mode | 7 | 0 | **Works.** 7/7 render | defaults |
+| A7C ARW | 321 | 63 | **Works.** 321/321 render, 0 failures | defaults |
+| ProShot + S24+ Pro mode DNG | 39 | 35 | **Works.** 39/39 render | defaults |
+| S24+ Expert RAW | 16 | 8 | **Works.** 16/16 render | defaults |
 
-368 of 368 files render with zero failures on a single no-flag invocation, which
-is `docs/PLAN.md` §1's first criterion for "usable". 98 of them have a paired
-camera JPEG, spanning ISO 25 to 12800.
+376 of 376 files render with zero failures on a single no-flag invocation, which
+is `docs/PLAN.md`'s first criterion for "usable". 106 of them have a paired
+camera JPEG, spanning ISO 25 to 12800. Counts are as of 0.1.18 and were taken
+from a `--dry-run --reference --summary` over `raw/`; the two Samsung sources are
+merged in the middle row because they share a `Model` string — see the next
+section for how to tell them apart.
+
+Since 0.1.17 the output also carries EXIF and an sRGB ICC profile, which is
+`docs/PLAN.md`'s second criterion. The third and fourth — no ruined frame, and
+presentable high-ISO — remain the open ones.
+
+**Since 0.1.18 the default colour path is `owned`, not Rawler's.** The program now
+owns everything from black-level normalization onward except the demosaic itself;
+see the scorecard section below for the evidence the default was flipped on. The
+project is also AGPL-3.0-or-later as of 0.1.18 (it was MIT), which removed the sole
+objection to porting GPL-3 demosaic algorithms later.
 
 ## Telling the two Samsung sources apart
 
@@ -77,7 +89,7 @@ raw-autotune raw/arw --output out --format jpeg --preview-exposure 0
 Keep `--jobs` at 3 or below when the batch contains 50-megapixel Expert RAW
 files. `--jobs 8` over the full corpus is killed by the OOM killer on a 31 GiB
 machine, and has been since before 0.1.12 — this is not caused by any recent
-feature, and `docs/PLAN.md` §3's automatic `--jobs` item is the fix.
+feature, and `docs/PLAN.md` lists `--jobs`-from-RAM as the next item that touches no rendering.
 
 Survey a batch without writing images:
 
@@ -235,7 +247,7 @@ range, and floors that at the pixel's unboosted scale so it cannot overrule
 
 ## The preview oracle became automatic in 0.1.13
 
-`docs/PLAN.md` §3's first item, done — and done differently from how the plan
+`docs/PLAN.md`'s zero-flag criterion, met — and met differently from how the plan
 described it. The plan proposed triggering on file class; the 42 pairs say the
 trigger must be **the preview itself**.
 
@@ -326,9 +338,239 @@ cost 20 highlight wins and was fixed. See `CHANGELOG.md` 0.1.15.
 This table is the acceptance test for any change that claims to beat the camera.
 Distance-to-camera is the wrong target for these four rows; win count is.
 
+### 0.1.18: the regression is fixed and the owned path wins on hue
+
+Two additions changed the picture, and both were about the program being able to
+*see* what it was doing rather than about doing something new.
+
+**A hue axis exists now.** `src/oklab.rs` plus a per-pixel comparison on a
+canonical 512-px grid (`reference::compare_pixels`). The four standing axes cannot
+see a hue shift, and `crushed_fraction` was structurally unable to favour the owned
+path at all — post-`Calibrate` data has no negatives, so rawler can never crush by
+that route while the owned path can only add zeros. Also new:
+`measured.mean_saturation_highlight`, saturation restricted to pixels above 0.7
+luminance.
+
+**The `crushed_fraction` regression is gone.** One clamp: `tone.rs`'s chroma anchor
+is floored at `black_output_linear` rather than 0, matching what `mapped_norm` was
+already clamped to. Head to head on 108 pairs, owned against rawler:
+
+| axis | before | after |
+|---|---|---|
+| `crushed_fraction` | 0 better, 87 same, **21 worse** | 0 better, **108 same**, 0 worse |
+| `luminance_entropy` | 36 / 5 / 67 | 41 / 5 / 62 |
+| `average_gradient` | **84** / 0 / 24 | **84** / 0 / 24 |
+| `near_white_fraction` | 34 / 35 / 39 | 34 / 35 / 39 |
+
+**And the owned path is closer to the camera's hue**: median 11.27° against
+rawler's 12.09°, mean 20.61° against 21.04°. Read the mean and the restricted
+cohort, not the corpus median — the clip only touches out-of-gamut pixels, so over
+all frames the median change is 0.0000° while the best frame improves by 26.2°.
+Over the 30 most out-of-gamut frames the median mean-hue improvement is **-0.905°**
+with only 13 of 30 worse, and the six largest wins are all frames where the clip
+would have rewritten 33-66% of pixels.
+
+Two things that fell out of the measurement rather than being planned:
+
+- **Our highlights are half again more saturated than the camera's** — ratio 1.53
+  (rawler) to 1.62 (owned), against a whole-frame 1.05. The whole-frame figure was
+  blind to it. This does *not* support the review's suspicion that the 1.20
+  saturation multiplier compensated for Rawler's desaturation; it points the other
+  way. Taste, not information — needs eyes, not a constant.
+- **A noise-vs-colour split for negatives and a scene-linear gamut operator were
+  both declined on evidence.** The residual entropy difference is uncorrelated with
+  negatives (r = -0.16, -0.01) and mildly *positively* correlated with
+  `above_one_fraction` (+0.16), median -0.000004 bits. And the gamut operator as
+  originally proposed was impossible: "preserve hue **and luminance**" cannot map a
+  luminance ≤ 0 pixel anywhere legal except black, so it would have reproduced the
+  bug one stage earlier.
+
+### Owning the rescale step, and where the default landed
+
+**`--raw-color-path owned` is the default since 0.1.18**, on the scorecard above:
+84/24 on local detail, a tie on crushed shadows, closer hue, and the only loss
+(`luminance_entropy`, 41/62) at a median of -0.0000039 bits against a 7.5-bit scale
+on a metric whose maximiser is histogram equalisation. `rawler` remains available as
+the A/B control and for reproducing pre-0.1.18 output.
+
+**`src/rescale.rs` now owns black/white normalization, the demosaic ROI and the
+default crop.** Rawler's `PPGDemosaic` is the only piece still rented. Peak working
+set fell 25% on a 24 MP ARW (321 → 242 MB) and 11% on a 24.5 MP linear DNG, because
+`develop_intermediate` clones the whole `RawImage`, floats it, and then builds a
+second full buffer.
+
+`--sub-black` is a hidden three-way control, defaulting to `rawler-compat`, which is
+**bit-identical** to `RawImage::apply_scaling` — proven by eight `f32::to_bits()`
+tests and by 376/376 files with unchanged `analysis`/`parameters` and byte-identical
+TIFFs. So owning the step moved nothing on its own; that was the point.
+
+Four latent Rawler defects are closed in passing and **no real file trips any of
+them** — hardcoded 2×2 black-level repeat, no `ActiveArea` anchoring of that
+pattern, `as_bayer_array()` broadcasting `[0]` unless the length is exactly 4, and
+odd dimensions leaving the last row or column at raw DN. `RescaleReport::notes`
+fires if a future file does. Also settled: the A7C's four black levels are *equal*
+(512, or 1024 at higher ISO), white level count 1 (15360), origin `(0,0)`, 6048×4024
+— and every ARW in the corpus has even dimensions.
+
+### `--sub-black preserve`: the case where the metrics were wrong
+
+**Decided by looking, and the answer was the opposite of what the scorecard said.**
+`preserve` is now the default.
+
+The numbers argued against it: `crushed_fraction` worse on 18 of 108 frames (0
+better), `mean_level` down by up to 14, worst-case entropy -0.42 bits and gradient
+-2.24. On that evidence it sat behind the flag as "probably right but unlooked-at".
+
+Looking settled it in one frame. **Clipping sub-black puts a magenta cast in the
+shadows.** Rectifying the noise floor lifts each channel's mean above true black;
+white balance then multiplies that pedestal by roughly 2.3 (red) and 1.6 (blue)
+against 1.0 (green), and the residue is magenta. On `_DSC1253` — a night frame with
+28.5% sub-black samples — the whole lower half of the image is tinted and the
+darkest crop is a field of magenta speckle. `preserve` keeps the noise symmetric
+about zero so it averages neutral, and the cast disappears. `_DSC1277` (ISO 8000)
+shows the same as a red-brown haze over dark foliage. `_DSC1276` — same scene, ISO
+2500, half the sub-black population — is near-identical either way, so the effect
+scales with its cause and costs nothing where there is nothing to fix.
+
+Structure is unchanged throughout: rock and leaf texture survive. What goes black is
+noise that carried no detail and used to become coloured haze instead. **All three
+metrics that argued against the change were describing the fix.** That is the
+`average_gradient` trap in `docs/PLAN.md` — its maximiser is amplified noise — and
+it is the clearest example this project has of why the grading session cannot be
+replaced by a scorecard.
+
+A magenta cast across the shadows of a night frame is what criterion 3 means by
+*ruined*. It was inherited from Rawler's `Rescale` and has been present for the
+whole life of the project, and **no axis on the scorecard could see it**.
+
+### `crushed_fraction` and `clipped_fraction` were measured at the wrong precision
+
+Found while chasing the above, and worth knowing as a class of bug. Our render is
+measured in 16 bits; the camera's JPEG in 8. The tests were `== 0` and
+`== u16::MAX` against `== 0` and `== 255` — so our side had to hit exactly 0/65535
+where the camera's had to hit 0/255. Both now use display precision (`<= 128`,
+`>= 65407`), matching what `output.rs` actually writes.
+
+On this corpus it changed **nothing** — 94W/10T/2L and 40W/66T/0L identically, same
+medians — because real renderings put few pixels in the affected bands. It matters
+only where those bands are populated deliberately, which is exactly what `preserve`
+does: its shadow cost reads as 18 frames under the corrected threshold against 1
+under the old one.
+
+The pre-existing agreement test covered five statistics and omitted these two, so it
+could never have caught it. A second test now covers them.
+
+### How that regression was diagnosed in 0.1.17 — and did not win then
+
+`--raw-color-path owned` (see `CHANGELOG.md` 0.1.17 and
+`docs/REVIEW-2026-07-30.md`) removes rawler's `Calibrate` clipping. Over 106
+pairs, head to head against the default path on the same 108 files:
+
+| axis | better | same | worse |
+|---|---:|---:|---:|
+| local detail (`average_gradient`) | **84** | 0 | 24 |
+| highlights kept (`near_white_fraction`) | 34 | 35 | 39 |
+| tonal detail (`luminance_entropy`) | 36 | 5 | 67 |
+| shadows kept (`crushed_fraction`) | 0 | 87 | **21** |
+
+One real win and **one real regression reported twice**: the crushed and entropy
+rows have the same cause, correlated at `r = -0.81`, with the eight worst entropy
+losses being the eight worst crush frames. Among the 75 frames with no
+negative-luminance pixels the median entropy delta is -0.000004 bits.
+
+**That was the 0.1.17 position. It has since changed** — see the section above; the
+regression is fixed and the hue axis exists. The account below is kept because the
+mechanism is the useful part and the trap generalises.
+
+### Why removing the clip made shadows worse
+
+Not what it looks like, and the first write-up of it here was wrong. The cause is
+negative **luminance**, not negative channels:
+
+`analyze::luminance` is a signed weighted sum, so a pixel with a large enough
+negative channel has negative luminance. `tone::render_pixel_local` sets its
+chroma anchor with `luminance(rgb).clamp(0.0, 1.0)`, so such a pixel anchors at 0
+— and `compress_gamut`'s scale is then `anchor / (anchor - min)` = `0 / |min|` =
+0, which multiplies every channel by zero. **The pixel collapses to pure black,
+including its positive channels.** Rawler's clip zeroes only the offending channel
+and leaves a dark saturated colour, so on this cohort the owned path is strictly
+the more destructive of the two. `src/color.rs` has a test rendering both versions
+of one such pixel.
+
+A negative channel alone is harmless — the anchor is positive and the offending
+channel simply lands on 0. The populations differ fourfold: the worst frame has
+61.1% of pixels with a negative channel but 14.7% with negative luminance.
+`clip_cost.negative_luminance_fraction` measures the one that matters and predicts
+the regression exactly — 0 false positives and 0 false negatives over 108 frames,
+crushed delta a median 0.883× the population.
+
+**Most of that population is noise, not exotic colour.** The frames with the
+largest negative populations are the noisiest in the corpus (`snr10_ev` +1.7 to
++2.0 EV, `p05` -5 to -7 EV). The sub-black clip happens per channel in *camera*
+space, so shadow noise pinned at zero in one channel goes negative in the working
+space the moment it passes a matrix with negative off-diagonals. Treat those as
+noise, not as colour to be gamut-mapped, or the fix will turn black speckle grey.
+
+(Since 0.1.18 that clip is **this program's own**, in `src/rescale.rs`, not
+Rawler's — and `--sub-black` selects the policy. It still clips by default. See
+the section on owning the rescale step below.)
+
+### What that ruled in and out (all now resolved; kept for the reasoning)
+
+**In**, in this order: (1) floor `compress_gamut`'s anchor at
+`black_output_linear` — note `mapped_norm` is already floored there while
+`mapped_luminance` is clamped to 0, an inconsistency worth fixing regardless; this
+moves default-path output in deep shadows and so needs its own measured pass. (2)
+Split negatives by magnitude against the fitted noise floor. (3) Only then a
+scene-linear gamut operator with an explicit luminance ≤ 0 branch.
+
+**Not** "gamut-compress preserving hue and luminance": every non-negative RGB
+triple has non-negative luminance, so no luminance-preserving operator can map a
+negative-luminance pixel anywhere legal except black. Written that way the fix
+reproduces the bug one stage earlier.
+
+**Out, for now**: the rest of the DNG colour science, which changes *which*
+colours land out of gamut without changing what happens to them. Build the
+mechanism first; any fitted thresholds are matrix-dependent, so tune after.
+
+`--working-space rec2020` cuts out-of-range pixels from a median 0.166% to 0.053%
+(max 66.2% → 52.2%) and improves the highlight row head to head to 56 better / 47
+worse — read that in preference to its against-camera row, which barely moves. It
+leaves `crushed` at 0/87/21: a camera's gamut is not a triangle, and this cohort
+is mostly noise anyway.
+
+### Two things this scorecard cannot tell you
+
+**The `crushed` row is structurally biased against the owned path.**
+Post-`Calibrate` data has no negatives, so the rawler path can never crush by this
+route while the owned path can only add zeros — that row was ≤ before a single
+frame was rendered. And the owned path's actual benefit, out-of-gamut and shadow
+hue fidelity instead of rawler's silent hue shift, is invisible to all four axes.
+A hue-angle delta restricted to the out-of-gamut cohort would be the honest
+instrument; until one exists the gate favours rawler for structural reasons.
+
+**The 1.20 saturation multiplier is exonerated only globally.** The ratio against
+the camera moves 1.046 → 1.050 → 1.052 across the three arms, so the constant
+needs no change — but `mean_saturation` averages the whole frame while the
+clipping's desaturation lives in the above-1.0 cohort, a median 0.009% of pixels.
+A whole-frame mean is nearly blind to it at that size. Whether 1.20 was
+compensating *in highlights* needs saturation measured on that cohort alone, which
+nothing currently reports. Exposure decisions did move by a median of 0.0000 EV
+over 376 files, which is a clean result.
+
+### Two scorecards from now on, not one
+
+Since 0.1.17 the summary splits every reference measure by `guidance_mode`, and
+`--no-preview` renders the independent arm. A pooled median cannot tell the
+controller getting better at judging scenes from more files happening to carry a
+usable preview. On the current corpus the split is 39 independent / 337
+preview-guided; the independent arm sits at a +0.04 EV median key delta against
+the preview-guided arm's +0.02. Report both, or the number means less than it
+looks like.
+
 ### Local tone does not close the gap — it makes things worse
 
-`docs/PLAN.md` §3 left the fate of `--local-tone` to "after the corpus visual
+`docs/PLAN.md` left the fate of `--local-tone` to "after the corpus visual
 pass". The corpus now exists, and the answer is that it should stay off:
 
 | axis | off | `--local-tone 0.5` | `--local-tone 1.0` |
@@ -400,8 +642,12 @@ the missing denoiser.
   and output sharpening are automatic since 0.1.14/0.1.15; luma noise is left
   alone deliberately — it is the part that destroys texture, and the camera's
   own high-ISO JPEGs are visibly mushier than ours.)
-- **No EXIF/ICC in the output.** TIFF and PNG are 16-bit RGB with no profile;
-  consumers should assume sRGB.
+- ~~**No EXIF/ICC in the output.**~~ **Done in 0.1.17.** All three formats carry
+  the copied EXIF and a generated sRGB v2 ICC profile; `--no-metadata` restores
+  the old bytes exactly. Two gaps remain deliberately: MakerNotes are not copied
+  (vendor blobs carry absolute file offsets, so relocating them corrupts them),
+  and PNG's `eXIf` chunk is ignored by many readers including Windows' own — use
+  JPEG or TIFF if a library has to see the tags.
 - **White balance is as-shot only** unless `--local-white-balance` is passed.
   That flag is off by default for a reason: unguarded, the method renders a
   campfire green, because a fire is the brightest thing in frame and gets read
@@ -429,6 +675,34 @@ one that sees chained IFD1 and Sony's preview IFD.
 **Sort IFD candidates explicitly.** `find_ifds_with_filter` walks `sub_ifds()`,
 a `HashMap` whose iteration order varies per process. Relying on the order it
 returns makes output non-deterministic — which this crate promises not to be.
+
+**The same trap is live inside rawler's own `Calibrate`.** It selects its
+calibration matrix with `find(D65).or_else(|| color_matrix.iter().next())`, and
+that fallback walks a `HashMap` — so a file carrying several calibration matrices
+and no D65 one develops differently from one process to the next, on the default
+colour path. No corpus file is affected (all 376 carry a D65 matrix) and a
+`--dry-run --summary` now counts and warns about any that would be, via
+`nondeterministic_illuminant_files`. `--raw-color-path owned` sorts explicitly and
+has no such case. If a new camera ever trips the warning, develop it on the owned
+path.
+
+**Removing a clip can be worse than keeping it, if a downstream stage was relying
+on the clip's guarantee.** 0.1.17's owned colour path stops clipping out-of-gamut
+negatives, and `crushed_fraction` got *worse* on 21 frames — because
+`tone::render_pixel_local` clamps its chroma anchor to `[0, 1]`, and a
+negative-luminance pixel therefore anchors at 0, which makes `compress_gamut`'s
+scale exactly 0 and zeroes every channel including the positive ones. Rawler's
+per-channel clip had been quietly guaranteeing a non-negative luminance. Whenever a
+"stop throwing data away" change scores worse, look for the stage downstream that
+was depending on the discarded property — and check the *sign* of any signed sum
+it takes.
+
+**`luminance` is signed and several call sites clamp it.** `analyze::luminance` is
+`0.2126r + 0.7152g + 0.0722b` with no absolute value, so it goes negative on
+out-of-gamut input. Every `.max(1e-8)` and `.clamp(0.0, 1.0)` applied to it hides
+that sign rather than handling it, and the two in `render_pixel_local` (lines 176
+and 211) are inconsistent with each other: `mapped_norm` is floored at
+`black_output_linear`, `mapped_luminance` at 0.
 
 **`preview::MIN_PREVIEW_PIXELS` is a policy value, not a sanity check.** Since
 0.1.13 it is the sole thing deciding which files the automatic exposure oracle
@@ -476,7 +750,7 @@ raw-autotune raw/arw raw/raw_old --dry-run --summary after.json
 
 # 2. Tests and lints.
 cargo fmt --check
-cargo test --release        # 103 tests
+cargo test --release        # 207 tests
 cargo clippy --all-targets --release
 
 # 3. Determinism: same input, many runs, --jobs 8, byte-identical sidecars.
@@ -488,7 +762,34 @@ cargo clippy --all-targets --release
 raw-autotune raw/arw_better raw/raw_better --output out --format jpeg \
   --reference --summary out/summary.json
 tools/contact-sheet.py out/summary.json --output out/sheet.html
+
+# 4b. Since 0.1.17, grade the two guidance arms separately — a pooled median
+#     cannot tell a better controller from more files carrying a preview.
+raw-autotune raw/arw_better raw/raw_better --output out-indep --format jpeg \
+  --no-preview --reference --summary out-indep/summary.json
+tools/contact-sheet.py out/summary.json --guidance independent \
+  --output out/sheet-independent.html
+
+# 5. Re-run the colour-path A/B after anything touching colour, the tone curve
+#    or the gamut handling. Since 0.1.18 `owned` should TIE rawler on
+#    crushed_fraction (0/108/0), win average_gradient (84/24) and beat it on
+#    hue. If crushed_fraction goes negative again, the black_output_linear
+#    floor on tone.rs's chroma anchor has been lost.
+raw-autotune raw/raw_3rd_batch --output out-owned --format jpeg --reference \
+  --raw-color-path owned --summary out-owned/summary.json
 ```
+
+**Read the hue axis with the right statistic.** The clip only touches out-of-gamut
+pixels, a minority of most frames, so a large improvement there barely moves a
+corpus median: over all 106 pairs the median hue change between the two colour
+paths is 0.0000° while the best frame improves by 26.2° and the worst worsens by
+0.14°. Use `hue_mean_degrees`, and restrict to the frames with a large
+`clip_cost.altered_fraction` when asking whether a colour change helped.
+
+Step 1's baseline needs a binary from the previous release. `git archive HEAD
+Cargo.toml Cargo.lock rust-toolchain.toml src | tar -x -C /d/bl` and build there
+— a `git worktree` fails on this repo because the filenames under
+`research/original-pdfs-*` exceed Windows' path limit.
 
 Step 4's acceptance thresholds, from the current corpus:
 
@@ -496,17 +797,23 @@ Step 4's acceptance thresholds, from the current corpus:
 |---|---|
 | `reference_saturation_ratio.median`, daylight | 0.94 to 1.10 |
 | `reference_saturation_ratio.median`, ISO 8000+ | 1.35 to 1.45 |
-| subject EV mean abs error, daylight, source with a preview | below 0.10 EV |
-| subject EV mean abs error, ProShot | around 0.27 EV |
-| subject EV mean abs error, night / ISO 1600+ | about 1.5 EV, **and correct** |
+| `reference_highlight_saturation_ratio.median` | about 1.53, and **not** a target to drive to 1.0 — see below |
+| `reference_hue_median_degrees`, whole corpus | about 12°, lower is closer to the camera |
+| centre-weighted key EV mean abs error, daylight, source with a preview | below 0.10 EV |
+| centre-weighted key EV mean abs error, ProShot | around 0.27 EV |
+| centre-weighted key EV mean abs error, night / ISO 1600+ | about 1.5 EV, **and correct** |
 | `clipped_fraction` median | 0.000%, and always below the camera's |
-| frames whose `crushed_fraction` rose | 0 |
+| frames whose `crushed_fraction` rose, default colour path | 0 |
 
-Two of those rows are deliberately not 1.0 or 0.0, and both were established in
-0.1.14. The high-ISO saturation ratio is residual low-frequency chroma noise the
-denoiser cannot reach. The night exposure error is the oracle deviation guard
-refusing a camera rendering that is itself wrong — see below. **Neither is a
-target to drive to zero**, and treating them as one would make output worse.
+Several of those rows are deliberately not 1.0 or 0.0. The high-ISO saturation
+ratio (0.1.14) is residual low-frequency chroma noise the denoiser cannot reach.
+The night exposure error is the oracle deviation guard refusing a camera rendering
+that is itself wrong — see below. The highlight saturation ratio (0.1.18) is a
+divergence in *taste*: the camera desaturates its shoulder hard and this program
+deliberately does not, so 1.53 is a fact about two rendering intents, not an error
+with a fix. **None of them is a target to drive to zero**, and treating any of them
+as one would make output worse. The hue row is the one where lower genuinely is
+better, and even there the median is the wrong summary — see the note above.
 
 The gate test caught a real regression during 0.1.9 development and is worth
 keeping as the first thing you run. Step 4 is newer and has now caught two: the
@@ -519,16 +826,17 @@ The test material is thinner than the file count suggests:
 
 | Class | Files | Paired JPEG | Notes |
 |---|---|---|---|
-| A7C ARW | 313 | 55 | one photographer, one body, ISO 100–12800 |
+| A7C ARW | 321 | 63 | one photographer, one body, ISO 100–12800 |
 | ProShot | 39 | 35 | true CFA; thumbnail-only preview |
 | S24+ Expert RAW | 9 | 8 | JPEG-XL, `BaselineExposure` +2 or +3 |
 | S24+ Pro mode | 7 | 0 | `LinearRaw`, lossless JPEG w/ restart intervals |
 
-98 of 368 files now have a paired camera JPEG, across all three target sources
-and ISO 25 to 12800. Those pairs have settled four questions the project had
+106 of 376 files now have a paired camera JPEG, across all three target sources
+and ISO 25 to 12800. Those pairs have settled five questions the project had
 been guessing at — chroma level, when to trust a vendor preview, whether the
-oracle guards are too tight, and how much of high-ISO "saturation" is noise —
-and are what every default should be re-checked against from here.
+oracle guards are too tight (all three rails now have paired evidence, and the
+ceiling needed fixing), and how much of high-ISO "saturation" is noise — and
+are what every default should be re-checked against from here.
 
 `camera-promode1.dng` is an outlier worth knowing about: p50 at +2.35 EV with
 only 3.92 EV of range, i.e. crammed against the top and clipped. It behaves
@@ -539,11 +847,13 @@ The pairs were shot in three sessions in one place, on a tropical island. Night,
 near-dark, high-ISO, beach and high-variance classes all arrived in 0.1.14 and
 were what drove that pass. Still missing, in rough order of value:
 
-1. **A genuinely high-key frame with a pair.** The only untested guard left is
-   `ORACLE_TARGET_CEILING_EV`; the brightest camera subject in the whole corpus
-   is +0.99 EV, and the ceiling does not bind until well past that. Snow is the
-   classic test and is not obtainable here — a white wall in direct midday sun,
-   or bright dry sand shot to the right, would do as well.
+1. ~~**A genuinely high-key frame with a pair.**~~ **Delivered and acted on in
+   0.1.16** — eight bright-scene pairs including a white wall in direct sun,
+   the first camera subjects above +1 EV. The ceiling was wrong and is now
+   corroboration-aware; see below and `CHANGELOG.md` 0.1.16. Snow remains
+   unobtainable and would still be worth a pair when travel allows: the
+   brightest corroborated camera subject seen so far is +1.63 EV, and the new
+   +2.0 corroborated bound has itself never been tested against a real scene.
 2. **Backlit and high-dynamic-range interiors.** 0.1.13's one visible trade is
    here — the oracle recovers a window and loses the room — and there is still
    no paired evidence to say which answer is right.
@@ -559,31 +869,36 @@ such in `docs/KNOWN_LIMITATIONS.md` and `docs/RESEARCH_NOTES.md`:
 table, of which only `highlight_norm` (0.1.10) and `saturation` (0.1.12) have
 been swept.
 
-### The oracle ceiling is firing, and nothing validates it
+### The oracle ceiling: suspected wrong, then proven wrong, fixed in 0.1.16
 
-`analyze::ORACLE_TARGET_CEILING_EV` is +1.0, on the reasoning that "a vendor
-rendering a scene more than a stop above middle grey is far more likely an
-HDR-fused or blown preview". Now that the oracle is automatic, that guard binds
-on **16 of the 287 files that have a preview** — it is live policy, not a
-theoretical backstop, and it makes us render those frames 0.1 to 1.1 EV darker
-than the camera did.
+`analyze::ORACLE_TARGET_CEILING_EV` (+1.0) bound on 16 of 287 preview files
+with no paired evidence either way; this section used to say the test would be
+"a white wall in direct midday sun". 0.1.16 got exactly that pair, and it
+proved the suspicion: camera subject +1.63 EV, unclipped, our analyzer calling
+the raw `high_key` — and the clamp holding the render 0.42 EV darker than the
+camera.
 
-The evidence points at it being wrong more often than right. Ten of the sixteen
-are independently classified `high_key` by our own analyzer, so a bright preview
-is corroborated by the raw statistics rather than contradicted by them; these
-look like genuinely bright scenes, not broken previews. **None of the sixteen
-has a paired JPEG**, so this is a suspicion, not a finding.
+The fix keeps the guard's reasoning where it is sound. A bright preview that
+the raw statistics *contradict* is still suspect and still clamps to +1.0. One
+the raw statistics corroborate raises the ceiling by up to +1 EV, ramped on the
+key score from the high-key threshold (0.32) to 0.60 —
+`analyze::oracle_target_ceiling_ev`. The 16 bound files split exactly along
+that line: ten high-key files freed, six uncorroborated files still clamped.
 
-**0.1.14's 58 new pairs did not test it.** They include beach and high-variance
-scenes, but the brightest camera subject among them is +0.99 EV, and the ceiling
-does not bind until well past that. It remains the one guard with no paired
-evidence either way. The test is a white wall in direct midday sun, or bright
-sand exposed to the right — anything whose camera JPEG genuinely lands above a
-stop over middle grey.
+Fixing it exposed a second error: the oracle's target inversion runs through
+the pre-oracle curve, and one re-solve does not converge on the shoulder
+(`_DSC1291` still sat 0.24 EV low with the ceiling gone). The re-solve now
+iterates — **brighter only**. Iterating both directions moved 131 corpus files
+and drove the night frames toward the vendor renderings the 0.1.14 pairs
+proved wrong; the single solve's undershoot had been silently protective
+there. Dark-side behaviour is bit-for-bit unchanged.
 
-The other two rails now have evidence, and it says leave them alone. The floor
-fired once, and `MAX_ORACLE_DEVIATION_EV` fired on five night frames where it
-was *correct* to fire — see "What the night and high-ISO pairs settled" above.
+All three rails now have paired evidence: the floor fired once,
+`MAX_ORACLE_DEVIATION_EV` fired on five night frames where it was *correct* to
+fire, and the ceiling was wrong for corroborated bright scenes and is fixed.
+Net effect measured over the corpus: 42 of 376 files move, all brighter, the
+bright pairs land at 0.00 EV median subject delta, and no dark frame moves at
+all.
 
 ## Where the detail lives
 

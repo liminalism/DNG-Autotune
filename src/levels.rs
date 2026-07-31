@@ -11,10 +11,26 @@
 //! consume it, and even a coincidental count match would be wrong: a 12-wide
 //! chunk stride does not line up with 3-component interleaved pixels.
 //!
-//! A repeating black-level pattern only carries information for CFA data, where
-//! each repeat position is a different sensor color. Once a file is linear RGB,
-//! every position holds the same component set, so collapsing the pattern to
-//! one level per component is the correct reduction rather than a workaround.
+//! **The collapse is a Rawler-compatibility workaround, not a correct
+//! reduction.** An earlier version of this comment argued the opposite — that
+//! once a file is linear RGB every repeat position holds the same component set,
+//! so averaging the pattern loses nothing. That argument is false. A
+//! `BlackLevelRepeatDim` on linear data is a meaningful repeating per-position
+//! offset: DNG defines `BlackLevel` positionally, and a demosaicing pipeline
+//! upstream of the file may well have left a pattern behind, which is precisely
+//! why the tag is allowed to have a repeat on `LinearRaw` at all. Averaging it
+//! discards that offset. It happens to cost nothing on this corpus, where every
+//! linear file records the same level at every position (Samsung's Expert RAW
+//! stores `[0 x 12]`), but "inert on the files we have" is not "correct".
+//!
+//! The collapse stays because `--raw-color-path rawler` still needs it:
+//! `correct_blacklevel` panics unless `blacklevel.len() == whitelevel.len()`, and
+//! a 12-wide chunk stride would not line up with 3-component interleaved pixels
+//! even if the counts matched. [`crate::rescale`] needs none of this — it indexes
+//! the real `width x height x cpp` layout — so the owned colour path is not
+//! limited by the reduction, and leaving this code untouched is what makes "the
+//! fitted noise model must not move" true by construction rather than by
+//! measurement.
 
 use anyhow::{Result, bail};
 use rawler::formats::tiff::Rational;

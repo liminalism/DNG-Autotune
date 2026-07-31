@@ -1,6 +1,6 @@
 //! Output sharpening, applied to the rendered image.
 //!
-//! `docs/PLAN.md` §4 lists this last in the 0.2 quality set on the grounds that
+//! `docs/PLAN.md` listed this last in its quality set on the grounds that
 //! it is the most taste-dependent and least likely to ruin a frame if deferred.
 //! The 98-pair scorecard in `docs/STATUS.md` then made it the largest *measured*
 //! gap: this program loses `average_gradient` to the camera on 64 of 98 frames,

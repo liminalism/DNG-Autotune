@@ -48,11 +48,7 @@ mod tests {
     use super::*;
 
     fn fixture() -> LinearImage {
-        LinearImage {
-            width: 2,
-            height: 3,
-            pixels: (0..6).map(|value| [value as f32; 3]).collect(),
-        }
+        LinearImage::new(2, 3, (0..6).map(|value| [value as f32; 3]).collect()).unwrap()
     }
 
     #[test]
