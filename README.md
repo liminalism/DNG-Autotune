@@ -1,4 +1,4 @@
-# raw-autotune 0.1.18
+# raw-autotune 0.1.19
 
 `raw-autotune` is a small Rust command-line RAW developer intended for testing a
 standalone, batch-oriented equivalent of the useful part of a photo editor's
@@ -101,7 +101,17 @@ Batch a directory recursively:
 raw-autotune raw-folder --output processed --format tiff --preset auto
 ```
 
-Allow two full-resolution images in flight at once (each image may still use the shared Rayon CPU pool):
+How many full-resolution images are held in flight at once is decided from the
+memory the machine reports free and the size of the largest input, and the run
+header says what it chose and why:
+
+```
+raw-autotune v0.1.19 | 376 file(s) | preset=auto | concurrent images=5 \
+  (auto: 22.76 GiB available, 2.67 GiB per image at 49.9 MP)
+```
+
+Override it when something else on the machine needs the memory, or to pin a
+measurement (each image still uses the shared Rayon CPU pool whatever this is):
 
 ```bash
 raw-autotune raw-folder --output processed --jobs 2
@@ -150,7 +160,7 @@ raw-autotune photo.dng --exposure-bias -0.35
 Apply local tone adaptation at half strength:
 
 ```bash
-raw-autotune photo.dng --local-tone 0.5 --jobs 1
+raw-autotune photo.dng --local-tone 0.5
 ```
 
 Create JPEG previews:
@@ -258,7 +268,8 @@ later curvelet fusion. Noise-floor and bright-detail guards reduce shadow-noise
 amplification and avoid lifting small bright features.
 
 It is **off by default** while it receives broader visual testing. The map is
-full resolution and memory intensive; use `--jobs 1` for large RAW files. The
+full resolution and memory intensive, though it peaks below the chroma stage
+that `--jobs auto` already budgets for, so it needs no separate allowance. The
 sidecar records its scale histogram, correction range, guarded fraction, and
 strength. `--local-tone 0` takes the unchanged rendering path and produces
 byte-identical output to omitting the option.
@@ -540,7 +551,7 @@ Use 20–50 images rather than one ideal photograph. Include:
 Run:
 
 ```bash
-raw-autotune test-raws --output results --emit-baseline --jobs 1
+raw-autotune test-raws --output results --emit-baseline
 ```
 
 Inspect the automatic image, the baseline image, and the JSON sidecar together.

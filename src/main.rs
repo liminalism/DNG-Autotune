@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use raw_autotune::cli::Cli;
 use raw_autotune::noiseprofile::{NoiseProfile, NoiseSample};
-use raw_autotune::{files, output, pipeline, types};
+use raw_autotune::{files, memory, output, pipeline, types};
 use std::collections::BTreeMap;
 use std::process;
 use std::sync::Mutex;
@@ -88,8 +88,8 @@ where
 }
 
 /// Decode each input far enough to fit its noise model, and pool the results.
-fn scan_all(jobs: &[types::InputJob], options: &types::RunOptions) -> NoiseProfile {
-    let samples: Vec<Option<NoiseSample>> = run_over_jobs(jobs, options.jobs, |index| {
+fn scan_all(jobs: &[types::InputJob], workers: usize) -> NoiseProfile {
+    let samples: Vec<Option<NoiseSample>> = run_over_jobs(jobs, workers, |index| {
         match pipeline::scan_noise(&jobs[index]) {
             Ok(sample) => sample,
             Err(error) => {
@@ -106,9 +106,10 @@ fn scan_all(jobs: &[types::InputJob], options: &types::RunOptions) -> NoiseProfi
 fn process_all(
     jobs: &[types::InputJob],
     options: &types::RunOptions,
+    workers: usize,
     profile: Option<&NoiseProfile>,
 ) -> Vec<anyhow::Result<types::ProcessReport>> {
-    run_over_jobs(jobs, options.jobs, |index| {
+    run_over_jobs(jobs, workers, |index| {
         pipeline::process_job(&jobs[index], options, profile)
     })
 }
@@ -122,12 +123,18 @@ fn run() -> Result<i32> {
         std::fs::create_dir_all(&options.output_dir)?;
     }
 
+    // Decided once, before anything is decoded, from the size of every input
+    // and the memory the machine reports free. It changes only how many files
+    // are in flight, never how any of them is rendered.
+    let plan = memory::plan(options.jobs, &jobs);
+
     println!(
-        "raw-autotune v{} | {} file(s) | preset={} | concurrent images={}{}",
+        "raw-autotune v{} | {} file(s) | preset={} | concurrent images={}{}{}",
         env!("CARGO_PKG_VERSION"),
         jobs.len(),
         options.preset.as_str(),
-        options.jobs,
+        plan.workers,
+        plan.describe(options.jobs),
         if options.dry_run {
             " | analysis only"
         } else {
@@ -137,7 +144,7 @@ fn run() -> Result<i32> {
 
     // --noise-scan produces a profile and stops.
     if let Some(path) = &options.noise_scan {
-        let profile = scan_all(&jobs, &options);
+        let profile = scan_all(&jobs, plan.workers);
         output::save_noise_profile(path, &profile)?;
         println!(
             "noise profile: {} ({} group(s))",
@@ -161,7 +168,7 @@ fn run() -> Result<i32> {
             Some(profile)
         }
         None if options.pool_noise => {
-            let profile = scan_all(&jobs, &options);
+            let profile = scan_all(&jobs, plan.workers);
             println!(
                 "pooled noise from this batch ({} group(s))",
                 profile.groups.len()
@@ -171,7 +178,7 @@ fn run() -> Result<i32> {
         None => None,
     };
 
-    let results = process_all(&jobs, &options, profile.as_ref());
+    let results = process_all(&jobs, &options, plan.workers, profile.as_ref());
 
     let mut completed = 0_usize;
     let mut skipped = 0_usize;

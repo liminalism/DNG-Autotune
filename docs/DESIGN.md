@@ -95,8 +95,12 @@ unsupported file should be reported as an error rather than terminating a batch.
 
 - File-level memory concurrency is bounded by `--jobs` using scoped worker
   threads.
-- The default is one image at a time because a 50 MP f32 RGB image plus output
-  buffers can consume substantial memory.
+- The default is `auto`: `memory.rs` probes every input's dimensions from its
+  TIFF directory, budgets the measured worst-case peak for the largest of them,
+  and takes the share of the operating system's available-memory figure that
+  fits — never more than the processor count. A 50 MP f32 RGB image plus the
+  chroma stage's working buffers is 2.7 GiB, which is why this cannot be a
+  fixed number.
 - Rawler and per-pixel rendering may use Rayon's shared global CPU pool inside
   each file job, so `--jobs 1` does not force the image pipeline to one CPU core.
 - Analysis samples rather than allocating another proxy.

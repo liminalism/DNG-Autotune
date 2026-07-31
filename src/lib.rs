@@ -14,6 +14,7 @@ pub mod files;
 pub mod levels;
 pub mod ljpeg;
 pub mod localtone;
+pub mod memory;
 pub mod metadata;
 pub mod metrics;
 pub mod noise;

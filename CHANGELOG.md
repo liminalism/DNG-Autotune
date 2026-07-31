@@ -1,5 +1,91 @@
 # Changelog
 
+## 0.1.19 — the batch sizes itself
+
+### `--jobs` defaults to `auto`
+
+`src/memory.rs` decides how many files to hold in flight from the memory the
+operating system reports free and the size of the largest input, and the run
+header says what it decided on:
+
+```text
+raw-autotune v0.1.19 | 376 file(s) | preset=auto | concurrent images=5 \
+  (auto: 22.76 GiB available, 2.67 GiB per image at 49.9 MP)
+```
+
+This closes `docs/PLAN.md` criterion 5, which was down to this one gap: a tool
+for unattended archiving cannot ship documentation reading "keep `--jobs` at 3 or
+below when the batch contains 50-megapixel files" and "`--jobs 8` over the full
+corpus is killed by the OOM killer on a 31 GiB machine". That is a per-source
+flag wearing a different name, and the program has every number it needs to
+work it out itself.
+
+**What one image costs.** Peak resident set per file, measured with
+`/usr/bin/time -v` at 0.1.18 with every optional operator forced on
+(`--chroma-denoise 2 --local-tone 1`):
+
+| frame | pixels | peak RSS | bytes/pixel |
+|---|---|---|---|
+| `_DSC0883.ARW` | 10.5 MP | 417 MiB | 41.6 |
+| `20260729_114901.dng` | 12.5 MP | 479 MiB | 40.2 |
+| `_DSC1236.ARW` | 24.3 MP | 913 MiB | 39.3 |
+| `_DSC1250.ARW` (ISO 12800) | 24.3 MP | 1216 MiB | **52.4** |
+| `20260728_114800.dng` | 49.9 MP | 1882 MiB | 39.5 |
+
+The spread is the interesting part, and it is not resolution. `20260728_114335`
+and `20260728_114339` are the same camera, the same dimensions and the same
+20,137,212 bytes on disk, and they peak at 215 MiB and 426 MiB respectively,
+reproducibly. The difference is `chroma::apply`, which allocates a
+full-resolution `chroma` (12 B/px), `luma` (4 B/px) and `scratch` (12 B/px) plus
+the guided stage's own planes — and which runs only on frames noisy enough to
+need it, which is a property of the picture and cannot be known before the file
+is decoded. So the budget assumes the noisy path on every frame. `--local-tone`
+turns out to need no separate allowance: on the same frame it peaks at
+38.4 B/px against chroma's 52.4, so covering chroma covers it.
+
+The constant is 56 B/px against a measured worst case of 52.4, plus 64 MiB of
+per-file overhead against a fitted 26 MiB. Both are rounded away from the
+measurement on purpose: overestimating costs one worker, underestimating kills a
+batch two hours in.
+
+**How the size of each input is known before it is opened.** `memory::raw_pixels`
+reads the TIFF directory and takes the largest IFD declaring a CFA or LinearRaw
+photometric interpretation — no pixel data, no decode, well under a second for
+the whole corpus. `tests/probe_dimensions.rs` checks it against what the decoder
+finds on every RAW under `raw/`: **376 of 376, worst overshoot 1.0000x**. The
+test asserts the two bounds that matter rather than equality — the probe may
+never come in under the decoded frame, and may not overshoot it by more than
+10% — because the directory declares the stored frame and a source with a wider
+border would legitimately overshoot. A file whose directory cannot be read falls
+back to its size on disk at an assumed 1 pixel per byte, roughly twice the
+corpus's real 2.0 bytes per pixel, which is the safe direction.
+
+**What it chooses.** The batch is sized on the *largest* input, because workers
+pull from a shared queue and the five biggest files can be in flight together.
+70% of available memory is the budget; the rest absorbs `MemAvailable` being an
+estimate that moves, the batch's own output and page cache, and the assumption
+that concurrent workers peak simultaneously. The processor count is a hard
+ceiling — per-image stages already use every core. On this 31 GiB machine with
+22.8 GiB free, the full 376-file corpus plans 5 workers.
+
+The budget is deliberately looser than what a run actually uses: those 5 workers
+are budgeted 13.3 GiB, and rendering all 376 files to JPEG peaked at **5.80 GiB**
+in 2 min 32 s. Both gaps are the point — the 50-megapixel frames sized the budget
+but are 13 of 376 and rarely in flight together, and the frames that need the
+chroma stage are a different subset again. Sizing for the case where they
+coincide is what makes the run survivable unattended, which is the criterion this
+closes.
+
+Memory is read from `MemAvailable` on Linux and `GlobalMemoryStatusEx` on
+Windows (declared inline; `windows-sys` would be a dependency tree for one
+struct and one function). A platform that answers neither gets one worker, which
+is what this program did for its whole life until now.
+
+`--jobs N` still means exactly N. Nothing here changes what is rendered: the
+whole-corpus `--dry-run --summary` over 376 files is identical field-for-field
+to a 0.1.18 baseline with `elapsed_ms` ignored, and 24 JPEGs spanning all four
+sources are byte-identical between `--jobs 1` and `--jobs auto`.
+
 ## 0.1.18 — the scorecard learns to see colour, and the regression is fixed
 
 ### Relicensed MIT → AGPL-3.0-or-later

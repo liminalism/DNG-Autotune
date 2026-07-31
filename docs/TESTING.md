@@ -18,8 +18,7 @@ raw-autotune test-raws \
   --output test-results \
   --preset auto \
   --format tiff \
-  --emit-baseline \
-  --jobs 1
+  --emit-baseline
 ```
 
 For every image, review:
@@ -40,7 +39,8 @@ raw-autotune test-raws --output local-half --format jpeg --summary local-half.js
 raw-autotune test-raws --output local-full --format jpeg --summary local-full.json --local-tone 1
 ```
 
-Use `--jobs 1`; large linear DNGs can require about 2 GiB at full resolution.
+`--jobs` sizes itself; a large linear DNG at full local-tone strength is inside
+the per-image budget `memory.rs` already sets from the chroma stage.
 Inspect hard skyline/building edges for halos, smooth skies for banding, faces
 for uneven patches, and high-ISO shadows for amplified noise. In the summaries,
 compare `near_white_fraction`, `luminance_entropy`, and `average_gradient`.

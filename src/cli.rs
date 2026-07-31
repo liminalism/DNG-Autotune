@@ -1,4 +1,5 @@
 use crate::color::{RawColorPath, WorkingSpace};
+use crate::memory::JobCount;
 use crate::reference::ReferenceSource;
 use crate::rescale::SubBlack;
 use crate::types::{OutputFormat, Preset, RunOptions};
@@ -34,9 +35,12 @@ pub struct Cli {
     #[arg(long, default_value_t = 0.0, allow_hyphen_values = true)]
     pub exposure_bias: f32,
 
-    /// Number of RAW files held and processed concurrently. Per-image stages may use all CPU cores.
-    #[arg(short = 'j', long, default_value_t = 1)]
-    pub jobs: usize,
+    /// Number of RAW files held and processed concurrently, or `auto` to choose
+    /// from the memory the machine has free and the size of the largest input.
+    /// Per-image stages use all CPU cores whatever this is set to, and the
+    /// rendered output never depends on it.
+    #[arg(short = 'j', long, value_name = "N|auto", default_value_t = JobCount::Auto)]
+    pub jobs: JobCount,
 
     /// Replace existing output files instead of skipping them.
     #[arg(long)]
@@ -73,7 +77,8 @@ pub struct Cli {
     pub local_white_balance: f32,
 
     /// Full-resolution local tone adaptation strength, 0 to 1.
-    /// Off by default. This is memory intensive; use --jobs 1 for large files.
+    /// Off by default. Memory intensive, but it peaks below the chroma-denoise
+    /// stage that --jobs auto already budgets for, so it needs no lower --jobs.
     #[arg(
         long,
         value_name = "STRENGTH",
@@ -212,7 +217,6 @@ pub struct Cli {
 
 impl Cli {
     pub fn into_options(self) -> Result<(Vec<PathBuf>, RunOptions)> {
-        ensure!(self.jobs > 0, "--jobs must be at least 1");
         ensure!(
             (1..=100).contains(&self.jpeg_quality),
             "--jpeg-quality must be between 1 and 100"

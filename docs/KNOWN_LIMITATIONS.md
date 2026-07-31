@@ -168,8 +168,9 @@ maximum strength.
 It has no semantic knowledge: it cannot recognize a face, sky, skin, snow, or
 the intended subject. It also does not reproduce a phone pipeline's denoising,
 sharpening, segmentation, or multi-frame fusion. The full-resolution working
-buffers are memory intensive, so `--jobs 1` is recommended for large files.
-The feature remains off by default pending a more varied RAW corpus.
+buffers are memory intensive, though they peak below the chroma-denoise stage
+that `--jobs auto` budgets for, so they need no separate allowance. The feature
+remains off by default pending a more varied RAW corpus.
 
 ## Decoder corrections applied on top of Rawler
 

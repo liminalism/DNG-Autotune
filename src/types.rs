@@ -105,7 +105,10 @@ pub struct RunOptions {
     pub format: OutputFormat,
     pub preset: Preset,
     pub exposure_bias_ev: f32,
-    pub jobs: usize,
+    /// How many files to hold in flight, or the request to work it out from
+    /// available memory. Resolved once per run by [`crate::memory::plan`];
+    /// nothing this affects changes what is rendered.
+    pub jobs: crate::memory::JobCount,
     pub overwrite: bool,
     pub emit_baseline: bool,
     pub write_sidecar: bool,

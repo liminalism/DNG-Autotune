@@ -65,7 +65,7 @@ service of them.
 | 2 | Library-grade output | **Met.** EXIF plus a generated sRGB ICC profile in JPEG, TIFF and PNG; verified by reading the tags back and by Windows' own property handlers. `--no-metadata` opts out. |
 | 3 | No frame ruined | **Open, and the hard one.** One documented ruin was found and fixed in 0.1.18 — a magenta cast across the shadows of every frame with sub-black samples, invisible to all four scorecard axes and found only by looking. The win/tie/lose scorecard in `docs/STATUS.md` is the instrument; it says highlights are a rout in our favour, shadows a tie, local detail a win. What it cannot yet say is whether any frame is *ruined*, because that needs eyes. See "the grading session" below. |
 | 4 | High-ISO presentable | **Half met.** Chroma noise is handled automatically and the extreme-ISO magenta veil is gone. Luma noise is untouched, deliberately — it is the part that destroys texture, and the camera's own high-ISO JPEGs are visibly mushier than ours, so it is not obvious how far to close this. |
-| 5 | Unattended and idempotent | **Nearly.** Skip-existing works, per-file panics are caught so a batch survives, and the run reports completed/skipped/failed. Missing: `--jobs` chosen from available RAM rather than documented as "use `--jobs 1` for big files". |
+| 5 | Unattended and idempotent | **Met.** Skip-existing works, per-file panics are caught so a batch survives, the run reports completed/skipped/failed, and since 0.1.19 `--jobs` defaults to a count worked out from available memory and the largest input rather than to documentation telling the user to pick one. |
 
 ## How this project decides things
 
@@ -164,20 +164,12 @@ say which controller produced them. **Keep the grades.**
 
 Ordered by what each one unblocks, not by release.
 
-### 1. `--jobs` from available RAM
-
-Criterion 5's last gap, and the one item here that touches no rendering. The tool
-knows the file dimensions and can know the available memory; it should not be
-documenting "use `--jobs 1` for large files" while a 50 MP batch at `--jobs 8` gets
-OOM-killed. Owning the rescale step cut peak working set by a quarter, so the
-arithmetic this needs has changed and is now more favourable.
-
-### 2. Hot and dead pixel suppression
+### 1. Hot and dead pixel suppression
 
 Cheap, mechanical, and phone sensors need it. A median-based detector should not
 require the dark frames, though they would help.
 
-### 3. Clipped-highlight reconstruction
+### 2. Clipped-highlight reconstruction
 
 Now actually feasible: it was blocked for the whole life of the project because
 Rawler's `Calibrate` destroyed the clipped-channel information before we saw it,
@@ -185,7 +177,7 @@ and that step is ours now. Rebuilding a clipped channel from the surviving ones
 beats the current compress-only behaviour on skies. The deliberately-clipped corpus
 class is the test set — and it needs gathering.
 
-### 4. Scene-class policies
+### 3. Scene-class policies
 
 High-key, low-key, night, backlit, flat — driven by the statistics split this
 program already computes. Night first: it is the documented failure and the preview
@@ -193,7 +185,7 @@ oracle already half-solves it. **Each policy lands only with its corpus class as
 regression evidence**, which is what makes this wait on the corpus rather than on
 cleverness.
 
-### 5. The grading session
+### 4. The grading session
 
 The acceptance test for criterion 3, and the thing that ultimately decides whether
 this program works: a blind side-by-side pass over the paired corpus, every frame

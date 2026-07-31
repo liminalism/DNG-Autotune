@@ -1,6 +1,6 @@
-# Status and handoff — raw-autotune 0.1.18
+# Status and handoff — raw-autotune 0.1.19
 
-Updated 2026-07-30. Scope as stated: the program has to work on **Samsung S24+
+Updated 2026-07-31. Scope as stated: the program has to work on **Samsung S24+
 Expert RAW**, **ProShot** output, and **Sony A7C ARW**. This records how far
 that is, what to run, and what is left.
 
@@ -27,6 +27,10 @@ section for how to tell them apart.
 Since 0.1.17 the output also carries EXIF and an sRGB ICC profile, which is
 `docs/PLAN.md`'s second criterion. The third and fourth — no ruined frame, and
 presentable high-ISO — remain the open ones.
+
+**Since 0.1.19 `--jobs` defaults to `auto`** and is worked out from the memory
+the machine reports free and the size of the largest input, which closes
+`docs/PLAN.md`'s fifth criterion. See "What to run" below.
 
 **Since 0.1.18 the default colour path is `owned`, not Rawler's.** The program now
 owns everything from black-level normalization onward except the demosaic itself;
@@ -74,7 +78,7 @@ JPEGs are flat and blow their skies; do not treat them as a colour target.
 ```bash
 # Every source, one command, no per-source flags. This is the whole corpus.
 raw-autotune raw/arw raw/arw_better raw/raw_better raw/raw_old raw/raw_3rd_batch \
-  --output out --format jpeg --jobs 3
+  --output out --format jpeg
 
 # Optional, recommended: pool sensor noise per ISO first. The scan takes about
 # 13 seconds over 258 files; the profile is reusable and keeps output identical
@@ -86,10 +90,12 @@ raw-autotune raw/arw --output out --noise-profile sony.json
 raw-autotune raw/arw --output out --format jpeg --preview-exposure 0
 ```
 
-Keep `--jobs` at 3 or below when the batch contains 50-megapixel Expert RAW
-files. `--jobs 8` over the full corpus is killed by the OOM killer on a 31 GiB
-machine, and has been since before 0.1.12 — this is not caused by any recent
-feature, and `docs/PLAN.md` lists `--jobs`-from-RAM as the next item that touches no rendering.
+`--jobs` no longer needs a value; since 0.1.19 it defaults to `auto` and is
+chosen from the memory the machine reports free and the size of the largest
+input. The advice this paragraph used to carry — "keep it at 3 or below when the
+batch contains 50-megapixel Expert RAW files, because `--jobs 8` over the full
+corpus is killed by the OOM killer on a 31 GiB machine" — is now the program's
+job. On this machine the full corpus plans 5 workers.
 
 Survey a batch without writing images:
 
@@ -611,8 +617,9 @@ failure modes.
 
 The implementation is deterministic and `--local-tone 0` is byte-identical to
 the old path. It is still an experimental photographic choice, not a new
-default. Use `--jobs 1` on large files because the Gaussian pyramid uses
-multiple full-resolution floating-point buffers.
+default. The Gaussian pyramid's full-resolution floating-point buffers used to
+mean `--jobs 1` on large files; since 0.1.19 the automatic job count budgets for
+the chroma stage, which peaks higher still, so it needs no separate allowance.
 
 At maximum strength, 268/268 available files rendered successfully (258 A7C
 ARWs and 10 Samsung DNGs). Peak resident memory was 2.05 GiB on the largest
