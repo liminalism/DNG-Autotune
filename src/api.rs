@@ -189,12 +189,54 @@ impl RenderedImage {
     }
 }
 
+/// Self-describing native-endian 16-bit sRGB image for direct in-process use.
+///
+/// Unlike [`RenderedImage`], this keeps the renderer's native `Vec<u16>`
+/// allocation intact. Consumers such as high-bit-depth image encoders can
+/// borrow `data` directly without an endian packing pass or an intermediate
+/// image file.
+#[derive(Debug, Clone)]
+pub struct RenderedRgb16Image {
+    pub width: u32,
+    pub height: u32,
+    /// Number of `u16` samples between adjacent rows.
+    pub row_stride: usize,
+    pub data: Vec<u16>,
+    pub report: RenderReport,
+}
+
 /// Develop one RAW directly into a packed RGB buffer.
 ///
 /// This function performs no output writes and retains no references to the
 /// input. `RenderedImage` is `Send`, so ownership can be moved directly to a
 /// receiving worker or transport task.
 pub fn render_file(path: impl AsRef<Path>, options: &RenderOptions) -> Result<RenderedImage> {
+    let rendered = render_file_rgb16(path, options)?;
+    let width = rendered.width;
+    let height = rendered.height;
+    let data = pack(rendered.data, options.pixel_format);
+    let row_stride = width as usize * options.pixel_format.bytes_per_pixel();
+
+    Ok(RenderedImage {
+        width,
+        height,
+        row_stride,
+        pixel_format: options.pixel_format,
+        data,
+        report: rendered.report,
+    })
+}
+
+/// Develop one RAW directly into native-endian packed 16-bit sRGB samples.
+///
+/// This is the no-extra-conversion integration path for an in-process encoder:
+/// the `Vec<u16>` produced by the tone renderer is returned as-is. The
+/// `pixel_format` member of [`RenderOptions`] only controls [`render_file`] and
+/// is intentionally ignored here.
+pub fn render_file_rgb16(
+    path: impl AsRef<Path>,
+    options: &RenderOptions,
+) -> Result<RenderedRgb16Image> {
     options.validate()?;
     let path = path.as_ref();
 
@@ -297,14 +339,13 @@ pub fn render_file(path: impl AsRef<Path>, options: &RenderOptions) -> Result<Re
     let measured = crate::metrics::OutputStats::measure(&rendered);
     let width = rendered.width();
     let height = rendered.height();
-    let data = pack(rendered.into_raw(), options.pixel_format);
-    let row_stride = width as usize * options.pixel_format.bytes_per_pixel();
+    let data = rendered.into_raw();
+    let row_stride = width as usize * 3;
 
-    Ok(RenderedImage {
+    Ok(RenderedRgb16Image {
         width,
         height,
         row_stride,
-        pixel_format: options.pixel_format,
         data,
         report: RenderReport {
             automatic_profile_version: RunOptions::AUTO_PROFILE_VERSION,

@@ -4,14 +4,19 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-fn is_supported_raw(path: &Path) -> bool {
+/// Whether an extension is supported by the RAW decoder used by this crate.
+pub fn is_supported_raw_extension(extension: &str) -> bool {
+    rawler::decoders::supported_extensions()
+        .iter()
+        .any(|supported| supported.eq_ignore_ascii_case(extension))
+}
+
+/// Whether a path has an extension supported by the RAW decoder.
+pub fn is_supported_raw(path: &Path) -> bool {
     let Some(extension) = path.extension().and_then(|ext| ext.to_str()) else {
         return false;
     };
-    let extension = extension.to_ascii_uppercase();
-    rawler::decoders::supported_extensions()
-        .iter()
-        .any(|supported| supported.eq_ignore_ascii_case(extension.as_str()))
+    is_supported_raw_extension(extension)
 }
 
 fn safe_root_label(path: &Path) -> PathBuf {

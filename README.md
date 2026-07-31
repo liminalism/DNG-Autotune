@@ -169,6 +169,10 @@ compression. `Rgb16SrgbBe` preserves the 16-bit render and gives every channel
 an explicit network-friendly byte order. The result owns its `Vec<u8>`, is
 `Send`, and performs no output writes. See `examples/in-memory.rs`.
 
+In-process high-bit-depth encoders should use `api::render_file_rgb16` instead.
+It returns the tone renderer's native-endian `Vec<u16>` allocation directly,
+without byte packing, an image-file intermediate, or another RGB conversion.
+
 Survey a large batch quickly — measures every file, writes no images:
 
 ```bash

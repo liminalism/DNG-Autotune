@@ -268,7 +268,7 @@ pub fn available_bytes() -> Option<u64> {
     None
 }
 
-/// Pixel count of the raw image in a TIFF-based RAW file, read from the
+/// Dimensions of the raw image in a TIFF-based RAW file, read from the
 /// directory without touching the pixel data.
 ///
 /// The raw image is the largest IFD declaring a CFA or LinearRaw photometric
@@ -281,7 +281,7 @@ pub fn available_bytes() -> Option<u64> {
 ///
 /// `None` for anything that is not a readable TIFF, which the caller estimates
 /// from the file size instead.
-pub fn raw_pixels(path: &Path) -> Option<u64> {
+pub fn raw_dimensions(path: &Path) -> Option<(u32, u32)> {
     let file = File::open(path).ok()?;
     let mut reader = BufReader::new(file);
     let tiff = GenericTiffReader::new(&mut reader, 0, 0, None, &[TAG_SUB_IFDS]).ok()?;
@@ -297,22 +297,30 @@ pub fn raw_pixels(path: &Path) -> Option<u64> {
             )
         })
         .into_iter()
-        .filter_map(pixels_of)
-        .max();
+        .filter_map(dimensions_of)
+        .max_by_key(|&(width, height)| u64::from(width) * u64::from(height));
     if raw.is_some() {
         return raw;
     }
 
     tiff.find_ifds_with_filter(|_| true)
         .into_iter()
-        .filter_map(pixels_of)
-        .max()
+        .filter_map(dimensions_of)
+        .max_by_key(|&(width, height)| u64::from(width) * u64::from(height))
 }
 
-fn pixels_of(ifd: &IFD) -> Option<u64> {
-    let width = u64::from(entry_u32(ifd, TAG_IMAGE_WIDTH)?);
-    let height = u64::from(entry_u32(ifd, TAG_IMAGE_LENGTH)?);
-    width.checked_mul(height).filter(|pixels| *pixels > 0)
+/// Pixel count companion to [`raw_dimensions`].
+pub fn raw_pixels(path: &Path) -> Option<u64> {
+    let (width, height) = raw_dimensions(path)?;
+    u64::from(width)
+        .checked_mul(u64::from(height))
+        .filter(|pixels| *pixels > 0)
+}
+
+fn dimensions_of(ifd: &IFD) -> Option<(u32, u32)> {
+    let width = entry_u32(ifd, TAG_IMAGE_WIDTH)?;
+    let height = entry_u32(ifd, TAG_IMAGE_LENGTH)?;
+    (width > 0 && height > 0).then_some((width, height))
 }
 
 fn entry_u32(ifd: &IFD, tag: u16) -> Option<u32> {
