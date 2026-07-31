@@ -99,14 +99,26 @@ fn develop_linear(raw: &RawImage) -> Result<LinearImage> {
 }
 
 /// Develop to scene-linear RGB through whichever colour path was asked for.
-fn develop(raw: &RawImage, options: &RunOptions) -> Result<(LinearImage, ColorReport)> {
+fn develop(
+    raw: &RawImage,
+    path: &Path,
+    options: &RunOptions,
+    snr10_ev: Option<f32>,
+) -> Result<(LinearImage, ColorReport)> {
     match options.raw_color_path {
         RawColorPath::Rawler => Ok((develop_linear(raw)?, ColorReport::rawler(raw))),
         RawColorPath::Owned => crate::color::develop(
             raw,
+            path,
             crate::color::DevelopOptions {
                 working_space: options.working_space,
                 sub_black: options.sub_black,
+                hot_pixels: options.hot_pixels,
+                highlight_reconstruction: options.highlight_reconstruction,
+                demosaic: options.demosaic,
+                snr10_ev,
+                full_dng_color: options.full_dng_color,
+                lens_correction: options.lens_correction,
             },
         ),
     }
@@ -162,7 +174,7 @@ fn dump_stage(
 /// working space" caveat is simply false under `--raw-color-path owned
 /// --working-space rec2020`, and a limitations list that lies in one
 /// configuration is worse than none.
-fn limitations(options: &RunOptions) -> Vec<String> {
+fn limitations(options: &RunOptions, color: &ColorReport) -> Vec<String> {
     let mut limitations =
         vec!["global analysis only; no face, subject, scene, or depth model".to_string()];
 
@@ -173,11 +185,13 @@ fn limitations(options: &RunOptions) -> Vec<String> {
                 .to_string(),
         ),
         RawColorPath::Owned => {
-            limitations.push(format!(
-                "owned colour path in {}; no ForwardMatrix, CameraCalibration, AnalogBalance, \
-                 dual-illuminant interpolation or chromatic adaptation transform",
-                options.working_space.as_str()
-            ));
+            if color.dng_color.is_none() {
+                limitations.push(format!(
+                    "owned colour path in {}; no ForwardMatrix, CameraCalibration, AnalogBalance, \
+                     dual-illuminant interpolation or chromatic adaptation transform",
+                    options.working_space.as_str()
+                ));
+            }
             // Conditional on the policy since 0.1.18: the rescale is this
             // program's own now (`crate::rescale`), so attributing the clip to
             // Rawler would be wrong, and asserting it happens at all would be
@@ -193,10 +207,23 @@ fn limitations(options: &RunOptions) -> Vec<String> {
         }
     }
 
-    limitations.extend([
-        "no explicit lens correction or camera-specific DCP look table".to_string(),
-        "no dedicated highlight reconstruction; luma noise is not reduced".to_string(),
-    ]);
+    if color
+        .lens_correction
+        .as_ref()
+        .is_none_or(|report| report.opcodes_applied == 0)
+    {
+        limitations.push(
+            "no usable standardized lens correction metadata; no camera/lens model was guessed"
+                .to_string(),
+        );
+    }
+    limitations.push("no camera-specific DCP creative rendering table".to_string());
+    if color.highlight_reconstruction.is_none() {
+        limitations
+            .push("no dedicated highlight reconstruction; luma noise is not reduced".to_string());
+    } else {
+        limitations.push("luma noise is not reduced".to_string());
+    }
 
     if options.write_metadata {
         // The EXIF copy is not total, and the two gaps are worth naming rather
@@ -389,7 +416,12 @@ fn process_job_inner(
     };
     let source_orientation = raw.orientation;
 
-    let (mut linear, color) = develop(&raw, options)?;
+    let (mut linear, color) = develop(
+        &raw,
+        &job.input,
+        options,
+        noise_floor.as_ref().map(|floor| floor.snr10_ev),
+    )?;
     drop(raw);
 
     // `None` whenever the working space already has sRGB primaries, which is the
@@ -421,6 +453,25 @@ fn process_job_inner(
             None => String::new(),
         }
     );
+    if let Some(lens) = &color.lens_correction {
+        eprintln!(
+            "LENS  {}: {} opcode(s) applied | {} warp | {} vignette | max shift {:.2}px | max gain {:.3}{}",
+            job.input.display(),
+            lens.opcodes_applied,
+            lens.rectilinear_warps,
+            lens.radial_vignette_corrections,
+            lens.max_displacement_pixels,
+            lens.max_gain,
+            if lens.required_opcodes_unsupported == 0 {
+                String::new()
+            } else {
+                format!(
+                    " | {} required opcode(s) unsupported",
+                    lens.required_opcodes_unsupported
+                )
+            }
+        );
+    }
 
     // DNG BaselineExposure is defined as an offset to the scene-linear data
     // before the default rendering. Applying it here, rather than folding it
@@ -692,7 +743,7 @@ fn process_job_inner(
         &paths.image,
         rendered,
         options.format,
-        options.jpeg_quality,
+        &options.jpeg,
         exif.as_ref(),
     )?;
 
@@ -702,7 +753,7 @@ fn process_job_inner(
             &paths.baseline,
             baseline,
             options.format,
-            options.jpeg_quality,
+            &options.jpeg,
             exif.as_ref(),
         )?;
     }
@@ -712,6 +763,7 @@ fn process_job_inner(
             schema_version: crate::types::REPORT_SCHEMA_VERSION,
             application: "raw-autotune".to_string(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
+            automatic_profile_version: RunOptions::AUTO_PROFILE_VERSION.to_string(),
             input: job.input.to_string_lossy().into_owned(),
             output: Some(paths.image.to_string_lossy().into_owned()),
             preset: options.preset,
@@ -735,7 +787,7 @@ fn process_job_inner(
             controller_version: crate::types::CONTROLLER_VERSION.to_string(),
             analysis: analysis.clone(),
             parameters: parameters.clone(),
-            limitations: limitations(options),
+            limitations: limitations(options, &color),
         };
         output::save_sidecar(&paths.sidecar, &sidecar)?;
     }

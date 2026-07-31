@@ -18,8 +18,8 @@ this file is about.
 - Version selected here: 0.7.2
 - License declared by the crate: LGPL-2.1
 
-Rawler provides RAW container decoding, metadata, normalization, demosaic, white
-balance, crop, and initial color calibration used by this prototype.
+Rawler provides RAW container decoding, metadata, camera data, decompression,
+the diagnostic PPG path, and uncommon-CFA fallback demosaics.
 
 Rust commonly links crate code into the resulting executable. Anyone
 redistributing compiled binaries should review the LGPL-2.1 obligations and
@@ -33,6 +33,15 @@ and `src/color.rs` reimplement behaviour Rawler gets wrong, written from
 specifications and from the observed defect, not transcribed. That was originally
 a licence necessity and is now merely good hygiene — it keeps the provenance of
 every file in `src/` unambiguous.
+
+## Adobe DNG specification
+
+`src/dngcolor.rs` implements the public DNG color-processing model from the
+Adobe Digital Negative specification; it does not copy Adobe DNG SDK source.
+Adobe's DNG patent license requires the following notice for compliant
+implementations:
+
+> This product includes DNG technology under license by Adobe.
 
 ## Other Rust dependencies
 

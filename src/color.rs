@@ -60,13 +60,14 @@
 //! and `docs/STATUS.md` for the fix that is queued. It is why `rawler` is still
 //! the default.
 //!
-//! # What is deliberately still missing
+//! # The optional full-DNG path
 //!
-//! `ForwardMatrix`, `CameraCalibration`, `AnalogBalance`, dual-illuminant
-//! interpolation and a proper chromatic adaptation transform are milestone 2 of
-//! the colour path, gated on this A/B proving out. The implicit adaptation here
-//! is the row-normalization: it forces camera neutral to working-space neutral,
-//! which is the dcraw-lineage shortcut Rawler also takes.
+//! [`crate::dngcolor`] adds `ForwardMatrix`, `CameraCalibration`,
+//! `AnalogBalance`, reciprocal-temperature dual-illuminant interpolation and
+//! Bradford adaptation under `--dng-color`. It is opt-in while its colour change
+//! is measured against the paired corpus. Without that flag, or on a file with
+//! no usable `ForwardMatrix`, the row-normalized milestone-1 transform here is
+//! unchanged.
 //!
 //! One loss used to be *upstream* of this module:
 //! `rawler::imgop::raw::correct_blacklevel*` clips sub-black sensor noise to zero
@@ -88,6 +89,7 @@
 //! effort turning black speckle grey. The per-frame noise model in
 //! [`crate::noise`] is what tells the two apart.
 
+use crate::demosaic::{DemosaicMethod, DemosaicReport};
 use crate::rescale::{self, NormalizedSamples, RescaleReport, SubBlack};
 use crate::types::{CameraRgb, Image, SceneLinear};
 use anyhow::{Context, Result, bail, ensure};
@@ -381,6 +383,45 @@ impl ColorTransform {
         })
     }
 
+    /// Compose the full DNG transform (ForwardMatrix, CameraCalibration,
+    /// AnalogBalance, dual-illuminant interpolation) for files that carry it.
+    ///
+    /// Returns `None` when the file lacks a `ForwardMatrix` or a usable
+    /// `ColorMatrix`, so the caller falls back to [`ColorTransform::derive`]. The
+    /// white balance is baked into the matrix here — the DNG neutral maps to the
+    /// working white by construction — so `white_balance` is unity and
+    /// [`convert3`](Self::convert3) applies the matrix alone.
+    pub fn derive_dng(
+        raw: &RawImage,
+        path: &std::path::Path,
+        working_space: WorkingSpace,
+    ) -> Option<(Self, crate::dngcolor::DngColorReport)> {
+        let mut cam_to_working = [[0.0_f32; 4]; 3];
+        let (channels, report) =
+            match crate::dngcolor::camera_to_working_any(raw, path, working_space)? {
+                (crate::dngcolor::DngMatrix::Three(matrix), report) => {
+                    for (row, coefficients) in matrix.iter().enumerate() {
+                        cam_to_working[row][..3].copy_from_slice(coefficients);
+                    }
+                    (3, report)
+                }
+                (crate::dngcolor::DngMatrix::Four(matrix), report) => {
+                    cam_to_working = matrix;
+                    (4, report)
+                }
+            };
+        let transform = Self {
+            cam_to_working,
+            white_balance: [1.0; 4],
+            channels,
+            // The scene illuminant is interpolated, not one of the file's
+            // discrete calibration illuminants; the report carries the detail.
+            illuminant: Illuminant::Unknown,
+            working_space,
+        };
+        Some((transform, report))
+    }
+
     /// Convert one three-channel camera pixel. Nothing is clipped.
     #[inline]
     pub fn convert3(&self, pixel: [f32; 3]) -> [f32; 3] {
@@ -493,14 +534,18 @@ pub struct ColorReport {
     pub working_space: WorkingSpace,
     /// Calibration illuminant actually used, e.g. `D65`.
     pub illuminant: String,
-    /// Every illuminant the file offered, sorted. More than one means milestone
-    /// 2's dual-illuminant interpolation has something to work with.
+    /// Every illuminant the decoder exposed, sorted. The DNG report carries the
+    /// exact one-, two-, or three-calibration interpolation details.
     pub illuminants_available: Vec<String>,
     /// As-shot white balance as applied, in the file's RGBE order.
     pub white_balance: [f32; 4],
     /// `cam_to_working`, row-major, 3 rows by `camera_channels` columns.
     pub cam_to_working: Vec<f32>,
     pub camera_channels: usize,
+    /// Bayer interpolation selected for this frame. Absent for LinearRaw,
+    /// monochrome, four-colour CFA and the Rawler colour path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub demosaic: Option<DemosaicReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clip_cost: Option<ClipCost>,
     /// What black/white normalization did, on the owned path only.
@@ -511,6 +556,23 @@ pub struct ColorReport {
     /// path's A/B baseline survives.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rescale: Option<RescaleReport>,
+    /// What hot/dead pixel suppression did, when it ran. Owned path only, and
+    /// absent (via `skip_serializing_if`) when the correction was off, so a run
+    /// with it off serializes exactly as it did before schema 10.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hot_pixels: Option<crate::hotpixels::HotPixelReport>,
+    /// What clipped-highlight reconstruction did, when it ran. Owned path only,
+    /// absent when off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight_reconstruction: Option<crate::highlight::HighlightReport>,
+    /// What the DNG matrix transform did. Owned path only; absent after a safe
+    /// fallback to the decoder camera matrix or when explicitly disabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dng_color: Option<crate::dngcolor::DngColorReport>,
+    /// Standardized lens operations read from DNG `OpcodeList3`. Absent for
+    /// non-DNG files, files without lens opcodes, and when explicitly disabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lens_correction: Option<crate::lens::LensCorrectionReport>,
 }
 
 impl ColorReport {
@@ -556,10 +618,17 @@ impl ColorReport {
             // there is nothing honest to report. The owned path reports its own.
             cam_to_working: Vec::new(),
             camera_channels: 3,
+            demosaic: None,
             clip_cost: None,
             // Rawler's `Rescale` still normalizes on this path, so there is no
             // policy of ours to report.
             rescale: None,
+            // Both corrections live inside the owned demosaic/convert path, which
+            // this path does not run.
+            hot_pixels: None,
+            highlight_reconstruction: None,
+            dng_color: None,
+            lens_correction: None,
         }
     }
 }
@@ -597,23 +666,52 @@ fn apply_default_crop<T: Copy>(
 /// `Image<CameraRgb>` is what stops it reaching the analyser or the tone curve
 /// by accident — both of those take `Image<SceneLinear>`.
 ///
-/// Everything except the demosaic itself is this program's own since 0.1.18.
-/// Rawler's `develop_intermediate` cannot be used here even for the demosaic: it
-/// starts by cloning the whole `RawImage` and calling `apply_scaling` on the
-/// clone, so the clip and the peak memory come as a package with the step list.
-/// Calling `Demosaic::demosaic` directly is what lets the normalized samples come
-/// from a borrowed `&RawImage`.
+/// The automatic RCD/AMaZE-class Bayer path is owned here. Rawler's PPG is kept
+/// as an explicit diagnostic control; calling it directly still lets normalized
+/// samples come from a borrowed `&RawImage` without `develop_intermediate`'s
+/// clone-and-scale package.
 pub fn demosaic_camera_rgb(
     raw: &RawImage,
     sub_black: SubBlack,
-) -> Result<(CameraImage, RescaleReport)> {
+    hot_pixels: f32,
+    demosaic: DemosaicMethod,
+    snr10_ev: Option<f32>,
+) -> Result<(
+    CameraImage,
+    RescaleReport,
+    Option<crate::hotpixels::HotPixelReport>,
+    Option<DemosaicReport>,
+)> {
+    demosaic_camera_rgb_with_lens(raw, sub_black, hot_pixels, demosaic, snr10_ev, None)
+}
+
+fn demosaic_camera_rgb_with_lens(
+    raw: &RawImage,
+    sub_black: SubBlack,
+    hot_pixels: f32,
+    demosaic: DemosaicMethod,
+    snr10_ev: Option<f32>,
+    mut lens: Option<&mut crate::lens::LensCorrection>,
+) -> Result<(
+    CameraImage,
+    RescaleReport,
+    Option<crate::hotpixels::HotPixelReport>,
+    Option<DemosaicReport>,
+)> {
     let normalized = rescale::normalize(raw, sub_black)?;
     let (width, height) = (normalized.width, normalized.height);
     // The whole frame, for the buffers that are never cropped to an active area.
     let full = Rect::new(Point::zero(), Dim2::new(width, height));
 
+    // Hot/dead pixel suppression runs on the raw mosaic, before the demosaic
+    // smears a stuck site across its neighbourhood. Only the CFA arm has a
+    // mosaic to correct; `LinearRaw` frames were demosaiced in-camera and carry
+    // no isolated single-site defects for this detector to find.
+    let mut hot_pixel_report = None;
+    let mut demosaic_report = None;
+
     let camera = match normalized.samples {
-        NormalizedSamples::Mosaic(samples) => match &raw.photometric {
+        NormalizedSamples::Mosaic(mut samples) => match &raw.photometric {
             RawPhotometricInterpretation::Cfa(config) => {
                 let roi = rescale::demosaic_roi(raw);
                 ensure!(
@@ -629,15 +727,60 @@ pub fn demosaic_camera_rgb(
                     roi.d.h
                 );
 
+                if hot_pixels > 0.0 {
+                    hot_pixel_report = Some(crate::hotpixels::correct_cfa(
+                        &mut samples,
+                        width,
+                        height,
+                        &config.cfa,
+                        hot_pixels,
+                    ));
+                }
+
                 let pixels = PixF32::new_with(samples, width, height);
                 if config.cfa.is_rgb() {
-                    let demosaiced =
-                        PPGDemosaic::new().demosaic(&pixels, &config.cfa, &config.colors, roi);
-                    let produced = Dim2::new(demosaiced.width, demosaiced.height);
-                    let mut buffer = demosaiced.into_inner();
+                    let report = crate::demosaic::select(
+                        demosaic,
+                        pixels.pixels(),
+                        width,
+                        height,
+                        &config.cfa,
+                        snr10_ev,
+                    );
+                    let mut buffer = match report.resolved {
+                        DemosaicMethod::Ppg => PPGDemosaic::new()
+                            .demosaic(&pixels, &config.cfa, &config.colors, roi)
+                            .into_inner(),
+                        DemosaicMethod::Rcd | DemosaicMethod::Amaze => {
+                            crate::demosaic::demosaic_bayer(
+                                pixels.pixels(),
+                                width,
+                                height,
+                                &config.cfa,
+                                roi,
+                                report.resolved,
+                            )
+                        }
+                        DemosaicMethod::Auto => unreachable!("auto is resolved before demosaic"),
+                    };
+                    demosaic_report = Some(report);
+                    let produced = roi.d;
                     // Free the mosaic before the crop: on a 24 megapixel frame
                     // that is 100 MB returned before the next allocation.
                     drop(pixels);
+                    if let Some(correction) = lens.as_deref_mut() {
+                        correction.apply_three(
+                            &mut buffer,
+                            produced.w,
+                            produced.h,
+                            crate::lens::ImageGeometry {
+                                full_width: width,
+                                full_height: height,
+                                origin_x: roi.p.x,
+                                origin_y: roi.p.y,
+                            },
+                        );
+                    }
                     let dim = apply_default_crop(raw, &mut buffer, produced, roi)?;
                     CameraImage::Three(Image::new(dim.w, dim.h, buffer)?)
                 } else if config.cfa.unique_colors() == 4 {
@@ -649,6 +792,19 @@ pub fn demosaic_camera_rgb(
                     let produced = Dim2::new(demosaiced.width, demosaiced.height);
                     let mut buffer = demosaiced.into_inner();
                     drop(pixels);
+                    if let Some(correction) = lens.as_deref_mut() {
+                        correction.apply_four(
+                            &mut buffer,
+                            produced.w,
+                            produced.h,
+                            crate::lens::ImageGeometry {
+                                full_width: width,
+                                full_height: height,
+                                origin_x: roi.p.x,
+                                origin_y: roi.p.y,
+                            },
+                        );
+                    }
                     let dim = apply_default_crop(raw, &mut buffer, produced, roi)?;
                     CameraImage::Four {
                         width: dim.w,
@@ -670,6 +826,19 @@ pub fn demosaic_camera_rgb(
             _ => {
                 let mut buffer: Vec<[f32; 3]> =
                     samples.into_iter().map(|value| [value; 3]).collect();
+                if let Some(correction) = lens.as_deref_mut() {
+                    correction.apply_three(
+                        &mut buffer,
+                        full.d.w,
+                        full.d.h,
+                        crate::lens::ImageGeometry {
+                            full_width: width,
+                            full_height: height,
+                            origin_x: 0,
+                            origin_y: 0,
+                        },
+                    );
+                }
                 let dim = apply_default_crop(raw, &mut buffer, full.d, full)?;
                 CameraImage::Three(Image::new(dim.w, dim.h, buffer)?)
             }
@@ -679,10 +848,36 @@ pub fn demosaic_camera_rgb(
         // the coordinate system the crop is expressed in. See
         // `rescale::default_crop` for the Rawler bug that distinction avoids.
         NormalizedSamples::Linear3(mut pixels) => {
+            if let Some(correction) = lens.as_deref_mut() {
+                correction.apply_three(
+                    &mut pixels,
+                    full.d.w,
+                    full.d.h,
+                    crate::lens::ImageGeometry {
+                        full_width: width,
+                        full_height: height,
+                        origin_x: 0,
+                        origin_y: 0,
+                    },
+                );
+            }
             let dim = apply_default_crop(raw, &mut pixels, full.d, full)?;
             CameraImage::Three(Image::new(dim.w, dim.h, pixels)?)
         }
         NormalizedSamples::Linear4(mut pixels) => {
+            if let Some(correction) = lens {
+                correction.apply_four(
+                    &mut pixels,
+                    full.d.w,
+                    full.d.h,
+                    crate::lens::ImageGeometry {
+                        full_width: width,
+                        full_height: height,
+                        origin_x: 0,
+                        origin_y: 0,
+                    },
+                );
+            }
             let dim = apply_default_crop(raw, &mut pixels, full.d, full)?;
             CameraImage::Four {
                 width: dim.w,
@@ -692,7 +887,7 @@ pub fn demosaic_camera_rgb(
         }
     };
 
-    Ok((camera, normalized.report))
+    Ok((camera, normalized.report, hot_pixel_report, demosaic_report))
 }
 
 /// Demosaiced sensor data, before any colour conversion.
@@ -720,21 +915,87 @@ pub enum CameraImage {
 pub struct DevelopOptions {
     pub working_space: WorkingSpace,
     pub sub_black: SubBlack,
+    /// Hot/dead pixel suppression strength, 0 to 1. 0 skips the correction
+    /// entirely, keeping the mosaic byte-identical.
+    pub hot_pixels: f32,
+    /// Clipped-highlight reconstruction strength, 0 to 1. 0 skips it entirely.
+    pub highlight_reconstruction: f32,
+    pub demosaic: DemosaicMethod,
+    pub snr10_ev: Option<f32>,
+    /// Compose the DNG matrix transform when the profile is complete, using
+    /// either its ForwardMatrix or ColorMatrix/ReductionMatrix route.
+    pub full_dng_color: bool,
+    /// Apply standardized DNG `OpcodeList3` lens corrections when present.
+    pub lens_correction: bool,
 }
 
 /// Develop to scene-linear working-space RGB through the owned colour path.
 pub fn develop(
     raw: &RawImage,
+    path: &std::path::Path,
     options: DevelopOptions,
 ) -> Result<(Image<SceneLinear>, ColorReport)> {
-    let transform = ColorTransform::derive(raw, options.working_space)?;
-    let (camera, rescale) = demosaic_camera_rgb(raw, options.sub_black)?;
+    // The DNG matrix transform is tried first when asked for. Incomplete or
+    // unsupported profiles fall back to the decoder camera matrix.
+    let mut dng_color = None;
+    let transform = if options.full_dng_color {
+        match ColorTransform::derive_dng(raw, path, options.working_space) {
+            Some((transform, report)) => {
+                dng_color = Some(report);
+                transform
+            }
+            None => ColorTransform::derive(raw, options.working_space)?,
+        }
+    } else {
+        ColorTransform::derive(raw, options.working_space)?
+    };
+    let mut lens_correction = options
+        .lens_correction
+        .then(|| crate::lens::LensCorrection::read(path))
+        .flatten();
+    let (mut camera, rescale, hot_pixels, demosaic) = demosaic_camera_rgb_with_lens(
+        raw,
+        options.sub_black,
+        options.hot_pixels,
+        options.demosaic,
+        options.snr10_ev,
+        lens_correction.as_mut(),
+    )?;
+
+    // Clipped-highlight reconstruction runs on camera RGB, after the demosaic
+    // and before white balance and the colour matrix: "was this channel at the
+    // sensor's clip point?" is a question about the raw sample. Three-channel
+    // only — the RGBE arm has no target source and no corpus behind it.
+    let mut highlight_reconstruction = None;
+    if options.highlight_reconstruction > 0.0
+        && let CameraImage::Three(image) = &mut camera
+    {
+        let wb = [
+            transform.white_balance[0],
+            transform.white_balance[1],
+            transform.white_balance[2],
+        ];
+        highlight_reconstruction = Some(crate::highlight::reconstruct(
+            image,
+            wb,
+            options.highlight_reconstruction,
+        ));
+    }
 
     let image: Image<SceneLinear> = match camera {
         // In place: the camera-RGB buffer becomes the scene-linear one rather
         // than being collected into a second allocation of the same size. See
         // `Image::map_into`.
-        CameraImage::Three(image) => image.map_into(|pixel| transform.convert3(pixel)),
+        CameraImage::Three(image) => {
+            if transform.channels != 3 {
+                bail!(
+                    "the sensor demosaiced to three colour channels but its DNG calibration \
+                     matrix describes {}; re-run with --raw-color-path rawler",
+                    transform.channels
+                );
+            }
+            image.map_into(|pixel| transform.convert3(pixel))
+        }
         CameraImage::Four {
             width,
             height,
@@ -780,8 +1041,13 @@ pub fn develop(
             .flat_map(|row| row[..transform.channels].iter().copied())
             .collect(),
         camera_channels: transform.channels,
+        demosaic,
         clip_cost: Some(clip_cost),
         rescale: Some(rescale),
+        hot_pixels,
+        highlight_reconstruction,
+        dng_color,
+        lens_correction: lens_correction.map(crate::lens::LensCorrection::into_report),
     };
 
     Ok((image, report))

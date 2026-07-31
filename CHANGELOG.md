@@ -1,5 +1,86 @@
 # Changelog
 
+## Unreleased — a standalone front-end
+
+### One automatic archive profile
+
+The bare executable now asks only for input paths and an output directory. It no
+longer presents a decision for every processing stage. Interactive and ordinary
+flag-based runs both start from the versioned `archive-auto-v2` profile:
+recursive discovery, memory-sized concurrency, owned colour, automatic tone,
+noise-aware chroma reduction and sharpening, metadata, and an automatic batch
+summary.
+
+The default output is an archive-oriented JPEG: quality 95, 4:4:4 chroma,
+baseline coding and optimized Huffman tables. Per-image JSON sidecars are
+opt-in (`--sidecar`); one `summary.json` per batch is the default. Expert flags
+remain available for controlled comparisons.
+
+### Adaptive Bayer demosaic and sensor-domain cleanup
+
+Ordinary Bayer files now use an owned, deterministic edge-directed demosaic.
+`--demosaic auto` keeps mature PPG on noisy or textured mosaics and selects an
+owned RCD or AMaZE-class path only when measured noise and green-phase agreement
+pass strict gates. A real dense-branch frame is the regression behind that
+conservative fallback. All three methods remain directly selectable; the
+selected method, selector version and measurements are recorded per frame.
+
+Hot/dead pixels are suppressed on the CFA mosaic before interpolation, and
+partially clipped RGB highlights are reconstructed from surviving channels
+before white balance and colour conversion. Both operators are deterministic,
+have explicit zero-strength byte-identity paths and report their activity.
+
+### DNG 1.7 matrix colour is automatic
+
+The default owned path composes either DNG camera-to-XYZ route: `ForwardMatrix`,
+or `ColorMatrix` with Bradford adaptation and optional `ReductionMatrix`.
+`AnalogBalance`, signature-gated `CameraCalibration`, `AsShotNeutral`,
+`AsShotWhiteXY`, one/two/three calibration sets, custom xy or spectral
+`IlluminantData`, and three- or four-channel camera profiles are supported.
+Malformed or incomplete profiles safely fall back to the decoder camera matrix;
+`--no-dng-color` provides a diagnostic control.
+
+The implementation reads numbered tags directly rather than recovering them
+from Rawler's illuminant-keyed map, iterates the complete
+`AnalogBalance × CameraCalibration × ColorMatrix` white-point transform, uses
+inverse-temperature interpolation for two illuminants and deterministic
+chromaticity weights for three, and reports every matrix branch used. Synthetic
+matrix/white-point invariants and the local ProShot dual-illuminant profile
+cover the path.
+
+### Standardized DNG lens correction
+
+The owned path now parses DNG `OpcodeList3` and applies `WarpRectilinear` and
+`FixVignetteRadial` immediately after demosaic and before `DefaultCrop`.
+Radial/tangential distortion, per-channel lateral chromatic aberration, and
+radial vignetting are supported without a camera-model table. Unknown or
+malformed required operations disable the list; absent metadata is a strict
+no-op. The local ProShot phone DNG exercises a real embedded warp.
+`--no-lens-correction` provides the compatibility control. This image-affecting
+default advances the unattended profile to `archive-auto-v2`.
+
+### In-memory embedding API
+
+`api::render_file` runs the automatic pipeline without writing a file and
+returns a `RenderedImage`: dimensions, stride, explicit pixel format, packed
+bytes, and the full render report. `Rgb8Srgb` and network-order
+`Rgb16SrgbBe` are available. `RenderOptions::automatic` shares the command-line
+image defaults, while `RenderOptions::from_run_options` lets an embedding reuse
+a batch configuration. `examples/in-memory.rs` is the minimal handoff example.
+
+### JPEG output moved to the `jpeg-encoder` crate
+
+JPEG encoding now goes through `jpeg-encoder` rather than `image`'s encoder, and
+its knobs are exposed on the flag CLI:
+
+* `--jpeg-subsampling <auto|444|422|420>`
+* `--jpeg-progressive`
+* `--no-jpeg-optimize` (disable the automatic optimized Huffman pass)
+
+`--jpeg-quality` is unchanged, and the source EXIF (`APP1`) and sRGB ICC profile
+(`APP2`) are still embedded. The no-metadata JPEG path remains byte-identical to
+itself with and without metadata attached, so the regression gate is intact.
+
 ## 0.1.19 — the batch sizes itself
 
 ### `--jobs` defaults to `auto`

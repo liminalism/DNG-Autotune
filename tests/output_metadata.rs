@@ -16,7 +16,7 @@
 use raw_autotune::metadata::{ORIENTATION_NORMAL, SourceMetadata, srgb_icc_profile};
 use raw_autotune::output::{save_image, save_image_with_metadata};
 use raw_autotune::tone::Rgb16Image;
-use raw_autotune::types::OutputFormat;
+use raw_autotune::types::{JpegSettings, OutputFormat};
 use rawler::exif::Exif;
 use rawler::formats::tiff::reader::TiffReader;
 use rawler::formats::tiff::{GenericTiffReader, Rational};
@@ -50,7 +50,14 @@ fn no_metadata_is_byte_identical_to_the_legacy_writer() {
         let legacy = scratch(&format!("legacy.{extension}"));
         let explicit = scratch(&format!("explicit-none.{extension}"));
         save_image(&legacy, image.clone(), format, 90).expect("legacy write");
-        save_image_with_metadata(&explicit, image.clone(), format, 90, None).expect("write");
+        save_image_with_metadata(
+            &explicit,
+            image.clone(),
+            format,
+            &JpegSettings::from_quality(90),
+            None,
+        )
+        .expect("write");
         assert_eq!(
             std::fs::read(&legacy).expect("readable"),
             std::fs::read(&explicit).expect("readable"),
@@ -77,7 +84,14 @@ fn every_format_carries_exif_and_reports_upright() {
     let image = gradient(40, 90);
     for (format, extension) in FORMATS {
         let path = scratch(&format!("tagged.{extension}"));
-        save_image_with_metadata(&path, image.clone(), format, 90, Some(&metadata)).expect("write");
+        save_image_with_metadata(
+            &path,
+            image.clone(),
+            format,
+            &JpegSettings::from_quality(90),
+            Some(&metadata),
+        )
+        .expect("write");
         let bytes = std::fs::read(&path).expect("readable");
 
         let exif_block = match format {
@@ -132,7 +146,7 @@ fn every_format_embeds_the_srgb_profile() {
         &jpeg,
         image.clone(),
         OutputFormat::Jpeg,
-        90,
+        &JpegSettings::from_quality(90),
         Some(&metadata),
     )
     .expect("write");
@@ -147,7 +161,7 @@ fn every_format_embeds_the_srgb_profile() {
         &tiff,
         image.clone(),
         OutputFormat::Tiff,
-        90,
+        &JpegSettings::from_quality(90),
         Some(&metadata),
     )
     .expect("write");
@@ -158,7 +172,14 @@ fn every_format_embeds_the_srgb_profile() {
     );
 
     let png = scratch("icc.png");
-    save_image_with_metadata(&png, image, OutputFormat::Png, 90, Some(&metadata)).expect("write");
+    save_image_with_metadata(
+        &png,
+        image,
+        OutputFormat::Png,
+        &JpegSettings::from_quality(90),
+        Some(&metadata),
+    )
+    .expect("write");
     let bytes = std::fs::read(&png).expect("readable");
     assert!(
         png_chunk(&bytes, b"iCCP").is_some(),
@@ -179,10 +200,22 @@ fn writes_are_reproducible() {
     for (format, extension) in FORMATS {
         let first = scratch(&format!("repeat-a.{extension}"));
         let second = scratch(&format!("repeat-b.{extension}"));
-        save_image_with_metadata(&first, image.clone(), format, 90, Some(&metadata))
-            .expect("write");
-        save_image_with_metadata(&second, image.clone(), format, 90, Some(&metadata))
-            .expect("write");
+        save_image_with_metadata(
+            &first,
+            image.clone(),
+            format,
+            &JpegSettings::from_quality(90),
+            Some(&metadata),
+        )
+        .expect("write");
+        save_image_with_metadata(
+            &second,
+            image.clone(),
+            format,
+            &JpegSettings::from_quality(90),
+            Some(&metadata),
+        )
+        .expect("write");
         assert_eq!(
             std::fs::read(&first).expect("readable"),
             std::fs::read(&second).expect("readable"),
@@ -209,7 +242,14 @@ fn real_raw_reaches_every_format() {
     let image = gradient(48, 32);
     for (format, extension) in FORMATS {
         let path = scratch(&format!("real.{extension}"));
-        save_image_with_metadata(&path, image.clone(), format, 90, Some(&metadata)).expect("write");
+        save_image_with_metadata(
+            &path,
+            image.clone(),
+            format,
+            &JpegSettings::from_quality(90),
+            Some(&metadata),
+        )
+        .expect("write");
         let bytes = std::fs::read(&path).expect("readable");
         let block = match format {
             OutputFormat::Tiff => bytes.clone(),

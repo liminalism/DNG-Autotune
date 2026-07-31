@@ -7,10 +7,16 @@
 //! actually uses.
 
 pub mod analyze;
+pub mod api;
 pub mod chroma;
 pub mod cli;
 pub mod color;
+pub mod demosaic;
+pub mod dngcolor;
 pub mod files;
+pub mod highlight;
+pub mod hotpixels;
+pub mod lens;
 pub mod levels;
 pub mod ljpeg;
 pub mod localtone;

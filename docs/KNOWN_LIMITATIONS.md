@@ -12,17 +12,26 @@ helper and will not match a mature editor's detail rendering.
 
 ## Color
 
-The program uses Rawler's available camera matrix and as-shot white balance.
-The convenient first-version development path calibrates directly into linear
-sRGB rather than a wider scene-referred working space. It does not yet
-implement:
+The default owned path uses the DNG 1.7 matrix model when a complete profile is
+present, converting to linear sRGB or optional Rec.2020 without Rawler's
+destructive clipping. It handles one, two or three calibrations, three or four
+camera channels, `ForwardMatrix`, signature-gated `CameraCalibration`,
+`AnalogBalance`, custom xy/SPD `IlluminantData`, `ReductionMatrix`, and Bradford
+adaptation. Incomplete or unsupported profiles fall back to the decoder camera
+matrix. It does not implement the creative/profile-rendering layers:
 
-- dual-illuminant matrix interpolation selected from estimated scene light;
 - DCP hue/saturation maps;
 - vendor picture styles;
-- ICC output embedding;
-- mixed-light white-balance analysis;
 - a trained camera-look transform.
+
+These are not missing sensor calibration. A DCP hue/saturation map or look
+table is an optional creative LUT applied after the camera has already been
+converted colorimetrically: it can make skin warmer, foliage greener, skies
+deeper, or emulate a vendor picture style. The matrix path answers what colour
+was measured; these tables choose how that colour should look.
+
+Mixed-light correction exists separately under `--local-white-balance`; it is
+off by default. JPEG, TIFF, and PNG outputs carry an sRGB ICC profile.
 
 Sunsets, colored stage light, LEDs, and underwater images are intentionally not
 "neutralized" by a speculative white-balance algorithm.
@@ -53,9 +62,11 @@ phone DNGs only.
 
 ## Highlights
 
-The program compresses bright scene-linear values but does not reconstruct
-sensor channels that were already clipped. It can retain highlight gradation
-that exists in the developed f32 buffer; it cannot invent missing channel data.
+The automatic profile reconstructs a partially clipped RGB channel from the
+surviving channel ratios before colour conversion. Fully clipped pixels and
+strongly coloured highlights are deliberately left alone, so the program still
+cannot invent detail when every channel is gone. Four-colour RGBE data does not
+yet use this reconstruction.
 
 The tone curve's highlight segment is driven by a blend of luminance and the
 brightest channel (`highlight_norm`), because a luminance-only curve clips
@@ -84,8 +95,27 @@ Chroma noise reduction exists since 0.1.14 (`src/chroma.rs`), automatic and
 driven by the frame's own fitted noise model. It is inert on clean frames — 309
 of 368 corpus files — and cannot alter luminance at all, by construction.
 
-Not done: **luma denoising**, hot-pixel suppression, chromatic-aberration
-correction, output sharpening, local texture control.
+Not done: **luma denoising** or semantic local texture control. Hot/dead CFA
+suppression and noise-aware output sharpening are automatic and can be scaled
+or disabled. Lens correction is available only where standardized metadata
+supports it, as described below.
+
+## Lens correction
+
+The automatic owned path reads DNG `OpcodeList3` directly. It supports
+`WarpRectilinear` (radial/tangential distortion and one- or per-channel lateral
+chromatic aberration) and `FixVignetteRadial`. Operations run in their specified
+order immediately after demosaic, in full raw-image coordinates, before
+`DefaultCrop` and colour conversion. Invalid coefficients and unknown required
+opcodes disable the whole list; unknown optional opcodes are reported and
+skipped. `--no-lens-correction` disables the stage.
+
+This does not make EXIF lens identity a correction profile. Most proprietary
+RAW files provide a lens name, focal length, focus distance, and aperture but
+not portable distortion/vignetting coefficients. Those files remain unchanged.
+There is deliberately no generic correction guessed from make/model. DNG
+`WarpFisheye`, `WarpRectilinear2`, gain-map opcodes, and vendor MakerNote lens
+profiles are not yet implemented.
 
 Two limits of the chroma filter specifically:
 
@@ -150,9 +180,9 @@ high-variance pairs did not reach that regime either (brightest camera subject
 
 ## Output metadata
 
-EXIF, XMP, GPS, camera profile, and thumbnails are not copied. TIFF and PNG are
-written as 16-bit RGB pixel files, but v0.1 does not embed an ICC profile.
-Consumers should currently interpret them as sRGB-encoded RGB.
+Core EXIF and GPS metadata are copied, orientation is normalized, and JPEG,
+TIFF and PNG carry the generated sRGB ICC profile. MakerNotes, embedded
+thumbnails, vendor-private blobs and complete XMP packets are not copied.
 
 JPEG is necessarily 8-bit.
 

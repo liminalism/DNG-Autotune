@@ -57,7 +57,9 @@
 //! signature-sorted order. Same input, same bytes, on any thread count.
 
 use crate::tone::Rgb16Image;
+use crate::types::{JpegSettings, JpegSubsampling};
 use anyhow::{Context, Result};
+use jpeg_encoder::{ColorType as JpegColorType, Encoder as JpegEncoder, SamplingFactor};
 use rawler::RawLoader;
 use rawler::decoders::{RawDecodeParams, RawMetadata};
 use rawler::exif::Exif;
@@ -462,30 +464,75 @@ fn attach<E: image::ImageEncoder>(encoder: &mut E, exif: Option<Vec<u8>>, icc: b
 
 /// Write a JPEG with EXIF (`APP1`) and the sRGB ICC profile (`APP2`).
 ///
+/// The encoder is the `jpeg-encoder` crate rather than `image`'s, so the caller
+/// can reach its progressive, optimized-Huffman and chroma-subsampling knobs
+/// through [`JpegSettings`]. EXIF and ICC are attached with the crate's own
+/// `add_exif_metadata`/`add_icc_profile`, which prepend the `Exif\0\0` header
+/// and chunk the `ICC_PROFILE` marker exactly as the JFIF spec requires.
+///
 /// `rgb8` must already be 8-bit interleaved RGB; the caller owns the 16-to-8
 /// reduction so that the byte-for-byte result of the no-metadata path is
-/// unchanged.
+/// unchanged whether or not metadata is attached.
 pub fn write_jpeg(
     path: &Path,
     rgb8: &[u8],
     width: u32,
     height: u32,
-    quality: u8,
+    settings: &JpegSettings,
     metadata: Option<&SourceMetadata>,
 ) -> Result<()> {
+    // `jpeg-encoder` addresses pixels with 16-bit dimensions. Every RAW this
+    // program targets is far inside that (the largest, an 8160x6120 Expert RAW,
+    // is well under 65535), so this is a guard rather than a real case.
+    let width_u16 = u16::try_from(width)
+        .with_context(|| format!("JPEG width {width} exceeds the format's 65535 limit"))?;
+    let height_u16 = u16::try_from(height)
+        .with_context(|| format!("JPEG height {height} exceeds the format's 65535 limit"))?;
+
     let file =
         File::create(path).with_context(|| format!("failed to create JPEG {}", path.display()))?;
-    let mut encoder =
-        image::codecs::jpeg::JpegEncoder::new_with_quality(BufWriter::new(file), quality);
+    let mut encoder = JpegEncoder::new(BufWriter::new(file), settings.quality);
+
+    encoder.set_progressive(settings.progressive);
+    encoder.set_optimized_huffman_tables(settings.optimized_huffman);
+    encoder.set_sampling_factor(sampling_factor(settings.subsampling, settings.quality));
 
     if let Some(metadata) = metadata {
-        let exif = metadata.jpeg_exif_payload(width, height)?;
-        attach(&mut encoder, exif, true)?;
+        // The same payload the PNG/TIFF paths use; `add_exif_metadata` adds the
+        // six-byte `Exif\0\0` header itself, so the raw TIFF structure goes in.
+        if let Some(exif) = metadata.jpeg_exif_payload(width, height)? {
+            encoder
+                .add_exif_metadata(&exif)
+                .map_err(|error| anyhow::anyhow!("encoder rejected EXIF metadata: {error}"))?;
+        }
+        encoder
+            .add_icc_profile(srgb_icc_profile())
+            .map_err(|error| anyhow::anyhow!("encoder rejected the ICC profile: {error}"))?;
     }
 
     encoder
-        .encode(rgb8, width, height, image::ExtendedColorType::Rgb8)
+        .encode(rgb8, width_u16, height_u16, JpegColorType::Rgb)
         .with_context(|| format!("failed to encode JPEG {}", path.display()))
+}
+
+/// Map a [`JpegSubsampling`] onto the encoder's sampling factor.
+///
+/// `Auto` follows the common convention: full chroma resolution at quality 90
+/// and above, where subsampling artefacts start to show against the smaller
+/// gain, and 4:2:0 below it.
+fn sampling_factor(subsampling: JpegSubsampling, quality: u8) -> SamplingFactor {
+    match subsampling {
+        JpegSubsampling::S444 => SamplingFactor::F_1_1,
+        JpegSubsampling::S422 => SamplingFactor::F_2_1,
+        JpegSubsampling::S420 => SamplingFactor::F_2_2,
+        JpegSubsampling::Auto => {
+            if quality >= 90 {
+                SamplingFactor::F_1_1
+            } else {
+                SamplingFactor::F_2_2
+            }
+        }
+    }
 }
 
 /// Write a 16-bit PNG with EXIF (`eXIf`) and the sRGB ICC profile (`iCCP`).
@@ -1215,7 +1262,15 @@ mod tests {
             .iter()
             .map(|value| ((*value as u32 + 128) / 257) as u8)
             .collect();
-        write_jpeg(&path, &rgb8, 32, 24, 90, Some(&sample_metadata())).expect("JPEG writes");
+        write_jpeg(
+            &path,
+            &rgb8,
+            32,
+            24,
+            &JpegSettings::from_quality(90),
+            Some(&sample_metadata()),
+        )
+        .expect("JPEG writes");
 
         let bytes = std::fs::read(&path).expect("JPEG readable");
         let exif = extract_jpeg_app1(&bytes).expect("APP1 Exif segment must be present");
@@ -1246,7 +1301,8 @@ mod tests {
             .iter()
             .map(|value| ((*value as u32 + 128) / 257) as u8)
             .collect();
-        write_jpeg(&path, &rgb8, 32, 24, 90, None).expect("JPEG writes");
+        write_jpeg(&path, &rgb8, 32, 24, &JpegSettings::from_quality(90), None)
+            .expect("JPEG writes");
         let bytes = std::fs::read(&path).expect("JPEG readable");
         assert!(extract_jpeg_app1(&bytes).is_none());
         assert!(extract_jpeg_app2(&bytes).is_none());
@@ -1712,7 +1768,15 @@ mod tests {
             .iter()
             .map(|value| ((*value as u32 + 128) / 257) as u8)
             .collect();
-        write_jpeg(&path, &rgb8, 64, 48, 90, Some(&metadata)).expect("JPEG writes");
+        write_jpeg(
+            &path,
+            &rgb8,
+            64,
+            48,
+            &JpegSettings::from_quality(90),
+            Some(&metadata),
+        )
+        .expect("JPEG writes");
 
         let bytes = std::fs::read(&path).expect("JPEG readable");
         let exif = extract_jpeg_app1(&bytes).expect("APP1 Exif segment");

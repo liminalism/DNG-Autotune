@@ -14,7 +14,8 @@
 - Better clipped-highlight reconstruction before demosaic.
 - Camera/ISO-aware noise estimate and conservative denoising.
 - Hot/dead pixel suppression.
-- Lens correction through DNG opcodes or a lens database.
+- DNG `WarpRectilinear`/`FixVignetteRadial` correction is implemented;
+  `WarpRectilinear2`, fisheye, gain maps, and an optional lens database remain.
 - Output-size-aware sharpening.
 - More deliberate gamut compression and saturated-highlight handling.
 

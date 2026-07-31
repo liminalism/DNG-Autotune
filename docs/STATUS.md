@@ -32,11 +32,20 @@ presentable high-ISO — remain the open ones.
 the machine reports free and the size of the largest input, which closes
 `docs/PLAN.md`'s fifth criterion. See "What to run" below.
 
-**Since 0.1.18 the default colour path is `owned`, not Rawler's.** The program now
-owns everything from black-level normalization onward except the demosaic itself;
-see the scorecard section below for the evidence the default was flipped on. The
-project is also AGPL-3.0-or-later as of 0.1.18 (it was MIT), which removed the sole
-objection to porting GPL-3 demosaic algorithms later.
+**Since 0.1.18 the default colour path is `owned`, not Rawler's.** The current
+implementation owns everything from black-level normalization onward for
+ordinary Bayer files except the mature PPG kernel selected for noisy/textured
+mosaics. Owned RCD/AMaZE-class interpolation is used only behind strict measured
+guards because dense branches still show less false colour through PPG.
+
+**DNG matrix colour and standardized lens correction are automatic.** Colour
+composes the ForwardMatrix or ColorMatrix/Bradford route with `AnalogBalance`, signature-matched
+`CameraCalibration`, one/two/three illuminants, custom `IlluminantData`, and
+three/four camera channels with optional `ReductionMatrix`. Incomplete profiles
+fall back to the decoder transform; `--no-dng-color` is the control. DNG
+`OpcodeList3` supplies `WarpRectilinear` distortion/lateral-CA and
+`FixVignetteRadial` coefficients without a camera database; missing metadata is
+a no-op and `--no-lens-correction` is the control.
 
 ## Telling the two Samsung sources apart
 
@@ -399,11 +408,11 @@ Two things that fell out of the measurement rather than being planned:
 on a metric whose maximiser is histogram equalisation. `rawler` remains available as
 the A/B control and for reproducing pre-0.1.18 output.
 
-**`src/rescale.rs` now owns black/white normalization, the demosaic ROI and the
-default crop.** Rawler's `PPGDemosaic` is the only piece still rented. Peak working
-set fell 25% on a 24 MP ARW (321 → 242 MB) and 11% on a 24.5 MP linear DNG, because
-`develop_intermediate` clones the whole `RawImage`, floats it, and then builds a
-second full buffer.
+**`src/rescale.rs` owns black/white normalization, the demosaic ROI and the
+default crop; `src/demosaic.rs` owns method selection and the guarded
+interpolators.** Rawler PPG remains the mature fallback. Peak working set fell 25% on a
+24 MP ARW (321 → 242 MB) and 11% on a 24.5 MP linear DNG when the owned path
+removed `develop_intermediate`'s full-image clone.
 
 `--sub-black` is a hidden three-way control, defaulting to `rawler-compat`, which is
 **bit-identical** to `RawImage::apply_scaling` — proven by eight `f32::to_bits()`
@@ -517,9 +526,9 @@ space, so shadow noise pinned at zero in one channel goes negative in the workin
 space the moment it passes a matrix with negative off-diagonals. Treat those as
 noise, not as colour to be gamut-mapped, or the fix will turn black speckle grey.
 
-(Since 0.1.18 that clip is **this program's own**, in `src/rescale.rs`, not
-Rawler's — and `--sub-black` selects the policy. It still clips by default. See
-the section on owning the rescale step below.)
+(Since 0.1.18 that policy is **this program's own**, in `src/rescale.rs`, not
+Rawler's. The automatic profile preserves sub-black samples; `--sub-black`
+selects the diagnostic alternatives.)
 
 ### What that ruled in and out (all now resolved; kept for the reasoning)
 
@@ -535,9 +544,9 @@ triple has non-negative luminance, so no luminance-preserving operator can map a
 negative-luminance pixel anywhere legal except black. Written that way the fix
 reproduces the bug one stage earlier.
 
-**Out, for now**: the rest of the DNG colour science, which changes *which*
-colours land out of gamut without changing what happens to them. Build the
-mechanism first; any fitted thresholds are matrix-dependent, so tune after.
+The DNG matrix mechanism described above is now in. Creative DCP tables remain
+out because they are a rendering look rather than the colorimetric transform
+needed at this stage.
 
 `--working-space rec2020` cuts out-of-range pixels from a median 0.166% to 0.053%
 (max 66.2% → 52.2%) and improves the highlight row head to head to 56 better / 47
@@ -645,10 +654,12 @@ the missing denoiser.
 
 - **No semantic local control.** Local tone has no face, sky, skin or subject
   awareness and does not reproduce a phone's multi-frame image pipeline.
-- **No luma denoising, lens correction or hot-pixel pass.** (Chroma denoising
-  and output sharpening are automatic since 0.1.14/0.1.15; luma noise is left
-  alone deliberately — it is the part that destroys texture, and the camera's
-  own high-ISO JPEGs are visibly mushier than ours.)
+- **No luma denoising or guessed lens profiles.** Standard DNG lens opcodes,
+  hot/dead CFA suppression, chroma denoising and output sharpening are
+  automatic. Proprietary RAWs without portable lens coefficients are left
+  geometrically unchanged. Luma noise is left alone deliberately because it is
+  the part that destroys texture, and the camera's own high-ISO JPEGs are
+  visibly mushier than ours.
 - ~~**No EXIF/ICC in the output.**~~ **Done in 0.1.17.** All three formats carry
   the copied EXIF and a generated sRGB v2 ICC profile; `--no-metadata` restores
   the old bytes exactly. Two gaps remain deliberately: MakerNotes are not copied

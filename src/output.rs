@@ -1,7 +1,7 @@
 use crate::metadata::SourceMetadata;
 use crate::noiseprofile::NoiseProfile;
 use crate::tone::Rgb16Image;
-use crate::types::{BatchSummary, OutputFormat, Sidecar};
+use crate::types::{BatchSummary, JpegSettings, OutputFormat, Sidecar};
 use anyhow::{Context, Result};
 use image::{DynamicImage, ImageFormat};
 use std::fs::{self, File};
@@ -20,7 +20,13 @@ pub fn save_image(
     format: OutputFormat,
     jpeg_quality: u8,
 ) -> Result<()> {
-    save_image_with_metadata(path, image, format, jpeg_quality, None)
+    save_image_with_metadata(
+        path,
+        image,
+        format,
+        &JpegSettings::from_quality(jpeg_quality),
+        None,
+    )
 }
 
 /// Write the rendered image, optionally with EXIF copied from the source RAW and
@@ -34,7 +40,7 @@ pub fn save_image_with_metadata(
     path: &Path,
     image: Rgb16Image,
     format: OutputFormat,
-    jpeg_quality: u8,
+    jpeg: &JpegSettings,
     metadata: Option<&SourceMetadata>,
 ) -> Result<()> {
     if let Some(parent) = path.parent() {
@@ -65,7 +71,7 @@ pub fn save_image_with_metadata(
                 .into_iter()
                 .map(|value| ((value as u32 + 128) / 257) as u8)
                 .collect();
-            crate::metadata::write_jpeg(path, &rgb8, width, height, jpeg_quality, metadata)?;
+            crate::metadata::write_jpeg(path, &rgb8, width, height, jpeg, metadata)?;
         }
     }
 

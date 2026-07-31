@@ -10,34 +10,37 @@ It currently:
 
 1. decodes DNG and other camera RAW formats through Rawler;
 2. normalizes sensor black/white levels itself, keeping sub-black samples;
-3. demosaics Bayer inputs through Rawler's PPG;
-4. applies the camera's as-shot white balance and colour matrix itself, into
-   scene-linear RGB, discarding nothing — no gamut clip, no highlight rewrite;
-5. samples scene-linear RGB statistics;
-6. estimates exposure, usable black/white EV limits, contrast, saturation, and
+3. suppresses isolated hot/dead CFA sites and adaptively chooses mature PPG or
+   guarded owned RCD/AMaZE-class interpolation for ordinary Bayer data;
+4. reconstructs partially clipped RGB highlights and applies the DNG matrix
+   model (or the decoder camera matrix fallback) into scene-linear RGB without
+   destructive gamut clipping;
+5. applies standardized DNG distortion, lateral chromatic-aberration and
+   vignetting instructions when the file supplies them;
+6. samples scene-linear RGB statistics;
+7. estimates exposure, usable black/white EV limits, contrast, saturation, and
    vibrance;
-7. reduces chroma noise and sharpens, both scaled by the frame's own fitted
+8. reduces chroma noise and sharpens, both scaled by the frame's own fitted
    sensor-noise model;
-8. optionally builds a full-resolution, multi-scale local exposure map;
-9. applies a hue-preserving, middle-gray-anchored view transform;
-10. writes 16-bit TIFF/PNG or 8-bit JPEG, with the source EXIF and an sRGB ICC
-    profile;
-11. writes a JSON sidecar containing all measured statistics and selected
-    parameters.
+9. optionally builds a full-resolution, multi-scale local exposure map;
+10. applies a hue-preserving, middle-gray-anchored view transform;
+11. writes 16-bit TIFF/PNG or 8-bit JPEG (the latter through the
+    `jpeg-encoder` crate), with the source EXIF and an sRGB ICC profile;
+12. writes one JSON batch summary by default; per-image sidecars remain
+    available with `--sidecar`.
 
-Everything from the black level onward is this program's own; Rawler supplies the
-container parsing, the camera database, the decompression and the demosaic. See
-"Owning the colour conversion" below for why that boundary moved, and what it
-bought.
+Everything from the black level onward is this program's own for ordinary Bayer
+files; Rawler supplies container parsing, camera data and decompression. Its PPG
+demosaic remains available as an explicit diagnostic control, and its bilinear
+four-colour path covers uncommon RGBE mosaics.
 
 No ONNX model is required. Neural pre-analysis is deliberately deferred.
 
 ## What to expect
 
 The current version should be useful for comparing its automatic decisions on a
-real batch of photographs and for identifying where semantic analysis, better
-highlight reconstruction, denoising, lens correction, or camera-profile work
-will matter.
+real batch of photographs and for identifying where semantic analysis, luma
+denoising, unprofiled lenses, or creative camera-profile work will matter.
 
 It will not consistently match Lightroom Auto. The controller only sees global
 and center-weighted tonal statistics. It does not know that a region is a face,
@@ -81,9 +84,23 @@ cargo test
 Rawler 0.7.2 requires Rust 1.89 or newer. The included
 `rust-toolchain.toml` selects Rust 1.89.0.
 
+## Interactive mode
+
+Run the executable with **no arguments** for the minimal automatic front-end:
+
+```bash
+raw-autotune
+```
+
+It asks only for one or more RAW files/folders and an output directory, then
+starts. The versioned `archive-auto-v2` profile chooses colour, demosaic,
+corrections, tone, metadata, JPEG settings and safe concurrency. Passing any
+argument uses the non-interactive CLI, with the same defaults and optional
+expert overrides.
+
 ## First commands
 
-Single image, default automatic preset, 16-bit TIFF:
+Single image, automatic archive JPEG:
 
 ```bash
 raw-autotune photo.dng
@@ -95,10 +112,10 @@ Choose output directory:
 raw-autotune photo.dng --output processed
 ```
 
-Batch a directory recursively:
+Batch a directory recursively (the default):
 
 ```bash
-raw-autotune raw-folder --output processed --format tiff --preset auto
+raw-autotune raw-folder --output processed
 ```
 
 How many full-resolution images are held in flight at once is decided from the
@@ -106,7 +123,7 @@ memory the machine reports free and the size of the largest input, and the run
 header says what it chose and why:
 
 ```
-raw-autotune v0.1.19 | 376 file(s) | preset=auto | concurrent images=5 \
+raw-autotune v0.1.19 | 376 file(s) | profile=archive-auto-v2 | preset=auto | concurrent images=5 \
   (auto: 22.76 GiB available, 2.67 GiB per image at 49.9 MP)
 ```
 
@@ -128,6 +145,29 @@ Analyze without writing files:
 ```bash
 raw-autotune photo.dng --dry-run
 ```
+
+## In-memory library API
+
+An embedding crate does not need to invoke the executable or exchange temporary
+files. `api::render_file` returns an owned, self-describing packed RGB buffer
+plus the analysis and processing report:
+
+```rust
+use raw_autotune::api::{PixelFormat, RenderOptions, render_file};
+
+let mut options = RenderOptions::automatic();
+options.pixel_format = PixelFormat::Rgb8Srgb;
+let image = render_file("photo.dng", &options)?;
+
+assert_eq!(image.row_stride, image.width as usize * 3);
+sender.send(image)?; // move the pixels and report to another crate/thread
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+`Rgb8Srgb` is packed RGB and is usually the best IPC/network payload before
+compression. `Rgb16SrgbBe` preserves the 16-bit render and gives every channel
+an explicit network-friendly byte order. The result owns its `Vec<u8>`, is
+`Send`, and performs no output writes. See `examples/in-memory.rs`.
 
 Survey a large batch quickly — measures every file, writes no images:
 
@@ -151,6 +191,12 @@ Correct mixed lighting (off by default, see below):
 raw-autotune photo.dng --local-white-balance 0.7
 ```
 
+The DNG matrix model is automatic. Disable it only for a controlled comparison:
+
+```bash
+raw-autotune photo.dng --no-dng-color
+```
+
 Apply a manual bias on top of automatic exposure:
 
 ```bash
@@ -163,11 +209,29 @@ Apply local tone adaptation at half strength:
 raw-autotune photo.dng --local-tone 0.5
 ```
 
-Create JPEG previews:
+Override the archive JPEG quality:
 
 ```bash
 raw-autotune raw-folder --format jpeg --jpeg-quality 94
 ```
+
+JPEG is written with the [`jpeg-encoder`](https://crates.io/crates/jpeg-encoder)
+crate. The automatic archive settings are quality 95, baseline, optimized
+Huffman tables and 4:4:4 chroma; the flag CLI exposes overrides:
+
+```bash
+raw-autotune raw-folder --format jpeg --jpeg-quality 90 \
+  --jpeg-subsampling 420 --jpeg-progressive --no-jpeg-optimize
+```
+
+* `--jpeg-quality <1..100>`
+* `--jpeg-subsampling <auto|444|422|420>` — `auto` is 4:4:4 at quality ≥ 90 and
+  4:2:0 below it
+* `--jpeg-progressive` — progressive rather than baseline
+* `--no-jpeg-optimize` — skip the default optimized Huffman pass
+
+The source EXIF (`APP1`) and the sRGB ICC profile (`APP2`) are embedded exactly
+as they are for TIFF and PNG.
 
 ## Chroma noise reduction
 
@@ -396,8 +460,9 @@ usable preview". So every summary splits its reference measures by
 
 ## Owning the colour conversion
 
-Since 0.1.18 the program owns everything from black-level normalization onward
-except the demosaic itself. That was not always so: it used to develop through
+Since 0.1.18 the program owns everything from black-level normalization onward,
+and the current release adds the ordinary-Bayer demosaic. That was not always
+so: it used to develop through
 Rawler's `Rescale` and `Calibrate`, and both destroyed data before this program saw
 it. `Calibrate`'s per-pixel tail clips out-of-gamut channels to zero and rewrites
 every pixel with a channel above 1.0 — which, after as-shot white balance, is much
@@ -421,6 +486,38 @@ The default was flipped on measurement, not preference — see below.
 colour. It has no effect on the Rawler path, which is hardcoded to sRGB primaries.
 BT.2020 was measured and is *not* clearly better: it wins on near-white but gives
 back local detail for no additional hue accuracy, so it stays opt-in.
+
+The default DNG path implements the DNG 1.7 matrix model: one, two or three
+numbered `ColorMatrix`/`ForwardMatrix` sets, signature-gated
+`CameraCalibration`, `AnalogBalance`, custom `IlluminantData`, Bradford
+adaptation, and the no-ForwardMatrix route. Three- and four-camera-channel
+profiles are accepted; four-channel profiles can use `ReductionMatrix`.
+`AsShotNeutral` and `AsShotWhiteXY` are both supported. Reports record the
+estimated CCT, interpolation weights, camera-channel count, custom illuminants,
+white-balance source and matrices used. Incomplete profiles safely fall back to
+the decoder camera matrix.
+
+The automatic lens path is similarly metadata-driven. DNG `OpcodeList3`
+`WarpRectilinear` instructions are applied after demosaic and before
+`DefaultCrop`, in the raw IFD's coordinate system; they can correct radial and
+tangential distortion plus per-channel lateral chromatic aberration.
+`FixVignetteRadial` gain instructions are also supported. The local ProShot
+phone DNG applies its embedded warp with a measured maximum displacement of
+about 10 pixels. `--no-lens-correction` is the diagnostic control. A file with
+no usable opcode is left alone—lens name and focal length are not enough
+information to invent coefficients.
+
+### What the missing DCP tables are
+
+DCP means **DNG Camera Profile**. The matrices above answer a colorimetric
+question: “what real colour does this sensor response represent?” A DCP can
+also contain hue/saturation/value lookup tables (`ProfileHueSatMap*` and
+`ProfileLookTable*`) and a profile tone curve. Those answer an aesthetic
+question: “how should this camera render foliage, skin, sky, and contrast?”
+They are closer to a camera picture style or film look than to basic RAW
+compatibility. raw-autotune currently performs the calibrated matrix conversion
+and its own tone rendering, but does not reproduce those optional creative
+tables.
 
 On the owned path each sidecar's `color` block reports what the clipping would
 have cost: the fraction of pixels Rawler's operator would have moved, split by
@@ -575,9 +672,9 @@ That distinction matters because each failure belongs to a different subsystem.
 - face/subject/sky detection;
 - semantic or face-aware local tone control;
 - profiled RAW denoising;
-- robust clipped-highlight reconstruction;
-- lens distortion/vignetting/chromatic-aberration correction;
-- DCP hue/saturation maps and camera looks;
+- lens correction for files without standardized DNG opcodes, and newer
+  `WarpRectilinear2`/fisheye opcode variants;
+- DCP creative hue/saturation maps and camera looks;
 - scene-linear EXR export;
 - GPU processing;
 - GUI.

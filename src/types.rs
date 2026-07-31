@@ -18,7 +18,13 @@ pub const MID_GRAY: f32 = 0.18;
 ///   `color.clip_cost.negative_luminance_fraction`.
 /// 9 added the `color.rescale` block, present only on the owned colour path,
 ///   which owns black/white normalization from 0.1.18 on.
-pub const REPORT_SCHEMA_VERSION: u32 = 9;
+/// 10 added `color.hot_pixels` and `color.highlight_reconstruction`, both present
+///   only on the owned colour path and only when the corresponding correction
+///   ran; a run with both off serializes identically to schema 9.
+/// 11 added `color.dng_color`, present when the DNG matrix path was composed.
+/// 12 adds pre-demosaic correction, highlight reconstruction, adaptive demosaic,
+///   extended DNG calibration details, and the automatic profile identifier.
+pub const REPORT_SCHEMA_VERSION: u32 = 13;
 
 /// Name for the exposure controller's current behaviour, frozen at the colour
 /// path's correctness boundary.
@@ -99,6 +105,85 @@ impl OutputFormat {
     }
 }
 
+/// Chroma subsampling for the JPEG encoder, exposing the three factors that
+/// matter in practice plus an automatic choice.
+///
+/// The mapping onto `jpeg_encoder::SamplingFactor` lives in
+/// [`crate::metadata`] so this enum carries no dependency on the encoder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum JpegSubsampling {
+    /// 4:4:4 below the quality threshold and 4:2:0 above it, matching what most
+    /// encoders pick when left alone. The default.
+    Auto,
+    /// 4:4:4 — full chroma resolution, largest file, no colour bleed.
+    #[value(name = "444")]
+    S444,
+    /// 4:2:2 — chroma halved horizontally.
+    #[value(name = "422")]
+    S422,
+    /// 4:2:0 — chroma halved both ways, smallest file.
+    #[value(name = "420")]
+    S420,
+}
+
+impl JpegSubsampling {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::S444 => "4:4:4",
+            Self::S422 => "4:2:2",
+            Self::S420 => "4:2:0",
+        }
+    }
+}
+
+/// Everything the `jpeg-encoder` crate lets a caller tune, gathered so the
+/// whole JPEG configuration travels as one value from the CLI to the writer.
+#[derive(Debug, Clone, Copy)]
+pub struct JpegSettings {
+    /// Quality from 1 to 100.
+    pub quality: u8,
+    /// Emit a progressive JPEG rather than a baseline one. Smaller, but slower
+    /// to encode and to decode.
+    pub progressive: bool,
+    /// Optimize the Huffman tables for this image. A few percent smaller at the
+    /// cost of a second encoding pass.
+    pub optimized_huffman: bool,
+    /// Chroma subsampling.
+    pub subsampling: JpegSubsampling,
+}
+
+impl JpegSettings {
+    /// The settings a plain `--jpeg-quality` implies: baseline, unoptimized,
+    /// automatic subsampling.
+    pub const fn from_quality(quality: u8) -> Self {
+        Self {
+            quality,
+            progressive: false,
+            optimized_huffman: false,
+            subsampling: JpegSubsampling::Auto,
+        }
+    }
+
+    /// Archive-oriented automatic output: high quality, full chroma, baseline
+    /// compatibility, and deterministic optimized Huffman tables.
+    pub const fn archive() -> Self {
+        Self {
+            quality: 95,
+            progressive: false,
+            optimized_huffman: true,
+            subsampling: JpegSubsampling::S444,
+        }
+    }
+}
+
+impl Default for JpegSettings {
+    fn default() -> Self {
+        Self::archive()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub output_dir: PathBuf,
@@ -112,7 +197,7 @@ pub struct RunOptions {
     pub overwrite: bool,
     pub emit_baseline: bool,
     pub write_sidecar: bool,
-    pub jpeg_quality: u8,
+    pub jpeg: JpegSettings,
     pub max_samples: usize,
     pub recursive: bool,
     pub dry_run: bool,
@@ -150,6 +235,68 @@ pub struct RunOptions {
     pub chroma_denoise: f32,
     /// Multiplier on the automatic output-sharpening amount; 1.0 is automatic.
     pub sharpen: f32,
+    /// Bayer demosaic policy. `Auto` resolves per frame from pre-demosaic
+    /// statistics and is recorded in the colour report.
+    pub demosaic: crate::demosaic::DemosaicMethod,
+    /// Hot/dead pixel suppression strength on the CFA mosaic, 0 to 1. 0 is off
+    /// and byte-identical; owned colour path only.
+    pub hot_pixels: f32,
+    /// Clipped-highlight reconstruction strength, 0 to 1. 0 is off and
+    /// byte-identical; owned colour path only.
+    pub highlight_reconstruction: f32,
+    /// Use the DNG matrix model (ForwardMatrix/ColorMatrix, CameraCalibration,
+    /// AnalogBalance, ReductionMatrix, and up to three illuminants) on files
+    /// that carry it. On by default and owned colour path only; safely falls
+    /// back to the decoder's camera matrix when a profile is incomplete.
+    pub full_dng_color: bool,
+    /// Apply standardized DNG post-demosaic lens opcodes when the file carries
+    /// them. Unknown cameras and files without opcodes are left untouched.
+    pub lens_correction: bool,
+}
+
+impl RunOptions {
+    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v2";
+
+    /// The unattended archive profile shared by the flag CLI and the minimal
+    /// interactive front-end. Callers change only explicit user overrides.
+    pub fn automatic(output_dir: PathBuf) -> Self {
+        let summary_path = Some(output_dir.join("summary.json"));
+        Self {
+            output_dir,
+            format: OutputFormat::Jpeg,
+            preset: Preset::Auto,
+            exposure_bias_ev: 0.0,
+            jobs: crate::memory::JobCount::Auto,
+            overwrite: false,
+            emit_baseline: false,
+            write_sidecar: false,
+            jpeg: JpegSettings::archive(),
+            max_samples: 250_000,
+            recursive: true,
+            dry_run: false,
+            local_white_balance: 0.0,
+            local_tone: 0.0,
+            preview_exposure: None,
+            raw_color_path: crate::color::RawColorPath::Owned,
+            working_space: crate::color::WorkingSpace::Srgb,
+            sub_black: crate::rescale::SubBlack::Preserve,
+            dump_stages: None,
+            write_metadata: true,
+            noise_scan: None,
+            noise_profile: None,
+            pool_noise: false,
+            summary_path,
+            reference: crate::reference::ReferenceSource::Disabled,
+            saturation_scale: 1.0,
+            chroma_denoise: 1.0,
+            sharpen: 1.0,
+            demosaic: crate::demosaic::DemosaicMethod::Auto,
+            hot_pixels: 0.5,
+            highlight_reconstruction: 0.75,
+            full_dng_color: true,
+            lens_correction: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -332,6 +479,7 @@ pub struct Sidecar {
     pub schema_version: u32,
     pub application: String,
     pub application_version: String,
+    pub automatic_profile_version: String,
     pub input: String,
     pub output: Option<String>,
     pub preset: Preset,
@@ -540,6 +688,8 @@ pub struct GuidanceScorecard {
 pub struct BatchSummary {
     pub schema_version: u32,
     pub application_version: String,
+    /// Versioned unattended defaults used by both CLI front-ends.
+    pub automatic_profile_version: String,
     pub preset: Preset,
     /// Frozen name for the controller this run used.
     pub controller_version: String,

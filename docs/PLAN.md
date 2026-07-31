@@ -164,20 +164,21 @@ say which controller produced them. **Keep the grades.**
 
 Ordered by what each one unblocks, not by release.
 
-### 1. Hot and dead pixel suppression
+### Completed in the current implementation
 
-Cheap, mechanical, and phone sensors need it. A median-based detector should not
-require the dark frames, though they would help.
+Hot/dead CFA-site suppression, partial clipped-highlight reconstruction,
+adaptive PPG/RCD/AMaZE-class Bayer selection, and the DNG 1.7 matrix model are
+implemented, deterministic, reported, and included in the versioned automatic
+profile. The owned interpolators are guarded behind low-noise/low-alias tests
+because dense-branch validation still favors mature PPG. The DNG path covers
+one/two/three illuminants, custom illuminant data, three/four camera channels
+and ReductionMatrix.
 
-### 2. Clipped-highlight reconstruction
+The next requirement for these stages is corpus evidence: the deliberately
+clipped class, fine repeating detail, high ISO and actual four-channel/triple-
+illuminant profiles should be added as they become available.
 
-Now actually feasible: it was blocked for the whole life of the project because
-Rawler's `Calibrate` destroyed the clipped-channel information before we saw it,
-and that step is ours now. Rebuilding a clipped channel from the surviving ones
-beats the current compress-only behaviour on skies. The deliberately-clipped corpus
-class is the test set — and it needs gathering.
-
-### 3. Scene-class policies
+### 1. Scene-class policies
 
 High-key, low-key, night, backlit, flat — driven by the statistics split this
 program already computes. Night first: it is the documented failure and the preview
@@ -185,7 +186,7 @@ oracle already half-solves it. **Each policy lands only with its corpus class as
 regression evidence**, which is what makes this wait on the corpus rather than on
 cleverness.
 
-### 4. The grading session
+### 2. The grading session
 
 The acceptance test for criterion 3, and the thing that ultimately decides whether
 this program works: a blind side-by-side pass over the paired corpus, every frame
@@ -194,20 +195,6 @@ confined to classes that have a documented follow-up.
 
 This is also how the learned controller eventually becomes plausible — graded
 corpus passes *are* the training data. Which is why the grades get kept.
-
-### Newly possible, not yet queued
-
-A better Bayer demosaic. The project relicensed to AGPL-3.0-or-later, which voids
-the only objection to porting RawTherapee's RCD or AMaZE (both GPL-3). PPG is still
-not the bottleneck, so this does not jump the queue — but it stopped being a
-refusal and became a choice, and it is the largest single quality item that just
-became available. X-Trans stays out of scope regardless.
-
-Full DNG colour science — `ForwardMatrix`, `CameraCalibration`, dual-illuminant
-interpolation, a real chromatic adaptation transform — sits behind the items above
-on purpose. It changes *which* colours land outside the working space without
-changing what happens to them, and what happens to them was the part that was
-wrong.
 
 ## What is deliberately not being done
 
@@ -223,7 +210,10 @@ wrong.
   selector would systematically pick the frame a human rejects. Revisit only after
   scene-class policies and metrics with real resolution on the contested axes. See
   `docs/candidate-render-plans-0115.md`.
-- **A general lens-correction database.** DNG opcodes only, when they arrive.
+- **A general lens-correction database.** Standard DNG
+  `WarpRectilinear`/`FixVignetteRadial` opcodes are now applied when present;
+  proprietary RAWs without portable coefficients remain intentionally
+  uncorrected.
 - GUI, camera looks/DCP, X-Trans quality, EXR export, GPU.
 
 ## Standing lessons

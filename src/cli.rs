@@ -1,8 +1,9 @@
 use crate::color::{RawColorPath, WorkingSpace};
+use crate::demosaic::DemosaicMethod;
 use crate::memory::JobCount;
 use crate::reference::ReferenceSource;
 use crate::rescale::SubBlack;
-use crate::types::{OutputFormat, Preset, RunOptions};
+use crate::types::{JpegSettings, JpegSubsampling, OutputFormat, Preset, RunOptions};
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use std::path::PathBuf;
@@ -24,7 +25,7 @@ pub struct Cli {
     pub output: PathBuf,
 
     /// Output image format.
-    #[arg(long, value_enum, default_value = "tiff")]
+    #[arg(long, value_enum, default_value = "jpeg")]
     pub format: OutputFormat,
 
     /// Automatic rendering style.
@@ -50,13 +51,33 @@ pub struct Cli {
     #[arg(long, alias = "emit-neutral")]
     pub emit_baseline: bool,
 
-    /// Do not write the JSON analysis/parameter sidecar.
+    /// Write a JSON analysis/parameter sidecar next to every image. The
+    /// automatic archive profile writes one batch summary instead.
     #[arg(long)]
+    pub sidecar: bool,
+
+    /// Deprecated compatibility spelling. Sidecars are already off by default.
+    #[arg(long, hide = true, conflicts_with = "sidecar")]
     pub no_sidecar: bool,
 
     /// JPEG quality from 1 to 100.
-    #[arg(long, default_value_t = 92)]
+    #[arg(long, default_value_t = 95)]
     pub jpeg_quality: u8,
+
+    /// Emit a progressive JPEG instead of a baseline one. Smaller files, slower
+    /// to encode and decode. Only affects `--format jpeg`.
+    #[arg(long)]
+    pub jpeg_progressive: bool,
+
+    /// Keep JPEG Huffman optimization disabled. The automatic archive profile
+    /// enables it because it changes file size, not pixels.
+    #[arg(long)]
+    pub no_jpeg_optimize: bool,
+
+    /// JPEG chroma subsampling. `auto` uses 4:4:4 at quality >= 90 and 4:2:0
+    /// below it. Only affects `--format jpeg`.
+    #[arg(long, value_enum, default_value = "444")]
+    pub jpeg_subsampling: JpegSubsampling,
 
     /// Approximate maximum number of pixels sampled for global analysis.
     #[arg(long, default_value_t = 250_000)]
@@ -208,11 +229,50 @@ pub struct Cli {
     #[arg(long, value_name = "SCALE", default_value_t = 1.0)]
     pub sharpen: f32,
 
+    /// Bayer demosaic policy. Auto keeps mature PPG for textured/noisy mosaics
+    /// and uses owned RCD/AMaZE-class interpolation only behind strict guards.
+    #[arg(long, value_enum, default_value = "auto")]
+    pub demosaic: DemosaicMethod,
+
     /// Multiply the preset's saturation. 1.0 leaves every preset exactly as
     /// tuned; this exists so the chroma path can be swept against a corpus of
     /// RAW+JPEG pairs, the way --exposure-bias offsets the automatic exposure.
     #[arg(long, value_name = "FACTOR", default_value_t = 1.0)]
     pub saturation_scale: f32,
+
+    /// Suppress hot and dead pixels on the CFA mosaic before demosaic, 0 to 1.
+    /// Defaults to a conservative automatic strength. A single stuck
+    /// photosite becomes a coloured speck the
+    /// demosaic then smears, so it is cheaper to kill before interpolation.
+    /// Owned colour path only (the default); ignored with --raw-color-path rawler.
+    #[arg(long, value_name = "STRENGTH", default_value_t = 0.5)]
+    pub hot_pixels: f32,
+
+    /// Reconstruct clipped highlights from their surviving channels, 0 to 1.
+    /// Defaults to a conservative automatic strength. Rebuilds a channel that saturated before the others so a
+    /// partially-blown highlight renders neutral instead of tinted. Owned colour
+    /// path only (the default); ignored with --raw-color-path rawler.
+    #[arg(long, value_name = "STRENGTH", default_value_t = 0.75)]
+    pub highlight_reconstruction: f32,
+
+    /// Compatibility spelling: the DNG matrix-profile path is already automatic.
+    #[arg(long, conflicts_with = "no_dng_color", hide = true)]
+    pub dng_color: bool,
+
+    /// Disable the automatic DNG matrix-profile path.
+    #[arg(long, conflicts_with = "dng_color")]
+    pub no_dng_color: bool,
+
+    /// Disable standardized DNG OpcodeList3 distortion, lateral chromatic
+    /// aberration, and vignetting correction. Files without usable lens
+    /// opcodes are always left unchanged.
+    #[arg(long)]
+    pub no_lens_correction: bool,
+
+    /// Do not write the automatic batch summary. `--summary FILE` still
+    /// chooses a custom path.
+    #[arg(long, conflicts_with = "summary")]
+    pub no_summary: bool,
 }
 
 impl Cli {
@@ -254,6 +314,23 @@ impl Cli {
             self.sharpen.is_finite() && (0.0..=3.0).contains(&self.sharpen),
             "--sharpen must be between 0 and 3"
         );
+        ensure!(
+            self.hot_pixels.is_finite() && (0.0..=1.0).contains(&self.hot_pixels),
+            "--hot-pixels must be between 0 and 1"
+        );
+        ensure!(
+            self.highlight_reconstruction.is_finite()
+                && (0.0..=1.0).contains(&self.highlight_reconstruction),
+            "--highlight-reconstruction must be between 0 and 1"
+        );
+        if self.raw_color_path == RawColorPath::Rawler
+            && (self.hot_pixels > 0.0 || self.highlight_reconstruction > 0.0 || self.dng_color)
+        {
+            eprintln!(
+                "note: --hot-pixels, --highlight-reconstruction and --dng-color act only on the \
+                 owned colour path; they are ignored with --raw-color-path rawler"
+            );
+        }
 
         let reference = match self.reference_dir {
             Some(directory) => {
@@ -269,6 +346,14 @@ impl Cli {
         };
 
         let output_dir = self.output;
+        let summary_path = if self.no_summary {
+            None
+        } else {
+            Some(
+                self.summary
+                    .unwrap_or_else(|| output_dir.join("summary.json")),
+            )
+        };
 
         let inputs = self
             .inputs
@@ -283,46 +368,53 @@ impl Cli {
             .collect::<Result<Vec<_>>>()
             .context("invalid input path")?;
 
-        Ok((
-            inputs,
-            RunOptions {
-                output_dir,
-                format: self.format,
-                preset: self.preset,
-                exposure_bias_ev: self.exposure_bias,
-                jobs: self.jobs,
-                overwrite: self.overwrite,
-                emit_baseline: self.emit_baseline,
-                write_sidecar: !self.no_sidecar,
-                jpeg_quality: self.jpeg_quality,
-                max_samples: self.max_samples,
-                recursive: !self.no_recursive,
-                dry_run: self.dry_run,
-                local_white_balance: self.local_white_balance,
-                local_tone: self.local_tone,
-                // `--no-preview` is the same decision as `--preview-exposure 0`;
-                // clap rejects passing both, so this cannot silently override a
-                // strength the user asked for.
-                preview_exposure: if self.no_preview {
-                    Some(0.0)
-                } else {
-                    self.preview_exposure
-                },
-                raw_color_path: self.raw_color_path,
-                working_space: self.working_space,
-                sub_black: self.sub_black,
-                dump_stages: self.dump_stages,
-                write_metadata: !self.no_metadata,
-                noise_scan: self.noise_scan,
-                noise_profile: self.noise_profile,
-                pool_noise: self.pool_noise,
-                summary_path: self.summary,
-                reference,
-                saturation_scale: self.saturation_scale,
-                chroma_denoise: self.chroma_denoise,
-                sharpen: self.sharpen,
-            },
-        ))
+        let mut options = RunOptions::automatic(output_dir);
+        options.format = self.format;
+        options.preset = self.preset;
+        options.exposure_bias_ev = self.exposure_bias;
+        options.jobs = self.jobs;
+        options.overwrite = self.overwrite;
+        options.emit_baseline = self.emit_baseline;
+        options.write_sidecar = self.sidecar && !self.no_sidecar;
+        options.jpeg = JpegSettings {
+            quality: self.jpeg_quality,
+            progressive: self.jpeg_progressive,
+            optimized_huffman: !self.no_jpeg_optimize,
+            subsampling: self.jpeg_subsampling,
+        };
+        options.max_samples = self.max_samples;
+        options.recursive = !self.no_recursive;
+        options.dry_run = self.dry_run;
+        options.local_white_balance = self.local_white_balance;
+        options.local_tone = self.local_tone;
+        // `--no-preview` is the same decision as `--preview-exposure 0`;
+        // clap rejects passing both, so this cannot silently override a
+        // strength the user asked for.
+        options.preview_exposure = if self.no_preview {
+            Some(0.0)
+        } else {
+            self.preview_exposure
+        };
+        options.raw_color_path = self.raw_color_path;
+        options.working_space = self.working_space;
+        options.sub_black = self.sub_black;
+        options.dump_stages = self.dump_stages;
+        options.write_metadata = !self.no_metadata;
+        options.noise_scan = self.noise_scan;
+        options.noise_profile = self.noise_profile;
+        options.pool_noise = self.pool_noise;
+        options.summary_path = summary_path;
+        options.reference = reference;
+        options.saturation_scale = self.saturation_scale;
+        options.chroma_denoise = self.chroma_denoise;
+        options.sharpen = self.sharpen;
+        options.demosaic = self.demosaic;
+        options.hot_pixels = self.hot_pixels;
+        options.highlight_reconstruction = self.highlight_reconstruction;
+        options.full_dng_color = !self.no_dng_color;
+        options.lens_correction = !self.no_lens_correction;
+
+        Ok((inputs, options))
     }
 }
 
@@ -385,5 +477,48 @@ mod tests {
                 "{value} was accepted"
             );
         }
+    }
+
+    #[test]
+    fn ordinary_cli_uses_the_unattended_archive_profile() {
+        let options = Cli::try_parse_from(["raw-autotune", "."])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        let expected = RunOptions::automatic(PathBuf::from("raw-autotune-output"));
+
+        assert_eq!(options.output_dir, expected.output_dir);
+        assert_eq!(options.format, expected.format);
+        assert_eq!(options.preset, expected.preset);
+        assert_eq!(options.jobs, expected.jobs);
+        assert_eq!(options.write_sidecar, expected.write_sidecar);
+        assert_eq!(options.jpeg.quality, expected.jpeg.quality);
+        assert_eq!(
+            options.jpeg.optimized_huffman,
+            expected.jpeg.optimized_huffman
+        );
+        assert_eq!(options.jpeg.subsampling, expected.jpeg.subsampling);
+        assert_eq!(options.raw_color_path, expected.raw_color_path);
+        assert_eq!(options.sub_black, expected.sub_black);
+        assert_eq!(options.demosaic, expected.demosaic);
+        assert_eq!(options.hot_pixels, expected.hot_pixels);
+        assert_eq!(
+            options.highlight_reconstruction,
+            expected.highlight_reconstruction
+        );
+        assert_eq!(options.full_dng_color, expected.full_dng_color);
+        assert_eq!(options.lens_correction, expected.lens_correction);
+        assert_eq!(options.summary_path, expected.summary_path);
+    }
+
+    #[test]
+    fn standardized_lens_correction_can_be_disabled() {
+        let options = Cli::try_parse_from(["raw-autotune", ".", "--no-lens-correction"])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        assert!(!options.lens_correction);
     }
 }

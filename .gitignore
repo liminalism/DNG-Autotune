@@ -12,3 +12,5 @@
 *.cr3
 *.CR3
 /raw
+/.codegraph
+/DNG_Spec_1_7_1_0.pdf

@@ -4,10 +4,14 @@ use raw_autotune::cli::Cli;
 use raw_autotune::noiseprofile::{NoiseProfile, NoiseSample};
 use raw_autotune::{files, memory, output, pipeline, types};
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::process;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
+
+mod interactive;
+mod interactive_menu;
 
 /// Reference measures collected for one guidance mode, before they become
 /// distributions.
@@ -115,8 +119,23 @@ fn process_all(
 }
 
 fn run() -> Result<i32> {
-    let cli = Cli::parse();
-    let (input_paths, options) = cli.into_options()?;
+    // The bare executable, with no arguments, launches the interactive wizard.
+    // Any argument at all routes through the flag-based CLI, so every documented
+    // batch invocation keeps working unchanged.
+    let (input_paths, options) = if std::env::args().len() <= 1 {
+        match interactive::run()? {
+            Some(pair) => pair,
+            None => return Ok(0),
+        }
+    } else {
+        let cli = Cli::parse();
+        cli.into_options()?
+    };
+
+    run_pipeline(input_paths, options)
+}
+
+fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result<i32> {
     let jobs = files::discover_inputs(&input_paths, options.recursive)?;
 
     if !options.dry_run {
@@ -129,9 +148,10 @@ fn run() -> Result<i32> {
     let plan = memory::plan(options.jobs, &jobs);
 
     println!(
-        "raw-autotune v{} | {} file(s) | preset={} | concurrent images={}{}{}",
+        "raw-autotune v{} | {} file(s) | profile={} | preset={} | concurrent images={}{}{}",
         env!("CARGO_PKG_VERSION"),
         jobs.len(),
+        types::RunOptions::AUTO_PROFILE_VERSION,
         options.preset.as_str(),
         plan.workers,
         plan.describe(options.jobs),
@@ -209,6 +229,9 @@ fn run() -> Result<i32> {
     let mut split: BTreeMap<&'static str, GuidanceAccumulator> = BTreeMap::new();
     let mut clip_altered = Vec::new();
     let mut clip_mean_abs_delta = Vec::new();
+    let mut hot_corrected = Vec::new();
+    let mut highlight_reconstructed = Vec::new();
+    let mut dng_color_frames = 0_usize;
     let mut nondeterministic_illuminant_files = 0_usize;
 
     for (job, result) in jobs.iter().zip(results) {
@@ -326,6 +349,15 @@ fn run() -> Result<i32> {
                     if let Some(cost) = &color.clip_cost {
                         clip_altered.push(cost.altered_fraction);
                         clip_mean_abs_delta.push(cost.mean_abs_delta);
+                    }
+                    if let Some(hot) = &color.hot_pixels {
+                        hot_corrected.push(hot.corrected());
+                    }
+                    if let Some(highlight) = &color.highlight_reconstruction {
+                        highlight_reconstructed.push(highlight.reconstructed_pixels);
+                    }
+                    if color.dng_color.is_some() {
+                        dng_color_frames += 1;
                     }
                 }
                 entries.push(types::SummaryEntry {
@@ -470,6 +502,25 @@ fn run() -> Result<i32> {
         );
     }
 
+    if !hot_corrected.is_empty() {
+        let total: usize = hot_corrected.iter().sum();
+        let frames = hot_corrected.iter().filter(|count| **count > 0).count();
+        println!("hot/dead pixels: {total} site(s) corrected across {frames} frame(s)");
+    }
+    if !highlight_reconstructed.is_empty() {
+        let total: usize = highlight_reconstructed.iter().sum();
+        let frames = highlight_reconstructed
+            .iter()
+            .filter(|count| **count > 0)
+            .count();
+        println!("highlight reconstruction: {total} pixel(s) rebuilt across {frames} frame(s)");
+    }
+    if dng_color_frames > 0 {
+        println!(
+            "full DNG colour: composed the ForwardMatrix transform for {dng_color_frames} file(s)"
+        );
+    }
+
     if nondeterministic_illuminant_files > 0 {
         println!(
             "warning: {nondeterministic_illuminant_files} file(s) carry several calibration \
@@ -482,6 +533,7 @@ fn run() -> Result<i32> {
         let summary = types::BatchSummary {
             schema_version: types::REPORT_SCHEMA_VERSION,
             application_version: env!("CARGO_PKG_VERSION").to_string(),
+            automatic_profile_version: types::RunOptions::AUTO_PROFILE_VERSION.to_string(),
             preset: options.preset,
             controller_version: types::CONTROLLER_VERSION.to_string(),
             raw_color_path: options.raw_color_path,
