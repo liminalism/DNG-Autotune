@@ -1,0 +1,28 @@
+# Line endings: LF everywhere, in the repository and in the working tree.
+#
+# This project is developed from Linux and Windows against the *same* checkout
+# on a shared partition — one working tree, one .git, two operating systems.
+# That rules out the usual "LF in the repository, native in the working tree"
+# arrangement: there is only one working tree, so whichever side checked out
+# last would decide what the other side sees, and `core.autocrlf` cannot help.
+# Hence `eol=lf` rather than plain `text=auto`.
+#
+# Before this file existed, ten source files were CRLF (src/color.rs,
+# pipeline.rs, types.rs, chroma.rs, metrics.rs, reference.rs, sharpen.rs,
+# whitebalance.rs, redecode.rs, tools/contact-sheet.py) purely because they were
+# last saved from the Windows side, and any tool that rewrote one of them from
+# Linux turned a four-line edit into a whole-file diff. Nothing in the build
+# cares which ending it gets; the diffs did.
+#
+# `build-release.bat` is deliberately not forced to CRLF. It is LF today and
+# builds on Windows, and cmd.exe only trips over LF-only batch files in
+# constructs this one does not use.
+
+* text=auto eol=lf
+
+# Binary, never converted or diffed as text. Git's own detection already gets
+# these right; the point of listing them is that the rule stops depending on
+# heuristics.
+*.pdf binary
+*.png binary
+*.jpg binary
