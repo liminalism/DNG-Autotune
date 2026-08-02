@@ -70,10 +70,10 @@
 //! every same-colour neighbour is an original sample.
 
 use rawler::cfa::CFA;
-use rayon::prelude::*;
-use serde::Serialize;
 #[cfg(test)]
 use rawler::cfa::CFAColor;
+use rayon::prelude::*;
+use serde::Serialize;
 
 /// Rows handed to one parallel task. Fixed by the data, not the thread count,
 /// so the work split is a property of the frame and not of the machine.
