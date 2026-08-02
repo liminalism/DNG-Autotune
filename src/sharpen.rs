@@ -99,6 +99,34 @@ pub fn apply(image: &mut Rgb16Image, snr10_ev: Option<f32>, scale: f32) -> Optio
     // then applied. Sharpening in place would let already-sharpened neighbours
     // feed the mask of the pixels after them.
     let raw = image.as_raw();
+
+    // Luminance, once per pixel, into its own plane.
+    //
+    // The mask below reads a `(2 * RADIUS + 1)^2` window per pixel and used to
+    // call `luma` for each sample, so every pixel's luminance was recomputed
+    // once for each neighbour that could see it — nine window samples plus the
+    // centre read, ten `luma` calls per pixel where one will do. `luma` is pure
+    // and deterministic, so reading the precomputed value back is the same `f32`
+    // the repeated call produced, and the window is still summed in the same
+    // order: bit-for-bit identical output, an order of magnitude less work.
+    // Costs one `f32` plane (4 B/px) alongside the correction plane already
+    // allocated here, which leaves this stage far below `chroma`'s peak — the
+    // frame-wide worst case `crate::memory::PEAK_BYTES_PER_PIXEL` is sized on.
+    let mut luma_plane = vec![0.0f32; width * height];
+    luma_plane
+        .par_chunks_exact_mut(width)
+        .enumerate()
+        .for_each(|(y, row)| {
+            // Walking the row's pixels as `chunks_exact(3)` rather than
+            // indexing `raw` per pixel keeps the same triplets in the same
+            // order with no per-pixel index arithmetic or bounds check.
+            let base = y * width * 3;
+            let pixels = raw[base..base + width * 3].chunks_exact(3);
+            for (out, pixel) in row.iter_mut().zip(pixels) {
+                *out = luma(pixel);
+            }
+        });
+
     let mut correction = vec![0.0f32; width * height];
     correction
         .par_chunks_exact_mut(width)
@@ -106,20 +134,30 @@ pub fn apply(image: &mut Rgb16Image, snr10_ev: Option<f32>, scale: f32) -> Optio
         .for_each(|(y, row)| {
             let y0 = y.saturating_sub(RADIUS);
             let y1 = (y + RADIUS).min(height - 1);
+            // The window's rows are the same for every pixel of this output
+            // row, so they are sliced once here rather than re-derived per
+            // pixel. Walking a slice also drops the per-sample bounds check
+            // without any unsafe, and keeps the left-to-right, top-to-bottom
+            // summation order exactly as it was.
+            let mut window_rows: [&[f32]; 2 * RADIUS + 1] = [&[]; 2 * RADIUS + 1];
+            let row_count = y1 - y0 + 1;
+            for (slot, sample_y) in window_rows.iter_mut().zip(y0..=y1) {
+                *slot = &luma_plane[sample_y * width..(sample_y + 1) * width];
+            }
+            let centre_row = &luma_plane[y * width..(y + 1) * width];
             for (x, out) in row.iter_mut().enumerate() {
                 let x0 = x.saturating_sub(RADIUS);
                 let x1 = (x + RADIUS).min(width - 1);
                 let mut sum = 0.0f32;
-                let mut count = 0.0f32;
-                for sample_y in y0..=y1 {
-                    for sample_x in x0..=x1 {
-                        let index = (sample_y * width + sample_x) * 3;
-                        sum += luma(&raw[index..index + 3]);
-                        count += 1.0;
+                for window_row in &window_rows[..row_count] {
+                    for value in &window_row[x0..=x1] {
+                        sum += *value;
                     }
                 }
-                let index = (y * width + x) * 3;
-                let centre = luma(&raw[index..index + 3]);
+                // The old loop accumulated `1.0` per sample; the window is at
+                // most 3x3, and every integer up to 9 is exact in `f32`.
+                let count = (row_count * (x1 - x0 + 1)) as f32;
+                let centre = centre_row[x];
                 let detail = centre - sum / count;
                 // Soft shrinkage: proportional for large detail, quadratic for
                 // small, so noise-scale corrections are suppressed smoothly.

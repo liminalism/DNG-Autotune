@@ -135,6 +135,61 @@ baseline 84.86s/89.02s/84.59s — **~19% wall-clock cumulative** across every
 entry in this "Batched sRGB encode" section. Full 258-file corpus: 258/258,
 zero failures; full test suite unchanged (251 passed).
 
+### Sharpen computes each pixel's luminance once instead of ten times
+
+Re-reading the `bridge_producer_consumer::helper` bucket with the same
+address-to-call-site technique as the two entries above — but resolving through
+DWARF (`addr2line -i` on the `profiling` binary, which keeps debug info) rather
+than disassembly, which names the inlined source function directly — put
+`sharpen::apply`'s mask loop at **9.4% of the whole profile** once the
+hot-pixel work above was removed: 10.28% of the merged bucket in the closure
+plus 6.77% in `sharpen::luma`, and the bucket is 55.27% of all samples.
+
+The cause is the same shape as the hot-pixel sort: work computed per *window
+sample* that only depends on the *pixel*. The unsharp mask reads a 3x3 window
+per pixel and called `luma` on each sample, so every pixel's luminance was
+recomputed once for each neighbour that could see it — nine window reads plus
+the centre, ten `luma` calls per pixel where one will do. `apply` now fills an
+`f32` luma plane once, in parallel, and the mask sums that. `luma` is pure and
+deterministic, so the value read back is the `f32` the repeated call produced,
+and the window is still summed left-to-right, top-to-bottom in the same order:
+bit-for-bit identical, not merely close. Two smaller exact cuts ride along —
+the window's three rows are sliced once per output row instead of re-derived
+per pixel (which also drops the per-sample bounds check, no `unsafe`), and the
+sample count is computed rather than accumulated as nine `+= 1.0`, exact
+because every integer up to 9 is exact in `f32`.
+
+Wall-clock on this box was too noisy to measure honestly — a control run with
+`--sharpen 0`, where the new code is dead, "improved" 3% purely from being
+second in its pair. The measurement that carries the claim is therefore
+**retired instructions** (`perf stat -e instructions:u`, both hybrid PMUs
+summed), which is independent of machine load, over 30 A7C files at `--jobs 1`,
+two repetitions in each order, differencing each binary's default run against
+its own `--sharpen 0` run so the rest of the pipeline cancels:
+
+| | baseline | after |
+|---|---|---|
+| whole program | 1471.7 / 1469.2 e9 | 1332.2 / 1332.2 e9 (**-9.4%**) |
+| sharpen stage alone | 284.1 / 271.9 e9 | 128.4 / 126.1 e9 (**-54%**) |
+| `--sharpen 0` control | 1187.5 / 1197.2 e9 | 1203.8 / 1206.1 e9 (unchanged) |
+
+Wall-clock, full 258-file corpus at the default `--jobs auto` — the real batch
+path — two repetitions with the order reversed between them, baseline slower in
+both: 70.58s/69.90s before vs 66.84s/65.07s after, **~6% wall-clock**. At
+`--jobs 1` over 100 files the same change is ~9% less user CPU (357.1s vs
+324.9s mean of three alternating repetitions), matching the instruction count,
+but only ~3% of wall — at one file at a time a larger share of the wall clock
+is stages where the pool is idle.
+
+Output is unchanged: all 258 corpus JPEGs byte-identical to the previous build,
+`summary.json` identical field-for-field apart from the output directory in the
+paths. Peak RSS is unchanged too (757.0 MiB vs 757.2 MiB on `_DSC1132.ARW`,
+1245.8 MiB vs 1245.6 MiB on `_DSC1255.ARW`): the luma plane adds 4 B/px to a
+stage that peaks far below `chroma::apply`, which is what
+`memory::PEAK_BYTES_PER_PIXEL` is sized on, so the `--jobs auto` budget is not
+affected. 251 tests pass unchanged, clippy clean, and three `--jobs 8` runs of
+36 files are byte-identical in both images and sidecars.
+
 ### One automatic archive profile
 
 The bare executable now asks only for input paths and an output directory. It no
