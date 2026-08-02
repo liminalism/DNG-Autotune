@@ -2,6 +2,139 @@
 
 ## Unreleased — a standalone front-end
 
+### Batched sRGB encode
+
+Flamegraph profiling (`tools/flamegraph_profile.py`, new) over the full A7C
+corpus at `--jobs 1` found `libm`'s `powf`/`log2f`/`exp2f` at ~15% of self time
+combined, plus more inside `tone::render_pixel_local` (17.5% self time) and
+whatever got inlined into rayon's per-pixel dispatch (~46%). The single
+largest, most reducible piece: `render_pixel_local`'s final step called
+`srgb_encode` — an exact `powf(1.0/2.4)` — three times per pixel,
+unconditionally, for every pixel of every image.
+
+The [`linear-srgb`](https://github.com/imazen/linear-srgb) crate's fast path
+is specifically a SIMD *slice* operation — its single-value call measured
+*slower* than our own `powf` (65ms vs 26ms over 4M calls), so a drop-in swap
+inside the per-pixel loop would have been a regression. `render` now runs in
+two passes instead: the existing rayon-parallel per-pixel loop computes
+everything through `compress_gamut` into an intermediate linear-RGB buffer
+(`render_pixel_linear`, `[f32; 3]`, no encode), then a second pass batch-
+encodes the whole buffer to `u16` via `linear_srgb::default::linear_to_srgb_u16_slice`
+in rayon-parallel 65536-element chunks, each chunk SIMD-dispatched by the
+crate at runtime.
+
+The crate's fast path uses C0-continuous sRGB constants (offset 0.055011,
+threshold 0.03929) rather than the IEC textbook constants (0.055, 0.040449936)
+`srgb_encode`/`srgb_decode` still use elsewhere (tests, `render_baseline`,
+preview linearization) — an exhaustive `[0, 1]` sweep against the exact powf
+curve measured max 1 u16-level deviation, mean 0.2; a real-file lossless PNG
+diff against the pre-change renderer confirmed exactly that (max 1 level,
+0.5% of pixels touched at all, 0% by more than 1 level) — invisible at the
+8-bit JPEG output this pipeline defaults to. `icc_curve_matches_render_transfer_function`
+(1/2048 tolerance) still passes with ample margin.
+
+Measured on 80 A7C files, `--jobs 1`, real JPEG output, machine otherwise
+idle: 72.6s/68.6s before vs 67.2s/68.0s after across two reversed-order runs
+(~4-7% wall-clock, ~50-70ms/file) — modest because encode was only a slice of
+total per-file time, not the dramatic multiple the crate advertises for the
+encode step in isolation. Full 258-file corpus still renders 258/258 with
+zero failures.
+
+### Two more per-pixel transcendental calls removed
+
+Re-profiling after the sRGB batching above still showed `libm`'s `log2f`/
+`exp2f` at a combined ~7% self time, plus `render_pixel_linear` itself at
+15.68%. Two more provably byte-identical cuts, no accuracy tradeoff:
+
+* `exposure_gain = (exposure_ev + local_ev).exp2()` was recomputed every
+  pixel. Without a local tone map, `local_ev` is `0.0` for every pixel in the
+  image — `render` now hoists the gain to one `exp2()` call per image instead
+  of up to ~10M redundant ones; `0.0` addition and the same `exp2()` input are
+  exact in IEEE 754, so this is bit-for-bit identical, not just close.
+* `input_ev = (norm / MID_GRAY).log2()` recomputed `luminance_ev` from
+  scratch whenever `norm == source_luminance`, which is exactly every pixel at
+  or below middle gray (`smoothstep` clamps negative input to `0.0`, making
+  `highlight_weight` — and therefore the highlight-vs-luminance blend —
+  exactly zero): `x * 1.0 + y * 0.0 == x` bit-for-bit for finite `x, y`, so
+  reusing `luminance_ev` there is the same value the second `log2` call would
+  have produced. `log2f`'s self time roughly halved (4.95% → 2.58%) on the
+  next profile.
+
+Measured on 100 A7C files, `--jobs 1`, real JPEG output, against the true
+pre-session baseline (before this entry and the one above), two reversed-order
+runs: 83.72s/83.26s before vs 80.94s/80.53s after (~3.3% wall-clock, both
+orderings agree). Full 258-file corpus: 258/258, zero failures; full test
+suite unchanged (251 passed, no assertions needed updating — expected, since
+both cuts are exact).
+
+The next-largest remaining piece was diffuse: demosaic, hot-pixel suppression,
+chroma reduction and sharpening's per-pixel work mostly showed up as inlined
+`rayon::iter::plumbing::bridge_producer_consumer::helper` self time rather
+than under its own symbol (`demosaic::interpolate_difference` was the one
+exception, ~2.5-2.75% on its own), so attributing it needed more than a
+flamegraph read — see the next entry.
+
+### Hot-pixel median sort deferred to the correction path
+
+`rayon`'s monomorphization means every distinct `.par_iter()`-family call site
+in the program compiles to its own copy of `bridge_producer_consumer::helper`,
+but they all share that one demangled name, so `perf report`'s default
+per-symbol view had been merging dozens of unrelated call sites into one
+opaque ~46%-of-runtime bucket (the previous entry's "diffuse" piece).
+Splitting it back out — matching each merged sample to its actual static
+address range via `nm -S` and `perf script -F dsoff` (ASLR-independent),
+then reading the disassembly at each address for a recognizable call or
+source comment — found one single instantiation at **40.73% of the entire
+profile's samples**: `hotpixels::correct_cfa`'s inner loop.
+
+`correct_cfa` runs over every CFA photosite, and for each one gathers its
+same-colour neighbours (up to 24, in a 5x5 window) and unconditionally
+sorted them to compute a median — a replacement value used only when the
+site is actually corrected. On this corpus, corrections are a tiny fraction
+of a percent of examined sites (9191 of hundreds of millions across the full
+258-file corpus), so the sort was overwhelmingly wasted work: computed for
+every site, used by almost none. Moving `sort_unstable_by` + the median
+lookup into the two branches that actually push a correction is the same
+slice, the same sort, the same median — provably identical output, just
+computed lazily. Full corpus: identical `9191 site(s) corrected across 108
+frame(s)` before and after; a real-file lossless PNG diff shows zero
+additional pixel movement beyond the sRGB-encode entry above (max 1 level,
+0.5% of pixels touched — unchanged from that entry's own measurement).
+
+Measured on 100 A7C files, `--jobs 1`, real JPEG output, against the true
+pre-session baseline, two reversed-order runs: 83.87s/83.58s before vs
+73.37s/73.95s after (**~12% wall-clock** — the single largest win of this
+whole optimization pass, more than the other three entries above combined).
+Full 258-file corpus: 258/258, zero failures; full test suite unchanged (251
+passed).
+
+### Hot-pixel same-colour lookup precomputed per CFA phase
+
+Re-profiling after the sort deferral above still showed `hotpixels::
+correct_cfa` at 26.05% of the whole profile — down from 40.73%, but still the
+largest single piece, and still the same function. The sort was gone; what's
+left is `gather_same_colour` asking `cfa.cfa_color_at` up to 24 times per
+photosite (once per candidate in the 5x5 search window) to find which
+candidates share the site's own colour.
+
+The CFA pattern repeats every `height x width` sites (2x2 for the A7C's
+Bayer sensor), so which window offsets are same-coloured depends only on a
+site's *phase* — `(row % height, col % width)` — never on its absolute
+position. `SameColourOffsets::new` now computes each phase's offset list
+once, before the parallel loop, from the same `cfa.cfa_color_at` calls the
+old code made per pixel; `gather_same_colour` looks the list up per site
+instead of re-deriving it, dropping the per-candidate colour comparison from
+the hot loop entirely — same offsets, same values gathered, same corrections.
+Full corpus: identical `9191 site(s) corrected across 108 frame(s)` before
+and after.
+
+Measured on 100 A7C files, `--jobs 1`, real JPEG output, three repetitions
+each (alternating, fresh output directories) after a machine-load outlier was
+caught and discarded: v6 70.37s/70.23s/69.37s vs the true pre-session
+baseline 84.86s/89.02s/84.59s — **~19% wall-clock cumulative** across every
+entry in this "Batched sRGB encode" section. Full 258-file corpus: 258/258,
+zero failures; full test suite unchanged (251 passed).
+
 ### One automatic archive profile
 
 The bare executable now asks only for input paths and an output directory. It no

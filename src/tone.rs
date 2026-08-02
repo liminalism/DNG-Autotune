@@ -153,14 +153,30 @@ fn to_display(rgb: [f32; 3], matrix: &crate::color::Matrix3) -> [f32; 3] {
     ]
 }
 
+/// Everything `render_pixel_local` does except the final sRGB encode: the
+/// exposure gain, the highlight-aware tone curve, chroma/vibrance, and
+/// `compress_gamut`. Returns linear RGB already clamped to `[0, 1]` by
+/// `compress_gamut`, ready for the transfer function.
+///
+/// Split out so `render` can batch the encode step across a whole image via
+/// `linear_srgb`'s SIMD slice API instead of one `srgb_encode` call per
+/// channel per pixel — the single-value call is not the crate's fast path
+/// (measured slower than our own `powf`, in fact); the ~4-16x win the crate
+/// advertises is specifically for slices, which is why this is a separate
+/// pass rather than inlined here.
+///
+/// Takes `exposure_gain` already computed rather than `local_ev` +
+/// `params.exposure_ev`, so the caller can hoist `(exposure_ev + 0.0).exp2()`
+/// out of the per-pixel loop when there is no local tone map: `local_ev` is
+/// then the same `0.0` for every pixel in the image, so the gain is one
+/// constant, not up to ~31M redundant `exp2()` calls on a 10.5 MP frame.
 #[inline]
-fn render_pixel_local(
+fn render_pixel_linear(
     source: [f32; 3],
     params: &ToneParams,
-    local_ev: f32,
+    exposure_gain: f32,
     working_to_display: Option<&crate::color::Matrix3>,
-) -> [u16; 3] {
-    let exposure_gain = (params.exposure_ev + local_ev).exp2();
+) -> [f32; 3] {
     let exposed = [
         source[0] * exposure_gain,
         source[1] * exposure_gain,
@@ -197,7 +213,17 @@ fn render_pixel_local(
         smoothstep(luminance_ev / ramp_end) * params.highlight_norm.clamp(0.0, 1.0);
     let norm = source_luminance * (1.0 - highlight_weight) + maximum_channel * highlight_weight;
 
-    let input_ev = (norm / MID_GRAY).log2();
+    // `smoothstep` clamps negative input to exactly 0, so every pixel at or
+    // below middle gray (the common case: all shadows and midtones) has
+    // `highlight_weight == 0.0` exactly, which makes `norm == source_luminance`
+    // bit-for-bit (`x * 1.0 + y * 0.0 == x` in IEEE 754 for finite x, y). Reusing
+    // `luminance_ev` there is the same value this log2 would have produced —
+    // skips a second libm call for most of a typical frame at no numeric cost.
+    let input_ev = if highlight_weight == 0.0 {
+        luminance_ev
+    } else {
+        (norm / MID_GRAY).log2()
+    };
     let output_ev = map_ev(input_ev, params);
     let mapped_norm =
         (MID_GRAY * output_ev.exp2()).clamp(params.black_output_linear, params.white_output_linear);
@@ -278,7 +304,21 @@ fn render_pixel_local(
         *channel = mapped_luminance + (*channel - mapped_luminance) * chroma_scale;
     }
 
-    let rgb = compress_gamut(rgb, mapped_luminance);
+    compress_gamut(rgb, mapped_luminance)
+}
+
+/// One pixel, sRGB-encoded. Test-only: `render`'s hot loop does not call
+/// this — it batches the encode step separately, see [`render_pixel_linear`].
+#[cfg(test)]
+#[inline]
+fn render_pixel_local(
+    source: [f32; 3],
+    params: &ToneParams,
+    local_ev: f32,
+    working_to_display: Option<&crate::color::Matrix3>,
+) -> [u16; 3] {
+    let exposure_gain = (params.exposure_ev + local_ev).exp2();
+    let rgb = render_pixel_linear(source, params, exposure_gain, working_to_display);
     [
         to_u16(srgb_encode(rgb[0])),
         to_u16(srgb_encode(rgb[1])),
@@ -288,9 +328,9 @@ fn render_pixel_local(
 
 /// One pixel, no local correction, no working-space conversion.
 ///
-/// Test-only since 0.1.17: `render` calls `render_pixel_local` directly so it can
-/// thread the working-space matrix through, and every invariant test below is
-/// about the sRGB-working-space case, which is what this spells.
+/// Test-only since 0.1.17: `render` calls `render_pixel_linear` directly so it
+/// can thread the working-space matrix through, and every invariant test below
+/// is about the sRGB-working-space case, which is what this spells.
 #[cfg(test)]
 #[inline]
 fn render_pixel(source: [f32; 3], params: &ToneParams) -> [u16; 3] {
@@ -303,7 +343,7 @@ pub fn render(
     local_tone: Option<&crate::localtone::LocalToneMap>,
     working_to_display: Option<&crate::color::Matrix3>,
 ) -> Rgb16Image {
-    let mut output = vec![0_u16; image.pixels.len() * 3];
+    let mut linear = vec![0.0_f32; image.pixels.len() * 3];
 
     match local_tone {
         Some(local_tone) => {
@@ -312,29 +352,58 @@ pub fn render(
                 (image.width, image.height),
                 "local tone map dimensions must match the rendered image"
             );
-            output
+            linear
                 .par_chunks_exact_mut(3)
                 .zip(image.pixels.par_iter())
                 .zip(local_tone.corrections_ev().par_iter())
                 .for_each(|((destination, source), local_ev)| {
+                    let exposure_gain = (params.exposure_ev + local_ev).exp2();
                     let rendered =
-                        render_pixel_local(*source, params, *local_ev, working_to_display);
+                        render_pixel_linear(*source, params, exposure_gain, working_to_display);
                     destination.copy_from_slice(&rendered);
                 });
         }
         None => {
-            output
+            // No local tone map: `local_ev` is 0.0 for every pixel, so the gain
+            // is one constant for the whole image, not a per-pixel `exp2()`.
+            let exposure_gain = params.exposure_ev.exp2();
+            linear
                 .par_chunks_exact_mut(3)
                 .zip(image.pixels.par_iter())
                 .for_each(|(destination, source)| {
-                    let rendered = render_pixel_local(*source, params, 0.0, working_to_display);
+                    let rendered =
+                        render_pixel_linear(*source, params, exposure_gain, working_to_display);
                     destination.copy_from_slice(&rendered);
                 });
         }
     }
 
+    let output = encode_srgb_u16(&linear);
+
     ImageBuffer::from_raw(image.width as u32, image.height as u32, output)
         .expect("rendered buffer dimensions are internally consistent")
+}
+
+/// Batch sRGB encode: linear `[0, 1]` values straight to `u16`, in chunks run
+/// across the rayon pool, each chunk SIMD-dispatched by `linear_srgb`. This is
+/// where the per-pixel `powf`/rayon-bridge cost in `render_pixel_local` moved
+/// to — one call per chunk instead of 3 `srgb_encode` calls per pixel.
+///
+/// Uses `linear_srgb`'s C0-continuous constants rather than this crate's own
+/// textbook IEC ones (see `srgb_encode`) — measured max 1 u16-level deviation,
+/// mean 0.2, over an exhaustive `[0, 1]` sweep against the exact powf curve;
+/// invisible at the 8-bit JPEG output this pipeline defaults to. See
+/// `CHANGELOG.md` for the measurement that justified adopting it here.
+fn encode_srgb_u16(linear: &[f32]) -> Vec<u16> {
+    const CHUNK: usize = 65_536;
+    let mut output = vec![0_u16; linear.len()];
+    output
+        .par_chunks_mut(CHUNK)
+        .zip(linear.par_chunks(CHUNK))
+        .for_each(|(destination, source)| {
+            linear_srgb::default::linear_to_srgb_u16_slice(source, destination);
+        });
+    output
 }
 
 pub fn render_baseline(

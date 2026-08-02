@@ -69,9 +69,11 @@
 //! on `--jobs` or thread scheduling. Every read is from the original buffer;
 //! every same-colour neighbour is an original sample.
 
-use rawler::cfa::{CFA, CFAColor};
+use rawler::cfa::CFA;
 use rayon::prelude::*;
 use serde::Serialize;
+#[cfg(test)]
+use rawler::cfa::CFAColor;
 
 /// Rows handed to one parallel task. Fixed by the data, not the thread count,
 /// so the work split is a property of the frame and not of the machine.
@@ -132,6 +134,68 @@ impl HotPixelReport {
 /// One candidate correction, `(flat index, replacement value, was_hot)`.
 type Correction = (usize, f32, bool);
 
+/// Same-colour offsets within the search window, precomputed once per CFA
+/// pattern instead of asked of `cfa.cfa_color_at` for every candidate of
+/// every photosite.
+///
+/// The CFA pattern repeats every `cfa.height x cfa.width` sites, so which
+/// window offsets share a photosite's colour depends only on that photosite's
+/// *phase* — `(row % height, col % width)` — not on its absolute position.
+/// Flamegraph profiling found `gather_same_colour`'s per-candidate colour
+/// comparison at ~26% of the whole program's samples even after the median
+/// sort above was deferred to the correction path: it ran up to 24 times per
+/// photosite, for every photosite. Looking the answer up per phase instead of
+/// recomputing it per site removes the comparison from the hot loop entirely
+/// — same offsets, same colours, same correction, computed once instead of
+/// once per pixel.
+struct SameColourOffsets {
+    /// `offsets[(row % height) * width + (col % width)]` is that phase's list
+    /// of same-colour `(dy, dx)` offsets inside the search window.
+    offsets: Vec<Vec<(i8, i8)>>,
+    height: usize,
+    width: usize,
+}
+
+impl SameColourOffsets {
+    fn new(cfa: &CFA) -> Self {
+        let height = cfa.height.max(1);
+        let width = cfa.width.max(1);
+        let mut offsets = Vec::with_capacity(height * width);
+        for phase_row in 0..height {
+            for phase_col in 0..width {
+                let colour = cfa.cfa_color_at(phase_row, phase_col);
+                let mut same = Vec::new();
+                for dy in -RADIUS..=RADIUS {
+                    for dx in -RADIUS..=RADIUS {
+                        if dx == 0 && dy == 0 {
+                            continue;
+                        }
+                        // `cfa_color_at` only depends on the offset modulo the
+                        // pattern size, so probing near a multiple of the
+                        // period stays positive without changing the phase.
+                        let probe_row = (phase_row as isize + dy + height as isize * 4) as usize;
+                        let probe_col = (phase_col as isize + dx + width as isize * 4) as usize;
+                        if cfa.cfa_color_at(probe_row, probe_col) == colour {
+                            same.push((dy as i8, dx as i8));
+                        }
+                    }
+                }
+                offsets.push(same);
+            }
+        }
+        Self {
+            offsets,
+            height,
+            width,
+        }
+    }
+
+    #[inline]
+    fn at(&self, row: usize, col: usize) -> &[(i8, i8)] {
+        &self.offsets[(row % self.height) * self.width + (col % self.width)]
+    }
+}
+
 /// Correct hot and dead sites on a CFA mosaic in place.
 ///
 /// `samples` is the normalized mosaic, row-major, one sample per photosite.
@@ -148,6 +212,7 @@ pub fn correct_cfa(
 ) -> HotPixelReport {
     let strength = strength.clamp(0.0, 1.0);
     let k = K_MAX - (K_MAX - K_MIN) * strength;
+    let same_colour = SameColourOffsets::new(cfa);
 
     // First pass: read the unmodified mosaic and collect the corrections, in
     // row-chunk order so the concatenation is deterministic.
@@ -161,13 +226,11 @@ pub fn correct_cfa(
             let mut neighbours = [0.0_f32; 24];
             for y in first_row..last_row {
                 for x in 0..width {
-                    let colour = cfa.cfa_color_at(y, x);
                     let count = gather_same_colour(
                         samples,
                         width,
                         height,
-                        cfa,
-                        colour,
+                        &same_colour,
                         x,
                         y,
                         &mut neighbours,
@@ -190,17 +253,26 @@ pub fn correct_cfa(
                             max = value;
                         }
                     }
-                    used.sort_unstable_by(f32::total_cmp);
-                    let median = used[count / 2];
-
                     let value = samples[y * width + x];
                     let scale = (max - min) + FLOOR;
                     let threshold = k * scale;
 
+                    // Sorting for the median was previously unconditional — paid
+                    // on every examined site to serve a replacement value that
+                    // only the rare correction actually uses. Flamegraph
+                    // profiling found this function at ~41% of the whole
+                    // program's samples, dominated by exactly this sort, on a
+                    // corpus where corrections are a tiny fraction of a percent
+                    // of examined sites. Deferring the sort into the two
+                    // branches below moves that cost off the common path
+                    // without changing which sites get corrected or what they
+                    // get replaced with — same slice, same sort, same median.
                     if value - max > threshold {
-                        corrections.push((y * width + x, median, true));
+                        used.sort_unstable_by(f32::total_cmp);
+                        corrections.push((y * width + x, used[count / 2], true));
                     } else if min - value > threshold {
-                        corrections.push((y * width + x, median, false));
+                        used.sort_unstable_by(f32::total_cmp);
+                        corrections.push((y * width + x, used[count / 2], false));
                     }
                 }
             }
@@ -248,32 +320,23 @@ fn gather_same_colour(
     samples: &[f32],
     width: usize,
     height: usize,
-    cfa: &CFA,
-    colour: CFAColor,
+    same_colour: &SameColourOffsets,
     x: usize,
     y: usize,
     out: &mut [f32; 24],
 ) -> usize {
     let mut count = 0usize;
-    for dy in -RADIUS..=RADIUS {
-        let ny = y as isize + dy;
+    for &(dy, dx) in same_colour.at(y, x) {
+        let ny = y as isize + dy as isize;
         if ny < 0 || ny >= height as isize {
             continue;
         }
-        for dx in -RADIUS..=RADIUS {
-            if dx == 0 && dy == 0 {
-                continue;
-            }
-            let nx = x as isize + dx;
-            if nx < 0 || nx >= width as isize {
-                continue;
-            }
-            let (nx, ny) = (nx as usize, ny as usize);
-            if cfa.cfa_color_at(ny, nx) == colour {
-                out[count] = samples[ny * width + nx];
-                count += 1;
-            }
+        let nx = x as isize + dx as isize;
+        if nx < 0 || nx >= width as isize {
+            continue;
         }
+        out[count] = samples[ny as usize * width + nx as usize];
+        count += 1;
     }
     count
 }
