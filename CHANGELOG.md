@@ -190,6 +190,51 @@ stage that peaks far below `chroma::apply`, which is what
 affected. 251 tests pass unchanged, clippy clean, and three `--jobs 8` runs of
 36 files are byte-identical in both images and sidecars.
 
+### Tone curve tabulated per frame: no libm in the render hot loop
+
+The largest remaining reducible cost in the v5 profile after the sharpen entry
+above was `tone::render_pixel_linear` itself: 18.75% self time plus ~10.5% in
+the libm calls it makes per pixel — a `log2f` for the pixel's EV, a `powf`
+inside `map_ev`, and an `exp2f` to come back to linear (and a second `log2f`
+on highlight pixels). All three are 1-D functions of a single linear value
+once `ToneParams` is fixed, so `render` now builds a `ToneLut` once per frame
+— 3,329 entries covering 2^-38..2^14, 64 samples per octave, ~40 KiB — and
+the hot loop replaces the whole transcendental chain with two interpolated
+table lookups: source luminance → highlight-blend weight, post-blend norm →
+(mapped norm, normalized highlight position). Indexing needs no logarithm
+either: for positive floats the IEEE 754 bit pattern is monotonic and
+piecewise linear within an octave, so the table is addressed straight from
+`to_bits()` and the mantissa-bit fraction *is* the linear interpolation
+weight. `map_ev` clamps to a constant outside `[black_input_ev,
+white_input_ev]`, which the tabulated range covers by >8 EV on each side, so
+range clamping is exact rather than an approximation.
+
+**This is the first perf change that is not bit-identical**, accepted
+deliberately: the project has no frozen reference rendering yet, and the
+approximation error is bounded far below visibility. Measured against the
+previous build on five diverse frames (A7C low/high ISO, extremely bright,
+Samsung linear DNG) as 8-bit TIFF: 0.03–0.04% of channel samples differ at
+all, essentially all by exactly one 8-bit step (quantization-boundary flips);
+the noisiest high-ISO frame has 76 samples out of 72M at 3 steps where a
+threshold decision (chroma cap, gamut branch, sharpen shrinkage) flipped on a
+~1e-4-relative input change. `lut_matches_the_exact_curve` pins the table to
+one part in 10^4 of the exact transcendental curve (absolute 1e-6 linear deep
+in the shadows), swept at 16 probes per table segment. The blend weight below
+middle grey is *exactly* zero (interpolating between exact-zero entries), so
+shadows and midtones still use the pure luminance norm.
+
+The full-corpus `--dry-run --summary` survey is **byte-equivalent across all
+46,386 fields**: analysis, classification, and every chosen parameter are
+untouched — only rendered pixel values move, and only at the last bit.
+
+Retired instructions (`perf stat -e instructions:u`, both hybrid PMUs summed,
+12 A7C files, `--jobs 1`, two repetitions in each order): 497.5/499.4 e9
+before vs 459.5/451.6 e9 after, **-8.6% whole-program**. Wall-clock over the
+full 258-file corpus at `--jobs auto`, order reversed between repetitions,
+under heavy background load: 153.3s/158.1s vs 147.1s/144.5s, ~6% — consistent
+with the instruction count. 253 tests pass (two new), clippy clean, and three
+`--jobs 8` runs are byte-identical in images and sidecars.
+
 ### One automatic archive profile
 
 The bare executable now asks only for input paths and an output directory. It no

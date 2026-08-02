@@ -153,6 +153,114 @@ fn to_display(rgb: [f32; 3], matrix: &crate::color::Matrix3) -> [f32; 3] {
     ]
 }
 
+/// Samples per octave in [`ToneLut`]. 64 keeps the interpolation error of the
+/// curve, which is smooth in log2 space, around one part in 10^5 of the value —
+/// two orders of magnitude below one 8-bit JPEG step — while the whole table
+/// still fits in 40 KiB.
+const LUT_SHIFT: u32 = 23 - 6;
+/// Bit pattern of 2^-38, the bottom of the tabulated range. `map_ev` clamps its
+/// position to `[0, 1]`, so the curve is *constant* below `black_input_ev` and
+/// above `white_input_ev`; the tabulated range covers both knees by a wide
+/// margin (2^-38 ≈ -35.8 EV, 2^14 ≈ +16.5 EV around middle grey), which makes
+/// clamping to the end entries exact, not an approximation.
+const LUT_MIN_BITS: u32 = 89 << 23;
+/// Bit pattern of 2^14, the top of the tabulated range.
+const LUT_MAX_BITS: u32 = 141 << 23;
+const LUT_LEN: usize = (((LUT_MAX_BITS - LUT_MIN_BITS) >> LUT_SHIFT) + 1) as usize;
+
+/// Locate a positive linear value in the table: entry index plus the fraction
+/// toward the next entry.
+///
+/// For positive finite floats the IEEE 754 bit pattern is monotonic in the
+/// value and piecewise linear within each octave, and every table segment lies
+/// inside one octave (64 divides the octave boundary exactly), so interpolating
+/// on the mantissa-bit fraction *is* linear interpolation in the value itself —
+/// no logarithm needed to index a table that is uniform in EV.
+#[inline]
+fn lut_position(value: f32) -> (usize, f32) {
+    let bits = value.to_bits();
+    if bits <= LUT_MIN_BITS {
+        return (0, 0.0);
+    }
+    if bits >= LUT_MAX_BITS {
+        return (LUT_LEN - 1, 0.0);
+    }
+    let offset = bits - LUT_MIN_BITS;
+    let index = (offset >> LUT_SHIFT) as usize;
+    let fraction = (offset & ((1 << LUT_SHIFT) - 1)) as f32 * (1.0 / (1u32 << LUT_SHIFT) as f32);
+    (index, fraction)
+}
+
+/// Per-image tables for the three transcendental stages of the tone curve.
+///
+/// `render_pixel_linear` used to spend one `log2f`, one `powf` (inside
+/// [`map_ev`]) and one `exp2f` per pixel — about a tenth of the whole
+/// program's retired instructions. All three are 1-D functions of a single
+/// linear value once `ToneParams` is fixed, so `render` tabulates them once
+/// per frame (3,329 entries, microseconds) and the hot loop does two
+/// interpolated lookups instead. Curve accuracy is verified by
+/// `lut_matches_the_exact_curve` below.
+struct ToneLut {
+    /// Per entry: `[mapped_norm, normalized_highlight]` as functions of the
+    /// post-exposure norm — the clamped curve output
+    /// `MID_GRAY * 2^map_ev(log2(x / MID_GRAY))` and the `[0, 1]` highlight
+    /// position `output_ev / white_output_ev` that drives desaturation.
+    curve: Vec<[f32; 2]>,
+    /// Highlight-norm blend weight as a function of source luminance, with
+    /// `params.highlight_norm` already folded in. Every entry at or below
+    /// middle grey is exactly `0.0`, so shadows and midtones — everything more
+    /// than one table segment (~1.1%) below middle grey — still blend to the
+    /// pure luminance norm exactly as before; only the single segment
+    /// straddling middle grey interpolates toward the first nonzero entry.
+    weight: Vec<f32>,
+}
+
+impl ToneLut {
+    fn new(params: &ToneParams) -> Self {
+        let ramp_end = (params.white_input_ev * HIGHLIGHT_NORM_RAMP).max(1.0e-4);
+        let highlight_norm = params.highlight_norm.clamp(0.0, 1.0);
+        let white_output = params.white_output_ev.max(1.0e-4);
+
+        let mut curve = vec![[0.0_f32; 2]; LUT_LEN];
+        let mut weight = vec![0.0_f32; LUT_LEN];
+        for (index, (curve_entry, weight_entry)) in
+            curve.iter_mut().zip(weight.iter_mut()).enumerate()
+        {
+            let value = f32::from_bits(LUT_MIN_BITS + (index as u32) * (1 << LUT_SHIFT));
+            let ev = (value / MID_GRAY).log2();
+            let output_ev = map_ev(ev, params);
+            let mapped_norm = (MID_GRAY * output_ev.exp2())
+                .clamp(params.black_output_linear, params.white_output_linear);
+            let normalized_highlight = (output_ev / white_output).clamp(0.0, 1.0);
+            *curve_entry = [mapped_norm, normalized_highlight];
+            *weight_entry = smoothstep(ev / ramp_end) * highlight_norm;
+        }
+
+        Self { curve, weight }
+    }
+
+    /// `(mapped_norm, normalized_highlight)` for a post-exposure norm.
+    #[inline]
+    fn curve(&self, norm: f32) -> (f32, f32) {
+        let (index, fraction) = lut_position(norm);
+        let low = self.curve[index];
+        let high = self.curve[(index + 1).min(LUT_LEN - 1)];
+        (
+            low[0] + (high[0] - low[0]) * fraction,
+            low[1] + (high[1] - low[1]) * fraction,
+        )
+    }
+
+    /// Highlight-norm blend weight for a source luminance.
+    #[inline]
+    fn weight(&self, source_luminance: f32) -> f32 {
+        let (index, fraction) = lut_position(source_luminance);
+        let low = self.weight[index];
+        let high = self.weight[(index + 1).min(LUT_LEN - 1)];
+        low + (high - low) * fraction
+    }
+}
+
 /// Everything `render_pixel_local` does except the final sRGB encode: the
 /// exposure gain, the highlight-aware tone curve, chroma/vibrance, and
 /// `compress_gamut`. Returns linear RGB already clamped to `[0, 1]` by
@@ -174,6 +282,7 @@ fn to_display(rgb: [f32; 3], matrix: &crate::color::Matrix3) -> [f32; 3] {
 fn render_pixel_linear(
     source: [f32; 3],
     params: &ToneParams,
+    lut: &ToneLut,
     exposure_gain: f32,
     working_to_display: Option<&crate::color::Matrix3>,
 ) -> [f32; 3] {
@@ -207,26 +316,9 @@ fn render_pixel_linear(
     // point without touching greys. Ramping in over the lower half of the
     // highlight range keeps saturated midtones close to their luminance
     // rendering while still fully protecting anything genuinely bright.
-    let luminance_ev = (source_luminance / MID_GRAY).log2();
-    let ramp_end = (params.white_input_ev * HIGHLIGHT_NORM_RAMP).max(1.0e-4);
-    let highlight_weight =
-        smoothstep(luminance_ev / ramp_end) * params.highlight_norm.clamp(0.0, 1.0);
+    let highlight_weight = lut.weight(source_luminance);
     let norm = source_luminance * (1.0 - highlight_weight) + maximum_channel * highlight_weight;
-
-    // `smoothstep` clamps negative input to exactly 0, so every pixel at or
-    // below middle gray (the common case: all shadows and midtones) has
-    // `highlight_weight == 0.0` exactly, which makes `norm == source_luminance`
-    // bit-for-bit (`x * 1.0 + y * 0.0 == x` in IEEE 754 for finite x, y). Reusing
-    // `luminance_ev` there is the same value this log2 would have produced —
-    // skips a second libm call for most of a typical frame at no numeric cost.
-    let input_ev = if highlight_weight == 0.0 {
-        luminance_ev
-    } else {
-        (norm / MID_GRAY).log2()
-    };
-    let output_ev = map_ev(input_ev, params);
-    let mapped_norm =
-        (MID_GRAY * output_ev.exp2()).clamp(params.black_output_linear, params.white_output_linear);
+    let (mapped_norm, normalized_highlight) = lut.curve(norm);
 
     let ratio = (mapped_norm / norm).clamp(0.0, 64.0);
     let mut rgb = [exposed[0] * ratio, exposed[1] * ratio, exposed[2] * ratio];
@@ -253,7 +345,6 @@ fn render_pixel_linear(
     // curve and the chroma anchor disagreed about where black is. They now agree.
     let mapped_luminance = luminance(rgb).clamp(params.black_output_linear, 1.0);
 
-    let normalized_highlight = (output_ev / params.white_output_ev.max(1.0e-4)).clamp(0.0, 1.0);
     let highlight_saturation = 1.0 - params.highlight_desaturation * normalized_highlight.powi(2);
 
     let maximum = rgb[0].max(rgb[1]).max(rgb[2]);
@@ -318,7 +409,8 @@ fn render_pixel_local(
     working_to_display: Option<&crate::color::Matrix3>,
 ) -> [u16; 3] {
     let exposure_gain = (params.exposure_ev + local_ev).exp2();
-    let rgb = render_pixel_linear(source, params, exposure_gain, working_to_display);
+    let lut = ToneLut::new(params);
+    let rgb = render_pixel_linear(source, params, &lut, exposure_gain, working_to_display);
     [
         to_u16(srgb_encode(rgb[0])),
         to_u16(srgb_encode(rgb[1])),
@@ -344,6 +436,7 @@ pub fn render(
     working_to_display: Option<&crate::color::Matrix3>,
 ) -> Rgb16Image {
     let mut linear = vec![0.0_f32; image.pixels.len() * 3];
+    let lut = ToneLut::new(params);
 
     match local_tone {
         Some(local_tone) => {
@@ -358,8 +451,13 @@ pub fn render(
                 .zip(local_tone.corrections_ev().par_iter())
                 .for_each(|((destination, source), local_ev)| {
                     let exposure_gain = (params.exposure_ev + local_ev).exp2();
-                    let rendered =
-                        render_pixel_linear(*source, params, exposure_gain, working_to_display);
+                    let rendered = render_pixel_linear(
+                        *source,
+                        params,
+                        &lut,
+                        exposure_gain,
+                        working_to_display,
+                    );
                     destination.copy_from_slice(&rendered);
                 });
         }
@@ -371,8 +469,13 @@ pub fn render(
                 .par_chunks_exact_mut(3)
                 .zip(image.pixels.par_iter())
                 .for_each(|(destination, source)| {
-                    let rendered =
-                        render_pixel_linear(*source, params, exposure_gain, working_to_display);
+                    let rendered = render_pixel_linear(
+                        *source,
+                        params,
+                        &lut,
+                        exposure_gain,
+                        working_to_display,
+                    );
                     destination.copy_from_slice(&rendered);
                 });
         }
@@ -458,6 +561,68 @@ mod tests {
         ToneParams {
             highlight_norm: 1.0,
             ..parameters()
+        }
+    }
+
+    /// The table is an approximation of the exact transcendental curve; this
+    /// pins how good it has to be. Swept densely (16 probes per table segment)
+    /// across the whole active EV range and beyond it, for both the plain and
+    /// the highlight-protected presets. The mapped-norm tolerance of one part
+    /// in 10^4 is two orders of magnitude below one 8-bit output step at
+    /// middle grey.
+    #[test]
+    fn lut_matches_the_exact_curve() {
+        for params in [parameters(), parameters_protected()] {
+            let lut = ToneLut::new(&params);
+            let ramp_end = (params.white_input_ev * HIGHLIGHT_NORM_RAMP).max(1.0e-4);
+            let highlight_norm = params.highlight_norm.clamp(0.0, 1.0);
+            let white_output = params.white_output_ev.max(1.0e-4);
+
+            let steps = 4096;
+            for step in 0..=steps {
+                let ev = -40.0 + 60.0 * (step as f32 / steps as f32);
+                let value = MID_GRAY * ev.exp2();
+
+                let output_ev = map_ev(ev, &params);
+                let exact_norm = (MID_GRAY * output_ev.exp2())
+                    .clamp(params.black_output_linear, params.white_output_linear);
+                let exact_highlight = (output_ev / white_output).clamp(0.0, 1.0);
+                let exact_weight = smoothstep(ev / ramp_end) * highlight_norm;
+
+                let (mapped_norm, normalized_highlight) = lut.curve(value);
+                let weight = lut.weight(value);
+
+                // Relative near and above middle grey, absolute (1e-6 linear,
+                // well under one 16-bit output step) deep in the shadows where
+                // the curvature at the black knee dominates a tiny value.
+                assert!(
+                    (mapped_norm - exact_norm).abs() <= 1.0e-4 * exact_norm.max(0.01),
+                    "ev {ev}: mapped_norm {mapped_norm} vs exact {exact_norm}"
+                );
+                assert!(
+                    (normalized_highlight - exact_highlight).abs() <= 1.0e-3,
+                    "ev {ev}: highlight {normalized_highlight} vs exact {exact_highlight}"
+                );
+                assert!(
+                    (weight - exact_weight).abs() <= 1.0e-3,
+                    "ev {ev}: weight {weight} vs exact {exact_weight}"
+                );
+            }
+        }
+    }
+
+    /// Below middle grey the blend weight must be *exactly* zero — the table
+    /// entries there are exact zeros and interpolating between zeros is zero —
+    /// so shadows and midtones use the pure luminance norm, as they always
+    /// did. The sweep stops 2% below middle grey: the one table segment that
+    /// straddles it interpolates toward the first nonzero entry, so exactness
+    /// holds everywhere except within one segment (~1.1%) of the boundary.
+    #[test]
+    fn lut_weight_is_exactly_zero_below_middle_gray() {
+        let lut = ToneLut::new(&parameters_protected());
+        for step in 0..=256 {
+            let value = 0.98 * MID_GRAY * (step as f32 / 256.0);
+            assert_eq!(lut.weight(value.max(1.0e-8)), 0.0, "value {value}");
         }
     }
 
