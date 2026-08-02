@@ -35,17 +35,27 @@
 //!    neighbours and can land a hair below full scale.
 //! 2. If some but not all channels are clipped, take the brightest unclipped
 //!    channel in white-balanced space as the neutral anchor — the most reliable
-//!    lower bound on how bright the highlight really was.
+//!    lower bound on how bright the highlight really was. If *every* channel is
+//!    clipped there is no survivor to anchor on, but the raw magnitudes are all
+//!    close to the same clip point, so the anchor falls back to the clipped
+//!    channel with the largest white-balance coefficient — the one that would
+//!    render a truly neutral target as neutral. Without this fallback a
+//!    fully-blown neutral highlight (a sun glint, a lens-flare core) renders
+//!    with the raw white-balance spread exposed as a colour cast — magenta on
+//!    the A7C, where red sits at ~2.3x and blue at ~1.6x against green's 1.0x.
 //! 3. Raise each clipped channel's white-balanced value to at least that anchor,
 //!    never lowering it. Converting back through the channel's own white-balance
 //!    coefficient gives the reconstructed camera value.
 //!
-//! This lifts a clipped channel only when it fell below the brightest surviving
-//! channel — precisely the false-colour case — and leaves genuinely coloured
-//! highlights, where the clipped channel is already the brightest, untouched. It
-//! cannot darken a pixel, and at full strength it pulls a partially-blown
+//! This lifts a clipped channel only when it fell below the anchor — precisely
+//! the false-colour case — and leaves a genuinely coloured highlight with a
+//! surviving channel, where the clipped channel is already the brightest,
+//! untouched. It cannot darken a pixel, and at full strength it pulls a blown
 //! highlight toward neutral rather than to a guessed hue, which is the
-//! conservative direction for an unattended archiver.
+//! conservative direction for an unattended archiver — including the
+//! fully-clipped case, where a genuinely coloured source intense enough to
+//! saturate all three channels is rare enough that neutral is still the better
+//! default.
 //!
 //! `strength` in `(0, 1]` blends between the original and reconstructed camera
 //! value. `strength == 0` is not represented — the caller skips this module — so
@@ -53,12 +63,11 @@
 //!
 //! # Status
 //!
-//! Off by default. `docs/PLAN.md` names the deliberately-clipped corpus class as
-//! the test set for this operator, and that corpus is not gathered yet. The
-//! operator is complete and deterministic; the default stays off until there are
-//! frames to prove it never over-reconstructs. Its interaction with
-//! `tone::compress_gamut` and the `highlight_norm` roll-off is the specific thing
-//! grading will have to check, since both act on the same highlight range.
+//! On by default (`--highlight-reconstruction 0.75`) as part of the
+//! `archive-auto-v2` profile. Its interaction with `tone::compress_gamut` and
+//! the `highlight_norm` roll-off is the specific thing grading has to check,
+//! since both act on the same highlight range — `compress_gamut` is hue-
+//! preserving, so a colour cast left in by this module survives it unchanged.
 
 use crate::types::{CameraRgb, Image};
 use rayon::prelude::*;
@@ -126,10 +135,6 @@ pub fn reconstruct(
                     continue;
                 }
                 tally.clipped += 1;
-                if clipped_count == 3 {
-                    tally.fully_clipped += 1;
-                    continue;
-                }
 
                 // Brightest surviving channel, in white-balanced space: the most
                 // reliable lower bound on the highlight's true neutral level.
@@ -142,6 +147,33 @@ pub fn reconstruct(
                         }
                     }
                 }
+
+                if clipped_count == 3 {
+                    tally.fully_clipped += 1;
+                    // No surviving channel to anchor on — but every raw channel
+                    // is near the same clip point, so the channel with the
+                    // largest white-balance coefficient is the most reliable
+                    // lower bound available: it is exactly the coefficient that
+                    // renders a truly neutral target as neutral. Anchoring there
+                    // pulls a fully-blown neutral highlight (a sun glint, a lens
+                    // flare) toward grey instead of leaving the white-balance
+                    // spread — on the A7C, red at ~2.3x and blue at ~1.6x against
+                    // green's 1.0x — exposed as a magenta cast. A genuinely
+                    // coloured light source this intense (saturating all three
+                    // channels) is rare enough that defaulting it toward neutral,
+                    // the same call the partial-clip case already makes, stays
+                    // the conservative choice for an unattended archiver.
+                    for channel in 0..3 {
+                        if white_balance[channel] <= 0.0 {
+                            continue;
+                        }
+                        let wb = pixel[channel] * white_balance[channel];
+                        if wb > anchor {
+                            anchor = wb;
+                        }
+                    }
+                }
+
                 if !anchor.is_finite() {
                     continue;
                 }
@@ -220,12 +252,36 @@ mod tests {
         assert_eq!(img.pixels[0], before);
     }
 
-    /// A fully-blown pixel has nothing to rebuild from.
+    /// A fully-blown pixel has no surviving channel to anchor on, but its raw
+    /// channels are all near the same clip point, so it must still be pulled
+    /// toward neutral using the clipped channel with the largest white-balance
+    /// coefficient as the anchor — otherwise the raw white-balance spread comes
+    /// out as a colour cast (magenta on the A7C, where this pixel is a stand-in
+    /// for a sun glint or lens-flare core with red at 2.0x and blue at 1.6x
+    /// against green's 1.0x).
     #[test]
-    fn a_fully_clipped_pixel_is_left_alone() {
+    fn a_fully_clipped_pixel_is_pulled_toward_the_largest_white_balance_channel() {
+        let mut img = image(vec![[1.0, 1.0, 1.0]]);
+        let report = reconstruct(&mut img, [2.0, 1.0, 1.6], 1.0);
+        assert_eq!(report.fully_clipped_pixels, 1);
+        assert_eq!(report.reconstructed_pixels, 1);
+        // Red has the largest white-balance coefficient (2.0), so it anchors
+        // the highlight and is itself left untouched; green and blue are
+        // raised to the same white-balanced level (2.0) and converted back
+        // through their own coefficients.
+        assert!((img.pixels[0][0] - 1.0).abs() < 1e-6);
+        assert!((img.pixels[0][1] - 2.0).abs() < 1e-5);
+        assert!((img.pixels[0][2] - 1.25).abs() < 1e-5);
+    }
+
+    /// A fully-clipped pixel whose channels are already balanced (equal
+    /// white-balance coefficients) has nothing to correct: the anchor equals
+    /// every channel's own value, so no lift is applied.
+    #[test]
+    fn a_fully_clipped_already_balanced_pixel_is_left_alone() {
         let mut img = image(vec![[1.0, 1.0, 1.0]]);
         let before = img.pixels[0];
-        let report = reconstruct(&mut img, [2.0, 1.0, 1.6], 1.0);
+        let report = reconstruct(&mut img, [1.0, 1.0, 1.0], 1.0);
         assert_eq!(report.fully_clipped_pixels, 1);
         assert_eq!(report.reconstructed_pixels, 0);
         assert_eq!(img.pixels[0], before);

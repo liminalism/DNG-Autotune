@@ -30,6 +30,16 @@ partially clipped RGB highlights are reconstructed from surviving channels
 before white balance and colour conversion. Both operators are deterministic,
 have explicit zero-strength byte-identity paths and report their activity.
 
+Fully-clipped highlights — every raw channel at the sensor's clip point, as in
+a sun glint on water or a lens-flare core — fell through the reconstruction
+above uncorrected, because it only had an anchor to lift toward when at least
+one channel survived. The white-balance spread (A7C red ~2.3x, blue ~1.6x
+against green's 1.0x) then showed straight through as a magenta cast on an A7C
+corpus frame (`raw/arw/_DSC0924.ARW`), 4.25% of the sparkle region's pixels
+past a strong-magenta threshold. `highlight::reconstruct` now falls back to
+anchoring on the clipped channel with the largest white-balance coefficient
+when none survive, cutting that fraction to 0.32% on the same frame and region.
+
 ### DNG 1.7 matrix colour is automatic
 
 The default owned path composes either DNG camera-to-XYZ route: `ForwardMatrix`,

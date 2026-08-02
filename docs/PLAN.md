@@ -166,17 +166,26 @@ Ordered by what each one unblocks, not by release.
 
 ### Completed in the current implementation
 
-Hot/dead CFA-site suppression, partial clipped-highlight reconstruction,
-adaptive PPG/RCD/AMaZE-class Bayer selection, and the DNG 1.7 matrix model are
+Hot/dead CFA-site suppression, clipped-highlight reconstruction (partial and,
+since the A7C sparkle-highlight corpus below, fully clipped too), adaptive
+PPG/RCD/AMaZE-class Bayer selection, and the DNG 1.7 matrix model are
 implemented, deterministic, reported, and included in the versioned automatic
 profile. The owned interpolators are guarded behind low-noise/low-alias tests
 because dense-branch validation still favors mature PPG. The DNG path covers
 one/two/three illuminants, custom illuminant data, three/four camera channels
 and ReductionMatrix.
 
-The next requirement for these stages is corpus evidence: the deliberately
-clipped class, fine repeating detail, high ISO and actual four-channel/triple-
-illuminant profiles should be added as they become available.
+The deliberately-clipped corpus class arrived as `raw/arw/_DSC0922.ARW` and
+`_DSC0924.ARW`: sun glints on rippling water and a lens-flare core, all three
+raw channels clipped at once. Reconstruction had no surviving channel to
+anchor on there and left the as-shot white-balance spread (A7C red ~2.3x, blue
+~1.6x against green) exposed as a magenta cast — see `CHANGELOG.md`. Fixed by
+falling back to the clipped channel with the largest white-balance coefficient
+as the anchor when none survive.
+
+The next requirement for these stages is corpus evidence: fine repeating
+detail, high ISO and actual four-channel/triple-illuminant profiles should be
+added as they become available.
 
 ### 1. Scene-class policies
 
