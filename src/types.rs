@@ -24,7 +24,15 @@ pub const MID_GRAY: f32 = 0.18;
 /// 11 added `color.dng_color`, present when the DNG matrix path was composed.
 /// 12 adds pre-demosaic correction, highlight reconstruction, adaptive demosaic,
 ///   extended DNG calibration details, and the automatic profile identifier.
-pub const REPORT_SCHEMA_VERSION: u32 = 13;
+/// 13 is the 0.1.19 baseline.
+/// 14 adds `color.highlight_reconstruction.near_white_pixels`, the count of
+///   pixels with two or more channels at the sensor clip. Those pixels also
+///   changed rendering in the same release — see `CHANGELOG.md`: they are now
+///   anchored across all channels at full strength, which is what removes the
+///   white-balance cast on blown skies. A frame with no such pixels serializes
+///   the same values it did under 13 apart from the new field, and
+///   `--highlight-reconstruction 0` is unchanged in both output and sidecar.
+pub const REPORT_SCHEMA_VERSION: u32 = 14;
 
 /// Name for the exposure controller's current behaviour, frozen at the colour
 /// path's correctness boundary.
@@ -231,6 +239,10 @@ pub struct RunOptions {
     pub reference: crate::reference::ReferenceSource,
     /// Multiplier on the preset's saturation; 1.0 is the preset as tuned.
     pub saturation_scale: f32,
+    /// Multiplier on the tone curve's highlight exponent alone; 1.0 is the
+    /// preset as tuned. Raises where highlights land without moving middle grey,
+    /// the black point or the shadow branch. See `analyze::derive_params`.
+    pub highlight_contrast: f32,
     /// Multiplier on the automatic chroma-denoise strength; 1.0 is automatic.
     pub chroma_denoise: f32,
     /// Multiplier on the automatic output-sharpening amount; 1.0 is automatic.
@@ -288,6 +300,7 @@ impl RunOptions {
             summary_path,
             reference: crate::reference::ReferenceSource::Disabled,
             saturation_scale: 1.0,
+            highlight_contrast: 1.0,
             chroma_denoise: 1.0,
             sharpen: 1.0,
             demosaic: crate::demosaic::DemosaicMethod::Auto,

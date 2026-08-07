@@ -53,6 +53,9 @@ pub struct RenderOptions {
     pub working_space: WorkingSpace,
     pub sub_black: SubBlack,
     pub saturation_scale: f32,
+    /// Multiplier on the tone curve's highlight exponent alone; 1.0 is the
+    /// preset as tuned. See `analyze::derive_params`.
+    pub highlight_contrast: f32,
     pub chroma_denoise: f32,
     pub sharpen: f32,
     pub demosaic: DemosaicMethod,
@@ -89,6 +92,7 @@ impl RenderOptions {
             working_space: options.working_space,
             sub_black: options.sub_black,
             saturation_scale: options.saturation_scale,
+            highlight_contrast: options.highlight_contrast,
             chroma_denoise: options.chroma_denoise,
             sharpen: options.sharpen,
             demosaic: options.demosaic,
@@ -124,6 +128,10 @@ impl RenderOptions {
         ensure!(
             self.saturation_scale.is_finite() && (0.0..=4.0).contains(&self.saturation_scale),
             "saturation_scale must be between 0 and 4"
+        );
+        ensure!(
+            self.highlight_contrast.is_finite() && (0.25..=4.0).contains(&self.highlight_contrast),
+            "highlight_contrast must be between 0.25 and 4"
         );
         ensure!(
             self.chroma_denoise.is_finite() && (0.0..=2.0).contains(&self.chroma_denoise),
@@ -302,6 +310,7 @@ pub fn render_file_rgb16(
             noise_floor_ev: noise_floor.as_ref().map(|floor| floor.snr1_ev),
             preview: preview.as_ref(),
             preview_strength,
+            highlight_contrast: options.highlight_contrast,
         },
     )?;
     parameters.saturation *= options.saturation_scale;
@@ -465,6 +474,7 @@ mod tests {
         assert_eq!(api.raw_color_path, batch.raw_color_path);
         assert_eq!(api.demosaic, batch.demosaic);
         assert_eq!(api.hot_pixels, batch.hot_pixels);
+        assert_eq!(api.highlight_contrast, batch.highlight_contrast);
         assert_eq!(api.highlight_reconstruction, batch.highlight_reconstruction);
         assert_eq!(api.full_dng_color, batch.full_dng_color);
         assert_eq!(api.lens_correction, batch.lens_correction);

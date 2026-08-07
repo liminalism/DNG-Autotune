@@ -46,6 +46,7 @@ fn derive_params(
     preset: Preset,
     exposure_ev: f32,
     noise_floor_ev: Option<f32>,
+    highlight_contrast: f32,
 ) -> ToneParams {
     let (p005, p05, p995) = (stats.p005_ev, stats.p05_ev, stats.p995_ev);
 
@@ -128,8 +129,28 @@ fn derive_params(
 
     // Choose curve exponents so the two curve segments meet at middle gray
     // with approximately the requested derivative ("contrast").
+    //
+    // `highlight_contrast` scales only the highlight exponent, which is what
+    // makes it a *sky* control rather than a contrast control. `map_ev` is
+    // anchored at middle grey and its two branches are independent, so raising
+    // this steepens the highlight branch — brighter skies, reaching the
+    // `highlight_desaturation` shoulder sooner — while the shadow branch, the
+    // black point and the exposure the oracle solved for all stay exactly where
+    // they were. Raising `contrast` instead would buy the same highlights by
+    // darkening the shadows, and on the paired A7C frames the ground already
+    // matches the camera to within 0.07 EV, so there is nothing there to spend.
+    //
+    // The default is 1.0 and multiplying by it is exact, so the derived exponent
+    // is bit-identical to the pre-0.1.20 expression when the knob is untouched.
+    // That matters more than usual here: this exponent feeds
+    // `tone::inverse_map_ev`, so the preview oracle inverts its target through
+    // whatever curve this produces. Hence the scale is applied inside the solve
+    // rather than patched onto `ToneParams` afterwards the way
+    // `saturation_scale` is — saturation is the one parameter nothing else is
+    // derived from, and this is not it.
     let shadow_power = (contrast * (-black_input_ev) / (-black_output_ev)).clamp(0.45, 4.0);
-    let highlight_power = (contrast * white_input_ev / white_output_ev).clamp(0.45, 4.0);
+    let highlight_power =
+        ((contrast * highlight_contrast) * white_input_ev / white_output_ev).clamp(0.45, 4.0);
 
     ToneParams {
         exposure_ev,
@@ -232,6 +253,9 @@ pub struct AnalysisInputs<'a> {
     pub preview: Option<&'a crate::preview::PreviewOracle>,
     /// How far to move from the controller's target toward the oracle's, 0 to 1.
     pub preview_strength: f32,
+    /// Multiplier on the tone curve's highlight exponent alone, 1.0 for the
+    /// unmodified curve. See `derive_params` for why it lives in the solve.
+    pub highlight_contrast: f32,
 }
 
 impl AnalysisInputs<'_> {
@@ -244,6 +268,7 @@ impl AnalysisInputs<'_> {
             noise_floor_ev: None,
             preview: None,
             preview_strength: 0.0,
+            highlight_contrast: 1.0,
         }
     }
 }
@@ -373,7 +398,13 @@ pub fn analyze(
         mean_chroma: (chroma_sum / valid as f64) as f32,
     };
 
-    let mut params = derive_params(&stats, preset, exposure_ev, noise_floor_ev);
+    let mut params = derive_params(
+        &stats,
+        preset,
+        exposure_ev,
+        noise_floor_ev,
+        inputs.highlight_contrast,
+    );
 
     // The preview oracle works in display EV, so it needs a curve to invert
     // through. Solve once with the key-score target, adopt the oracle's target,
@@ -410,7 +441,13 @@ pub fn analyze(
             exposure_ev =
                 (target_median_ev - center_weighted_key_ev + exposure_bias_ev).clamp(-5.0, 5.0);
             stats.target_median_ev = target_median_ev;
-            params = derive_params(&stats, preset, exposure_ev, noise_floor_ev);
+            params = derive_params(
+                &stats,
+                preset,
+                exposure_ev,
+                noise_floor_ev,
+                inputs.highlight_contrast,
+            );
         }
     }
 
@@ -610,6 +647,83 @@ mod tests {
             neutral < auto && auto < punchy,
             "neutral {neutral} < auto {auto} < punchy {punchy}"
         );
+    }
+
+    /// The knob's default has to be *exactly* inert, not approximately so.
+    /// `highlight_power` feeds `tone::inverse_map_ev`, so a curve that differed
+    /// by one ulp at the default would move the preview oracle's target and
+    /// with it the exposure of every frame that carries a preview. Multiplying
+    /// by 1.0 is exact in IEEE 754; this pins that the expression was written so
+    /// that it stays exact.
+    #[test]
+    fn the_default_highlight_contrast_is_bit_identical() {
+        let stats = analyze(
+            &graded_image(),
+            &AnalysisInputs::new(10_000, Preset::Auto, 0.0),
+        )
+        .unwrap()
+        .0;
+        for preset in [Preset::Neutral, Preset::Auto, Preset::Punchy] {
+            for exposure_ev in [-1.5, 0.0, 0.85, 2.0] {
+                let unscaled = derive_params(&stats, preset, exposure_ev, None, 1.0);
+                // The pre-knob expression, spelled out.
+                let expected = (unscaled.contrast * unscaled.white_input_ev
+                    / unscaled.white_output_ev)
+                    .clamp(0.45, 4.0);
+                assert_eq!(
+                    unscaled.highlight_power, expected,
+                    "{preset:?} at {exposure_ev} EV moved at the default"
+                );
+            }
+        }
+    }
+
+    /// What the knob is for: brighter highlights, and *only* highlights. The
+    /// shadow branch, the black point and the exposure the controller solved
+    /// for all have to be untouched, otherwise it is a contrast control wearing
+    /// a different name and the ground follows the sky up.
+    #[test]
+    fn highlight_contrast_raises_highlights_and_leaves_everything_below_grey_alone() {
+        let stats = analyze(
+            &graded_image(),
+            &AnalysisInputs::new(10_000, Preset::Auto, 0.0),
+        )
+        .unwrap()
+        .0;
+        let base = derive_params(&stats, Preset::Auto, 0.0, None, 1.0);
+        let raised = derive_params(&stats, Preset::Auto, 0.0, None, 1.35);
+
+        assert!(
+            raised.highlight_power > base.highlight_power,
+            "the highlight exponent must rise: {} -> {}",
+            base.highlight_power,
+            raised.highlight_power
+        );
+        assert_eq!(raised.shadow_power, base.shadow_power);
+        assert_eq!(raised.black_input_ev, base.black_input_ev);
+        assert_eq!(raised.black_output_linear, base.black_output_linear);
+        assert_eq!(raised.exposure_ev, base.exposure_ev);
+        assert_eq!(raised.contrast, base.contrast);
+
+        // Middle grey is the curve's anchor and must not move at all; every
+        // sampled highlight must render at or above where it did, and nothing
+        // at or below grey may move.
+        assert_eq!(crate::tone::map_ev(0.0, &raised), crate::tone::map_ev(0.0, &base));
+        for step in 1..=32 {
+            let ev = base.white_input_ev * (step as f32 / 32.0);
+            assert!(
+                crate::tone::map_ev(ev, &raised) >= crate::tone::map_ev(ev, &base),
+                "highlight at {ev} EV was not raised"
+            );
+        }
+        for step in 0..=32 {
+            let ev = base.black_input_ev * (step as f32 / 32.0);
+            assert_eq!(
+                crate::tone::map_ev(ev, &raised),
+                crate::tone::map_ev(ev, &base),
+                "shadow at {ev} EV moved"
+            );
+        }
     }
 
     #[test]

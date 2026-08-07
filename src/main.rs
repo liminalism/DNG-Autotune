@@ -231,6 +231,11 @@ fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result
     let mut clip_mean_abs_delta = Vec::new();
     let mut hot_corrected = Vec::new();
     let mut highlight_reconstructed = Vec::new();
+    // Tracked separately from the rebuilt count because it is the number that
+    // predicts sky quality: these are the pixels whose hue this program decided
+    // rather than measured. A frame where it is large has no sky detail left in
+    // the raw at all, whatever the render does afterwards.
+    let mut highlight_near_white = Vec::new();
     let mut dng_color_frames = 0_usize;
     let mut nondeterministic_illuminant_files = 0_usize;
 
@@ -355,6 +360,7 @@ fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result
                     }
                     if let Some(highlight) = &color.highlight_reconstruction {
                         highlight_reconstructed.push(highlight.reconstructed_pixels);
+                        highlight_near_white.push(highlight.near_white_pixels);
                     }
                     if color.dng_color.is_some() {
                         dng_color_frames += 1;
@@ -514,6 +520,20 @@ fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result
             .filter(|count| **count > 0)
             .count();
         println!("highlight reconstruction: {total} pixel(s) rebuilt across {frames} frame(s)");
+    }
+    if !highlight_near_white.is_empty() {
+        let total: usize = highlight_near_white.iter().sum();
+        let frames = highlight_near_white
+            .iter()
+            .filter(|count| **count > 0)
+            .count();
+        let worst = highlight_near_white.iter().copied().max().unwrap_or(0);
+        if total > 0 {
+            println!(
+                "  of which near-white (2+ channels at the sensor clip): {total} pixel(s) \
+                 across {frames} frame(s), worst frame {worst}"
+            );
+        }
     }
     if dng_color_frames > 0 {
         println!(

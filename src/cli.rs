@@ -240,6 +240,17 @@ pub struct Cli {
     #[arg(long, value_name = "FACTOR", default_value_t = 1.0)]
     pub saturation_scale: f32,
 
+    /// Multiply the tone curve's highlight exponent. 1.0 leaves every preset
+    /// exactly as tuned. Above 1.0 places bright regions higher on the curve
+    /// without moving middle grey, the black point or the shadows, so a sky
+    /// brightens and reaches the highlight-desaturation shoulder while the
+    /// ground stays put. This is the sweep knob for the one documented
+    /// divergence from the camera's own rendering (docs/STATUS.md: the camera
+    /// desaturates its shoulder hard and this program deliberately does not) —
+    /// a taste decision that belongs to whoever is grading the corpus.
+    #[arg(long, value_name = "FACTOR", default_value_t = 1.0)]
+    pub highlight_contrast: f32,
+
     /// Suppress hot and dead pixels on the CFA mosaic before demosaic, 0 to 1.
     /// Defaults to a conservative automatic strength. A single stuck
     /// photosite becomes a coloured speck the
@@ -305,6 +316,14 @@ impl Cli {
         ensure!(
             self.saturation_scale.is_finite() && (0.0..=4.0).contains(&self.saturation_scale),
             "--saturation-scale must be between 0 and 4"
+        );
+        // The lower bound is not 0: the exponent is clamped to 0.45 downstream,
+        // but a zero multiplier would mean "no highlight branch at all", which
+        // the curve has no sensible reading of. The upper bound is where the
+        // 0.45..4.0 clamp on the exponent binds for every realistic input range.
+        ensure!(
+            self.highlight_contrast.is_finite() && (0.25..=4.0).contains(&self.highlight_contrast),
+            "--highlight-contrast must be between 0.25 and 4"
         );
         ensure!(
             self.chroma_denoise.is_finite() && (0.0..=2.0).contains(&self.chroma_denoise),
@@ -406,6 +425,7 @@ impl Cli {
         options.summary_path = summary_path;
         options.reference = reference;
         options.saturation_scale = self.saturation_scale;
+        options.highlight_contrast = self.highlight_contrast;
         options.chroma_denoise = self.chroma_denoise;
         options.sharpen = self.sharpen;
         options.demosaic = self.demosaic;
@@ -503,6 +523,7 @@ mod tests {
         assert_eq!(options.sub_black, expected.sub_black);
         assert_eq!(options.demosaic, expected.demosaic);
         assert_eq!(options.hot_pixels, expected.hot_pixels);
+        assert_eq!(options.highlight_contrast, expected.highlight_contrast);
         assert_eq!(
             options.highlight_reconstruction,
             expected.highlight_reconstruction

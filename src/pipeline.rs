@@ -574,6 +574,7 @@ fn process_job_inner(
             noise_floor_ev: noise_floor.as_ref().map(|floor| floor.snr1_ev),
             preview: preview.as_ref(),
             preview_strength,
+            highlight_contrast: options.highlight_contrast,
         },
     )?;
 

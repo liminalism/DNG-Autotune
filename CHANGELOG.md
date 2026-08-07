@@ -2,6 +2,146 @@
 
 ## Unreleased — a standalone front-end
 
+### Blown skies rendered lavender-magenta: the near-white anchor rule
+
+`52881d2` fixed the *fully* clipped case — a sun glint with all three channels
+at the sensor's saturation level had been rendering with the raw white-balance
+spread exposed as a colour cast. It did not fix the case that actually dominates
+a daylight sky, where **two** channels clip and one survives, and that is what
+the tropical batch in `raw/raw_3rd_batch` was still showing: whole skies in
+`_DSC1282`, `_DSC1283`, `_DSC1288`, `_DSC1289` and `_DSC1290` came out lavender.
+
+Two clipped channels stopped at the same raw level, so the ratio between them is
+not a measurement — it is the white-balance coefficients. `highlight::reconstruct`
+anchored only on the lone survivor, and never lowers a channel, so a clipped
+channel whose own white-balanced value already exceeded the survivor was left
+untouched while the other was lifted only part-way toward it. The coefficient
+spread survived intact between them. On an A7C at these frames' as-shot balance
+(red 2.219x, blue 1.773x, green 1.0x) that is red and blue high with green
+trailing: magenta. The default `--highlight-reconstruction 0.75` made it worse
+rather than safer, since a partial blend toward neutral is by construction a
+fraction of the cast; at 1.0 the same frames still showed it, because the anchor
+itself was wrong.
+
+Fixed by making the clipped-channel *count* select the rule, since that is what
+distinguishes a coloured highlight from a near-white one:
+
+* **One channel clipped** — unchanged in every respect. Two exact survivors still
+  define a real colour, the anchor is still the brighter of them, and `strength`
+  still blends, because lifting the clipped channel toward them is a hue
+  assumption. This cohort renders bit-for-bit as it did before.
+* **Two or three clipped** (`NEAR_WHITE_CLIPPED_CHANNELS`) — the anchor widens to
+  the largest white-balanced value over *all* channels, clipped ones included, so
+  every clipped channel lands on one level: as bright as the pixel's brightest
+  evidence, as neutral as the evidence allows. Applied at full strength, because
+  the determination here is that the pixel is achromatic and a partial blend
+  toward achromatic is just a fraction of the artefact. The previous
+  fully-clipped fallback is the degenerate case of this rule, so the two special
+  cases collapse into one.
+
+Measured on the decoded raws, in the near-white cohort of each frame, as the
+green deficit against the brightest channel after white balance and the colour
+matrix — the quantity the eye reads as magenta:
+
+| Frame      | Near-white pixels | Before (0.75) | Before (1.0) | After |
+|------------|-------------------|---------------|--------------|-------|
+| `_DSC1283` |            12.42% |         37.5% |        14.4% |  0.0% |
+| `_DSC1288` |             3.44% |         28.5% |         8.4% |  0.0% |
+| `_DSC1290` |             2.81% |         78.4% |        73.0% |  0.0% |
+
+The one-clipped cohort is byte-identical across all three columns, which is the
+check that the fix is confined to where it belongs. Pinned by
+`two_clipped_channels_land_on_one_white_balanced_level`,
+`near_white_reconstruction_is_independent_of_strength`,
+`one_clipped_channel_keeps_the_survivor_anchor_and_the_strength_blend` and
+`reconstruction_never_darkens_a_channel`.
+
+This changes default output on any frame with near-white highlights, which is
+deliberate — it is the defect being fixed, not a new feature. Nine of the 58
+files in the batch have a near-white fraction above 1%; the median across the
+batch is 0.0003%, so most frames do not move at all.
+`--highlight-reconstruction 0` remains byte-identical to before, since the
+caller still skips the module entirely.
+
+`REPORT_SCHEMA_VERSION` 13 → 14, adding
+`color.highlight_reconstruction.near_white_pixels`. It is the number that
+predicts the defect without looking at the picture: five of the six worst frames
+in the batch by this metric are exactly the five flagged by eye. A large value
+also means the sky is unrecoverable — see `docs/HDR_EVALUATION.md`, which
+measured under 1 EV of *unclipped* headroom above diffuse white on every one of
+these frames and concluded that HDR output would not have helped this defect.
+`--summary` prints the near-white total alongside the rebuilt-pixel count.
+
+`check.bat` was a copy from another repository and referenced a `SYSEngine`
+workspace and a `cargo-checker.exe` that do not exist here; rewritten for this
+crate, release-mode throughout, with a `check.bat sky` mode that renders just
+these five frames for eyeball grading.
+
+### `--highlight-contrast`: a sky lever that leaves the ground alone
+
+Grading the fix above against the paired camera JPEGs turned up a second,
+separate question. Percentile-matching our output against the camera's on the
+same five frames:
+
+| percentile | p10 | p30 | p50 | p70 | p90 | p97 | p99 | p99.9 |
+|---|---|---|---|---|---|---|---|---|
+| ours − camera, EV | +0.88 | +0.39 | −0.04 | −0.26 | −0.43 | −0.52 | −0.36 | −0.23 |
+
+Not an exposure offset — midtones match to 0.04 EV and the ground band matches
+to 0.07 EV on four of the five frames — but a shoulder that rolls off about half
+a stop earlier than Sony's. That is why the sky never reaches
+`highlight_desaturation` and keeps the saturation that reads as violet on
+`_DSC1289`, where 15% of the remaining purple is one-channel-clipped pixels the
+reconstruction rule deliberately does not touch.
+
+This is *not* being treated as a defect, because `docs/STATUS.md` already
+records it as a decision: "the camera desaturates its shoulder hard and this
+program deliberately does not... a fact about two rendering intents, not an
+error with a fix." Re-tuning `contrast` against five frames would overturn a
+call measured across 258, and it would buy the highlights by darkening shadows
+that currently match the camera.
+
+So the change is a knob, not a new default. `--highlight-contrast FACTOR`
+multiplies the tone curve's *highlight* exponent alone:
+
+```
+highlight_power = clamp(contrast * highlight_contrast * white_input_ev / white_output_ev, 0.45, 4.0)
+```
+
+`map_ev` is anchored at middle grey with independent branches, so raising this
+lifts everything above grey and provably moves nothing at or below it —
+`highlight_contrast_raises_highlights_and_leaves_everything_below_grey_alone`
+sweeps both branches and pins exactly that. The default is 1.0 and multiplying
+by 1.0 is exact, so the derived exponent is bit-identical to the previous
+expression; `the_default_highlight_contrast_is_bit_identical` pins it across
+three presets and four exposures. That exactness is load-bearing rather than
+tidy: `highlight_power` feeds `tone::inverse_map_ev`, so a one-ulp difference
+would move the preview oracle's inverted target and with it the exposure of
+every frame carrying a preview. For the same reason the scale is applied inside
+`derive_params` rather than patched onto `ToneParams` afterwards the way
+`saturation_scale` is — saturation is the one parameter nothing else derives
+from, and this is not it.
+
+No schema change: `contrast` and `highlight_power` are already serialized, so
+the effect is visible in existing sidecars.
+
+### Grading harness for the sky question
+
+`tools/grade_sky.py` measures finished JPEGs against the camera's own JPEG of
+the same capture — sky and ground brightness in EV, and the green-deficit
+statistic that *is* the lavender failure rather than a proxy for it. It reads
+rendered files rather than reimplementing the pipeline, so it cannot drift out
+of sync with it. `check.bat sweep` renders the five affected frames plus three
+clean neighbours from the same batch across `--highlight-contrast` 1.00/1.20/
+1.40 and `--local-tone` 0.35/0.70 and prints the table. The controls are the
+point: a setting that fixes the sky frames by degrading the clean ones is not an
+improvement, and without them in the table that is invisible.
+
+On the shipped renders the statistic separates the cohorts cleanly — sky green
+deficit 15–41% and 2–13% of the frame reading purple on the five affected
+frames, against 0% and ~1% on their neighbours — which is what makes it usable
+as a sweep target.
+
 ### Batched sRGB encode
 
 Flamegraph profiling (`tools/flamegraph_profile.py`, new) over the full A7C
