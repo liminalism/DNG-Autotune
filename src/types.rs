@@ -32,7 +32,10 @@ pub const MID_GRAY: f32 = 0.18;
 ///   white-balance cast on blown skies. A frame with no such pixels serializes
 ///   the same values it did under 13 apart from the new field, and
 ///   `--highlight-reconstruction 0` is unchanged in both output and sidecar.
-pub const REPORT_SCHEMA_VERSION: u32 = 14;
+/// 15 adds per-frame `analysis` 1/2/3-channel clipped fractions and
+///   `color.highlight_reconstruction.clipped_1/2/3_pixels`, replacing the
+///   overloaded near-white semantic for reconstruction policy.
+pub const REPORT_SCHEMA_VERSION: u32 = 15;
 
 /// Name for the exposure controller's current behaviour, frozen at the colour
 /// path's correctness boundary.
@@ -444,6 +447,12 @@ pub struct AnalysisStats {
     pub tonal_class: TonalClass,
     pub near_black_fraction: f32,
     pub near_white_fraction: f32,
+    /// Fraction of sampled pixels with exactly 1 channel at/above the clip threshold.
+    pub clipped_1_fraction: f32,
+    /// Fraction with exactly 2 channels clipped.
+    pub clipped_2_fraction: f32,
+    /// Fraction with all 3 channels clipped.
+    pub clipped_3_fraction: f32,
     pub mean_chroma: f32,
 }
 

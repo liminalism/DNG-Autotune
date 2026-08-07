@@ -84,6 +84,35 @@ pub fn from_linear_srgb(rgb: [f32; 3]) -> Oklab {
     }
 }
 
+/// Convert Oklab to linear-light sRGB.
+///
+/// Inverse of [`from_linear_srgb`].
+#[inline]
+pub fn to_linear_srgb(lab: Oklab) -> [f32; 3] {
+    let l = lab.l;
+    let a = lab.a;
+    let b = lab.b;
+    // Inverse of the final rotation
+    // From Ottosson's blog:
+    // From Ottosson's blog: 
+    // l_ = L + 0.3963377774*a + 0.2158037573*b
+    // m_ = L - 0.1055613458*a - 0.0638541728*b
+    // s_ = L - 0.0894841775*a - 1.2914855480*b
+    // Then cube
+    let l_ = l + 0.3963377774 * a + 0.2158037573 * b;
+    let m_ = l - 0.1055613458 * a - 0.0638541728 * b;
+    let s_ = l - 0.0894841775 * a - 1.2914855480 * b;
+    let l = l_ * l_ * l_;
+    let m = m_ * m_ * m_;
+    let s = s_ * s_ * s_;
+    // Convert LMS to linear sRGB (inverse of forward matrix)
+    [
+        4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+    ]
+}
+
 /// Convert sRGB-encoded values on `0..=1` to Oklab.
 ///
 /// The measurement path receives display-encoded pixels, so the transfer function

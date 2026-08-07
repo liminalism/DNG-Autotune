@@ -301,6 +301,9 @@ pub fn analyze(
     let mut center_ev_values = Vec::with_capacity(ev_values.capacity() / 3);
     let mut near_black = 0_usize;
     let mut near_white = 0_usize;
+    let mut clipped_1 = 0_usize;
+    let mut clipped_2 = 0_usize;
+    let mut clipped_3 = 0_usize;
     let mut valid = 0_usize;
     let mut chroma_sum = 0.0_f64;
 
@@ -330,6 +333,16 @@ pub fn analyze(
             }
             if maximum >= 0.995 {
                 near_white += 1;
+            }
+            // Per-channel clipped counts using the same threshold as highlight reconstruction
+            // (0.98 in camera space, here applied to scene-linear for metrics).
+            const CLIP_THR: f32 = 0.98;
+            let clipped = (rgb[0] >= CLIP_THR) as usize + (rgb[1] >= CLIP_THR) as usize + (rgb[2] >= CLIP_THR) as usize;
+            match clipped {
+                1 => clipped_1 += 1,
+                2 => clipped_2 += 1,
+                3 => clipped_3 += 1,
+                _ => {}
             }
             valid += 1;
             ev_values.push(ev);
@@ -395,6 +408,9 @@ pub fn analyze(
         tonal_class,
         near_black_fraction: near_black as f32 / valid as f32,
         near_white_fraction: near_white as f32 / valid as f32,
+        clipped_1_fraction: clipped_1 as f32 / valid as f32,
+        clipped_2_fraction: clipped_2 as f32 / valid as f32,
+        clipped_3_fraction: clipped_3 as f32 / valid as f32,
         mean_chroma: (chroma_sum / valid as f64) as f32,
     };
 

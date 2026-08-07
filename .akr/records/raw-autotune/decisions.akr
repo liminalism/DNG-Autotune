@@ -1,0 +1,18 @@
+akr 0.1
+project raw-autotune
+
+record raw-autotune.decision.key-decisions/1 : decision {
+    title "Key Decisions"
+    state proposed
+    scope [ all ]
+    decision """
+        1. **Where the diagnostics live.** Advice says "inside the owned color path." Decision: add hooks in `src/color.rs:develop` (which calls `highlight::reconstruct` and owns the working→display matrix) to emit dumps before/after `highlight::reconstruct` and before/after `compress_gamut` in `src/tone.rs:282`. Alternative rejected: extending only `pipeline::dump_stage` (which sees `LinearImage` after develop) — it cannot see the pre-reconstruction camera-RGB buffer the advice specifies (items 1-4). Use a `--dump-stages` extension (or new `--dump-highlight-stages DIR`) that writes both the existing `LinearImage` baseline dumps and the new camera-RGB + gamut-stage PNGs, reusing `tone::render_baseline` with/without the working→display matrix consistently. Keep the "best effort, never fails the file" contract (`src/pipeline.rs:137`).
+        """
+    source {
+        kind legacy
+        path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
+        excerpt """
+            1. **Where the diagnostics live.** Advice says "inside the owned color path." Decision: add hooks in `src/color.rs:develop` (which calls `highlight::reconstruct` and owns the working→display matrix) to emit dumps before/after `highlight::reconstruct` and before/after `compress_gamut` in `src/tone.rs:282`. Alternative rejected: extending only `pipeline::dump_stage` (which sees `LinearImage` after develop) — it cannot see the pre-reconstruction camera-RGB buffer the advice specifies (items 1-4). Use a `--dump-stages` extension (or new `--dump-highlight-stages DIR`) that writes both the existing `LinearImage` baseline dumps and the new camera-RGB + gamut-stage PNGs, reusing `tone::render_baseline` with/without the working→display matrix consistently. Keep the "best effort, never fails the file" contract (`src/pipeline.rs:137`).
+            """
+    }
+}

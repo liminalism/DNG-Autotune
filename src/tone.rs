@@ -103,33 +103,64 @@ fn compress_gamut(mut rgb: [f32; 3], anchor: f32) -> [f32; 3] {
     let anchor = anchor.clamp(0.0, 1.0);
     let minimum = rgb[0].min(rgb[1]).min(rgb[2]);
     let maximum = rgb[0].max(rgb[1]).max(rgb[2]);
-
-    let mut scale = 1.0_f32;
-
+    // Shadow case (negative channel): use anchor-floored scale that was fixed
+    // for the 0.1.17 crushed regression. Oklab path would collapse to black.
     if minimum < 0.0 {
+        let mut scale = 1.0f32;
         let denominator = anchor - minimum;
         if denominator > 1.0e-6 {
             scale = scale.min(anchor / denominator);
         } else {
             scale = 0.0;
         }
+        if maximum > 1.0 {
+            let denom = maximum - anchor;
+            if denom > 1.0e-6 {
+                scale = scale.min((1.0 - anchor) / denom);
+            } else {
+                scale = 0.0;
+            }
+        }
+        for ch in &mut rgb {
+            *ch = anchor + (*ch - anchor) * scale.clamp(0.0, 1.0);
+            *ch = (*ch).clamp(0.0, 1.0);
+        }
+        return rgb;
     }
-
-    if maximum > 1.0 {
-        let denominator = maximum - anchor;
-        if denominator > 1.0e-6 {
-            scale = scale.min((1.0 - anchor) / denominator);
+    // Highlight case: OKLab hue-preserving chroma reduction.
+    let in_gamut = rgb[0] >= 0.0 && rgb[0] <= 1.0 && rgb[1] >= 0.0 && rgb[1] <= 1.0 && rgb[2] >= 0.0 && rgb[2] <= 1.0;
+    if in_gamut {
+        return rgb;
+    }
+    let lab = crate::oklab::from_linear_srgb(rgb);
+    let chroma = lab.chroma();
+    if chroma < crate::oklab::CHROMA_FLOOR {
+        // Near-neutral but out of gamut (e.g., L out of range): clamp
+        return [rgb[0].clamp(0.0, 1.0), rgb[1].clamp(0.0, 1.0), rgb[2].clamp(0.0, 1.0)];
+    }
+    // Binary search for max chroma scale that yields in-gamut sRGB.
+    let mut low = 0.0f32;
+    let mut high = 1.0f32;
+    let achro = crate::oklab::to_linear_srgb(crate::oklab::Oklab { l: lab.l, a: 0.0, b: 0.0 });
+    let mut best = [achro[0].clamp(0.0,1.0), achro[1].clamp(0.0,1.0), achro[2].clamp(0.0,1.0)];
+    // Achromatic is fallback, but we search for largest feasible chroma.
+    for _ in 0..20 {
+        let mid = (low + high) * 0.5;
+        let test_lab = crate::oklab::Oklab { l: lab.l, a: lab.a * mid, b: lab.b * mid };
+        let test_rgb = crate::oklab::to_linear_srgb(test_lab);
+        let feasible = test_rgb[0] >= 0.0 && test_rgb[0] <= 1.0 && test_rgb[1] >= 0.0 && test_rgb[1] <= 1.0 && test_rgb[2] >= 0.0 && test_rgb[2] <= 1.0;
+        if feasible {
+            low = mid;
+            best = test_rgb;
         } else {
-            scale = 0.0;
+            high = mid;
         }
     }
-
-    for channel in &mut rgb {
-        *channel = anchor + (*channel - anchor) * scale.clamp(0.0, 1.0);
-        *channel = (*channel).clamp(0.0, 1.0);
-    }
-
-    rgb
+    // If even the low end is not feasible (shouldn't happen for L in [0,1]), clamp
+    best[0] = best[0].clamp(0.0, 1.0);
+    best[1] = best[1].clamp(0.0, 1.0);
+    best[2] = best[2].clamp(0.0, 1.0);
+    best
 }
 
 /// Convert working-space linear RGB to display (sRGB primaries) linear RGB.
@@ -345,13 +376,53 @@ fn render_pixel_linear(
     // curve and the chroma anchor disagreed about where black is. They now agree.
     let mapped_luminance = luminance(rgb).clamp(params.black_output_linear, 1.0);
 
-    let highlight_saturation = 1.0 - params.highlight_desaturation * normalized_highlight.powi(2);
-
     let maximum = rgb[0].max(rgb[1]).max(rgb[2]);
     let minimum = rgb[0].min(rgb[1]).min(rgb[2]);
+    // Slice 6: uncertainty-gated chroma limiting. Where highlight
+    // reconstruction synthesized color, reduce the saturation/vibrance
+    // boost. Per-channel smoothstep 0.92->0.985 (per-white_level via
+    // normalized display linear) gives r = max(c_i); u blends with
+    // mean confidence so 1-clip (one channel near white) is mild,
+    // 2-clip stronger, 3-clip strongest, all continuous. This is
+    // C_gain = C_normal * (1 - u*d) from the advice, interpolated
+    // rather than hard-switched on clip count.
     let chroma = (maximum - minimum).clamp(0.0, 1.0);
     let midtone_weight = 1.0 - ((mapped_luminance - 0.5).abs() * 2.0).clamp(0.0, 1.0);
-    let adaptive_vibrance = 1.0 + params.vibrance * (1.0 - chroma) * midtone_weight;
+    let mut adaptive_vibrance = 1.0 + params.vibrance * (1.0 - chroma) * midtone_weight;
+    {
+        // Use the pre-highlight_saturation rgb (still display linear)
+        // to estimate reconstruction uncertainty: how close to white
+        // were the source channels before the boost.
+        let cr = smoothstep(((maximum - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+        // More precise per-channel: average confidence
+        let c0 = smoothstep(((rgb[0] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+        let c1 = smoothstep(((rgb[1] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+        let c2 = smoothstep(((rgb[2] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+        let r = c0.max(c1).max(c2);
+        let mean_c = (c0 + c1 + c2) / 3.0;
+        let u = (r * (0.75 + 0.25 * mean_c)).clamp(0.0, 1.0);
+        // In highlights the preset's highlight_desaturation already pulls
+        // chroma in; uncertainty adds a further gain reduction. Reliable
+        // prior (u small) retains most chroma, 3-clip interior (u~1)
+        // strongly neutralizes. 0.45 keeps the Auto net 1.02 at the top
+        // from re-introducing false cyan/violet via the saturation boost.
+        let _ = cr; // keep for readability, r already captures it
+        adaptive_vibrance *= 1.0 - u * 0.45;
+        // Also gently increase highlight desaturation with u so the
+        // net 1.22*(1-0.16)=1.02 at the top becomes ~0.85 when uncertain.
+        // This is the per-pixel form of "global highlight_desaturation
+        // would flatten legitimate saturates" — we only flatten where
+        // color was synthesized.
+    }
+    let effective_highlight_desaturation = (params.highlight_desaturation + 0.35 * {
+        let c0 = smoothstep(((rgb[0] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+        let c1 = smoothstep(((rgb[1] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+        let c2 = smoothstep(((rgb[2] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+        let r = c0.max(c1).max(c2);
+        let mean_c = (c0 + c1 + c2) / 3.0;
+        (r * (0.75 + 0.25 * mean_c)).clamp(0.0, 1.0)
+    }).clamp(0.0, 1.0);
+    let highlight_saturation = 1.0 - effective_highlight_desaturation * normalized_highlight.powi(2);
 
     // Chroma is expanded around the pixel's own rendered luminance, so a large
     // enough scale drives the outermost channel past the white point the curve
@@ -485,6 +556,90 @@ pub fn render(
 
     ImageBuffer::from_raw(image.width as u32, image.height as u32, output)
         .expect("rendered buffer dimensions are internally consistent")
+}
+
+/// Write gamut diagnostics: display-linear before and after `compress_gamut`.
+///
+/// Best-effort, never fails the file. Called from the pipeline when
+/// `--dump-stages` is set, after `ToneParams` are solved.
+pub(crate) fn dump_gamut_diagnostics(
+    image: &LinearImage,
+    params: &ToneParams,
+    local_tone: Option<&crate::localtone::LocalToneMap>,
+    working_to_display: Option<&crate::color::Matrix3>,
+    dump_dir: &std::path::Path,
+    stem: &str,
+) {
+    let res: anyhow::Result<()> = (|| {
+        let lut = ToneLut::new(params);
+        let mut pre_linear = vec![0.0f32; image.pixels.len() * 3];
+        let mut post_linear = vec![0.0f32; image.pixels.len() * 3];
+        // Replicate render_pixel_linear but split before/after compress_gamut
+        let mut fill = |source: [f32; 3], exposure_gain: f32| -> ([f32; 3], [f32; 3]) {
+            let exposed = [source[0]*exposure_gain, source[1]*exposure_gain, source[2]*exposure_gain];
+            let exposed = match working_to_display {
+                Some(m) => [m[0][0]*exposed[0]+m[0][1]*exposed[1]+m[0][2]*exposed[2],
+                            m[1][0]*exposed[0]+m[1][1]*exposed[1]+m[1][2]*exposed[2],
+                            m[2][0]*exposed[0]+m[2][1]*exposed[1]+m[2][2]*exposed[2]],
+                None => exposed,
+            };
+            let src_lum = luminance(exposed).max(1.0e-8);
+            let max_chan = exposed[0].max(exposed[1]).max(exposed[2]).max(1.0e-8);
+            let hw = lut.weight(src_lum);
+            let norm = src_lum*(1.0-hw)+max_chan*hw;
+            let (mapped_norm, norm_high) = lut.curve(norm);
+            let ratio = (mapped_norm / norm).clamp(0.0, 64.0);
+            let mut rgb = [exposed[0]*ratio, exposed[1]*ratio, exposed[2]*ratio];
+            let mapped_lum = luminance(rgb).clamp(params.black_output_linear, 1.0);
+            let highlight_sat = 1.0 - params.highlight_desaturation * norm_high.powi(2);
+            let maximum = rgb[0].max(rgb[1]).max(rgb[2]);
+            let minimum = rgb[0].min(rgb[1]).min(rgb[2]);
+            let chroma = (maximum - minimum).clamp(0.0, 1.0);
+            let mid_w = 1.0 - ((mapped_lum - 0.5).abs()*2.0).clamp(0.0,1.0);
+            let adaptive = 1.0 + params.vibrance*(1.0-chroma)*mid_w;
+            let unboosted = adaptive*highlight_sat;
+            let headroom = {
+                let upper = if maximum > mapped_lum { (params.white_output_linear - mapped_lum)/(maximum - mapped_lum) } else { f32::INFINITY };
+                let lower = if minimum < mapped_lum { (mapped_lum - params.black_output_linear)/(mapped_lum - minimum) } else { f32::INFINITY };
+                upper.min(lower).max(unboosted)
+            };
+            let scale = (params.saturation * unboosted).min(headroom);
+            for ch in &mut rgb { *ch = mapped_lum + (*ch - mapped_lum)*scale; }
+            let pre = rgb;
+            let post = compress_gamut(rgb, mapped_lum);
+            (pre, post)
+        };
+        match local_tone {
+            Some(lt) => {
+                pre_linear.par_chunks_exact_mut(3).zip(post_linear.par_chunks_exact_mut(3))
+                    .zip(image.pixels.par_iter()).zip(lt.corrections_ev().par_iter())
+                    .for_each(|(((pre, post), src), ev)| {
+                        let gain = (params.exposure_ev + ev).exp2();
+                        let (a,b)=fill(*src,gain);
+                        pre.copy_from_slice(&a); post.copy_from_slice(&b);
+                    });
+            }
+            None => {
+                let gain = params.exposure_ev.exp2();
+                pre_linear.par_chunks_exact_mut(3).zip(post_linear.par_chunks_exact_mut(3))
+                    .zip(image.pixels.par_iter())
+                    .for_each(|((pre, post), src)| {
+                        let (a,b)=fill(*src,gain);
+                        pre.copy_from_slice(&a); post.copy_from_slice(&b);
+                    });
+            }
+        }
+        for (label, buf) in [("gamut-pre", pre_linear), ("gamut-post", post_linear)] {
+            let out = encode_srgb_u16(&buf);
+            let p = dump_dir.join(format!("{stem}-{label}.png"));
+            if let Some(parent)=p.parent(){ std::fs::create_dir_all(parent)?; }
+            let img: Rgb16Image = ImageBuffer::from_raw(image.width as u32, image.height as u32, out).expect("dims");
+            img.save(&p)?;
+            eprintln!("DUMP  {label}: {}", p.display());
+        }
+        Ok(())
+    })();
+    if let Err(e)=res { eprintln!("DUMP  gamut diagnostics failed for {stem}: {e}"); }
 }
 
 /// Batch sRGB encode: linear `[0, 1]` values straight to `u16`, in chunks run

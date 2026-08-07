@@ -14,3 +14,7 @@
 /raw
 /.codegraph
 /DNG_Spec_1_7_1_0.pdf
+
+# AKR: a rebuildable cache and disposable agent notes.
+.akr/cache/
+.agent/scratch/

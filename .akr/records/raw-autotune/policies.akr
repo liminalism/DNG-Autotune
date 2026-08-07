@@ -1,0 +1,50 @@
+akr 0.1
+project raw-autotune
+
+record raw-autotune.policy.context-and-current-facts/1 : policy {
+    title "Context And Current Facts"
+    state proposed
+    scope [ all ]
+    rule """
+        - **Advice diagnosis** (`docs/white-blowout-advice.md:8`): two problems in order — (1) autotuner manufactures false sky chroma during highlight reconstruction, (2) scene may still benefit from single-frame local tone mapping. Current code's three structural hazards: hard `0.98` demosaiced threshold, rule switch at 1→2 clipped channels, and `two-or-three clipped → near-white at strength 1.0` regardless of `0.75`. Output `clipped_fraction` on the defect frames is 0.0004% (`_DSC1289`) / 0.0008% (`_DSC1290`) so final clamp is not the cause.
+        - **Measured cohort** (`docs/HDR_EVALUATION.md:24`, `docs/white-blowout-advice.md:39`): `_DSC1289` 958,928 pixels ≥1 clipped, 344,861 with ≥2, 0 fully clipped; `_DSC1290` 801,061 clipped, 682,786 multi-channel, 5,828 fully clipped. `src/highlight.rs` already reports `near_white_pixels` (schema v14) but the pipeline still counts `near_white_fraction` coarsely in `src/analyze.rs:332` (`maximum >= 0.995`). White-blowout advice §"Metrics worth adding" explicitly calls that fraction inadequate.
+        - **Current reconstruction** (`src/highlight.rs:30`): runs on demosaiced camera RGB, threshold `CLIP_THRESHOLD=0.98`, `NEAR_WHITE_CLIPPED_CHANNELS=2`, survivor-anchored blend at `strength` for 1-clipped vs widened anchor over all channels at `1.0` for ≥2-clipped, never darkens. Tests pin `two_clipped_channels_land_on_one_white_balanced_level` and `near_white_reconstruction_is_independent_of_strength`. The advice says this regime switch is exactly what creates a processing-regime gradient following luminance contours.
+        - **Gamut stage** (`src/tone.rs:102` `compress_gamut`): scales RGB around `mapped_luminance` then per-channel clamp. Comments in `src/color.rs:33` and `src/tone.rs:335` describe the hand-off; advice §"Fix gamut mapping" says this is not perceptually hue-constant and can turn a small upstream error into a visible sky band. `src/oklab.rs` already provides `from_linear_srgb`, `hue`, `chroma`, `hue_difference` for measurement but not for rendering.
+        - **Pipeline ordering** (`src/pipeline.rs:58` `develop`, `src/color.rs` owned path, `src/rescale.rs:1`): decode → `apply_corrections` → rescale/normalize → demosaic (`src/demosaic.rs` select) → color matrix → `highlight::reconstruct` (inside `color::develop`) → `chroma.rs` → `whitebalance.rs` → `analyze.rs` → optional `localtone.rs` → `tone.rs:432` render. `dump_stages` today (`src/pipeline.rs:139`) only dumps scene-linear `LinearImage` after `tone::render_baseline` (transfer-function-only), and starts at `01-scene-linear` after `develop()`. Advice §"First step" requires dumps *before/after* reconstruction and before/after `compress_gamut` on the owned path, plus a clip-state map — none exist.
+        - **Existing invariants**: `docs/STATUS.md` regression gate, `CLAUDE.md` determinism (batch vs single, `--jobs` independence), `--highlight-reconstruction 0` / `--local-tone 0` byte-identical contracts, `REPORT_SCHEMA_VERSION` bump discipline in `src/types.rs:13`, `src/rescale.rs` invariants about not mutating `RawImage` for `src/noise.rs`. `docs/HDR_EVALUATION.md` already concluded HDR output does not address this defect (unclipped headroom <1 EV on all five blown-sky frames).
+        - **Chroma path coupling** (`src/analyze.rs:121`, `src/tone.rs:348`): `saturation=1.22`, `highlight_desaturation=0.16` → net highlight chroma factor 1.0248 at the shoulder, per advice §"Why the current code creates the gradient". There is a second amplifier where `highlight_norm` and chroma capping interact (`src/tone.rs:378`).
+        """
+    source {
+        kind legacy
+        path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
+        excerpt """
+            - **Advice diagnosis** (`docs/white-blowout-advice.md:8`): two problems in order — (1) autotuner manufactures false sky chroma during highlight reconstruction, (2) scene may still benefit from single-frame local tone mapping. Current code's three structural hazards: hard `0.98` demosaiced threshold, rule switch at 1→2 clipped channels, and `two-or-three clipped → near-white at strength 1.0` regardless of `0.75`. Output `clipped_fraction` on the defect frames is 0.0004% (`_DSC1289`) / 0.0008% (`_DSC1290`) so final clamp is not the cause.
+            - **Measured cohort** (`docs/HDR_EVALUATION.md:24`, `docs/white-blowout-advice.md:39`): `_DSC1289` 958,928 pixels ≥1 clipped, 344,861 with ≥2, 0 fully clipped; `_DSC1290` 801,061 clipped, 682,786 multi-channel, 5,828 fully clipped. `src/highlight.rs` already reports `near_white_pixels` (schema v14) but the pipeline still counts `near_white_fraction` coarsely in `src/analyze.rs:332` (`maximum >= 0.995`). White-blowout advice §"Metrics worth adding" explicitly calls that fraction inadequate.
+            - **Current reconstruction** (`src/highlight.rs:30`): runs on demosaiced camera RGB, threshold `CLIP_THRESHOLD=0.98`, `NEAR_WHITE_CLIPPED_CHANNELS=2`, survivor-anchored blend at `strength` for 1-clipped vs widened anchor over all channels at `1.0` for ≥2-clipped, never darkens. Tests pin `two_clipped_channels_land_on_one_white_balanced_level` and `near_white_reconstruction_is_independent_of_strength`. The advice says this regime switch is exactly what creates a processing-regime gradient following luminance contours.
+            - **Gamut stage** (`src/tone.rs:102` `compress_gamut`): scales RGB around `mapped_luminance` then per-channel clamp. Comments in `src/color.rs:33` and `src/tone.rs:335` describe the hand-off; advice §"Fix gamut mapping" says this is not perceptually hue-constant and can turn a small upstream error into a visible sky band. `src/oklab.rs` already provides `from_linear_srgb`, `hue`, `chroma`, `hue_difference` for measurement but not for rendering.
+            - **Pipeline ordering** (`src/pipeline.rs:58` `develop`, `src/color.rs` owned path, `src/rescale.rs:1`): decode → `apply_corrections` → rescale/normalize → demosaic (`src/demosaic.rs` select) → color matrix → `highlight::reconstruct` (inside `color::develop`) → `chroma.rs` → `whitebalance.rs` → `analyze.rs` → optional `localtone.rs` → `tone.rs:432` render. `dump_stages` today (`src/pipeline.rs:139`) only dumps scene-linear `LinearImage` after `tone::render_baseline` (transfer-function-only), and starts at `01-scene-linear` after `develop()`. Advice §"First step" requires dumps *before/after* reconstruction and before/after `compress_gamut` on the owned path, plus a clip-state map — none exist.
+            - **Existing invariants**: `docs/STATUS.md` regression gate, `CLAUDE.md` determinism (batch vs single, `--jobs` independence), `--highlight-reconstruction 0` / `--local-tone 0` byte-identical contracts, `REPORT_SCHEMA_VERSION` bump discipline in `src/types.rs:13`, `src/rescale.rs` invariants about not mutating `RawImage` for `src/noise.rs`. `docs/HDR_EVALUATION.md` already concluded HDR output does not address this defect (unclipped headroom <1 EV on all five blown-sky frames).
+            - **Chroma path coupling** (`src/analyze.rs:121`, `src/tone.rs:348`): `saturation=1.22`, `highlight_desaturation=0.16` → net highlight chroma factor 1.0248 at the shoulder, per advice §"Why the current code creates the gradient". There is a second amplifier where `highlight_norm` and chroma capping interact (`src/tone.rs:378`).
+            """
+    }
+}
+
+record raw-autotune.policy.slice-3-new-metrics-phase-a-3-parallel-with/1 : policy {
+    title "Slice 3 — New metrics (Phase A.3, parallel with Slice 2)"
+    state proposed
+    scope [ all ]
+    rule """
+        - **Owns:** `src/metrics.rs`, `src/highlight.rs:119` `HighlightReport`, `src/types.rs` sidecar schema, `src/analyze.rs:330` near-white accounting.
+        - **Does:** replace single `near_white_fraction` policy with `fraction_{1,2,3}_clipped`, expose in `AnalysisStats` + `OutputStats` where appropriate; compute `reconstruction_uncertainty` distribution, hue discontinuity across clip-state boundaries (OKLab `hue_difference` on adjacent pixels straddling the boundary), low-freq hue total variation (blurred hue field over bright low-texture ROI), reconstruction chroma/luma delta, pre/post-gamut hue delta, fully-clipped component sizes (connected-component label, 4- or 8-connectivity, deterministic scan). Wire into `pipeline::process_job` sidecar and into `--dry-run --summary` JSON.
+        - **Depends on:** Slice 1 clip-state; otherwise independent.
+        """
+    source {
+        kind legacy
+        path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
+        excerpt """
+            - **Owns:** `src/metrics.rs`, `src/highlight.rs:119` `HighlightReport`, `src/types.rs` sidecar schema, `src/analyze.rs:330` near-white accounting.
+            - **Does:** replace single `near_white_fraction` policy with `fraction_{1,2,3}_clipped`, expose in `AnalysisStats` + `OutputStats` where appropriate; compute `reconstruction_uncertainty` distribution, hue discontinuity across clip-state boundaries (OKLab `hue_difference` on adjacent pixels straddling the boundary), low-freq hue total variation (blurred hue field over bright low-texture ROI), reconstruction chroma/luma delta, pre/post-gamut hue delta, fully-clipped component sizes (connected-component label, 4- or 8-connectivity, deterministic scan). Wire into `pipeline::process_job` sidecar and into `--dry-run --summary` JSON.
+            - **Depends on:** Slice 1 clip-state; otherwise independent.
+            """
+    }
+}

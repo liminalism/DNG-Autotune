@@ -278,6 +278,7 @@ pub fn render_file_rgb16(
                 snr10_ev: noise_floor.as_ref().map(|floor| floor.snr10_ev),
                 full_dng_color: options.full_dng_color,
                 lens_correction: options.lens_correction,
+                dump_stages: None,
             },
         )?,
         RawColorPath::Rawler => (develop_rawler(&raw)?, ColorReport::rawler(&raw)),

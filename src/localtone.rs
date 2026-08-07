@@ -332,6 +332,34 @@ pub fn build(
                     value *= 1.0 - smoothstep((detail_ev - 1.0) / 2.0);
                 }
 
+                // Slice 6: r-gated detail — suppress local contrast where
+                // highlight reconstruction uncertainty is high. Per-channel
+                // smoothstep (0.92→0.985, per-white_level via normalized linear)
+                // gives continuous confidence c_i in 0..1; r = max(c_i) is the
+                // reconstruction confidence for that pixel. We blend continuously
+                // rather than switching on hard clip count, so the 1→2 clipped
+                // boundary does not become a luminance-contour artifact. Median
+                // stays near zero (median_base_ev) and the curve is never
+                // applied per-channel — one EV gain for all three.
+                {
+                    let cr = smoothstep(((source[0] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+                    let cg = smoothstep(((source[1] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+                    let cb = smoothstep(((source[2] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
+                    let r = cr.max(cg).max(cb);
+                    // Reliability: deep fully-clipped interior (all three high)
+                    // is less trustworthy than 1-channel at the boundary. Blend
+                    // via mean confidence rather than hard 0.98 count.
+                    let mean_c = (cr + cg + cb) / 3.0;
+                    // u blends between r (single channel) and mean-driven high
+                    // interior: u = r * (0.75 + 0.25*mean_c) so 1-clip -> ~0.75*r,
+                    // 3-clip -> ~r, continuous.
+                    let u = (r * (0.75 + 0.25 * mean_c)).clamp(0.0, 1.0);
+                    // Gate both lifts and compressions; 0.85 retains the
+                    // existing strength so --local-tone 0.35 HDR sky/ground
+                    // separation is preserved on trusted pixels.
+                    value *= 1.0 - u * 0.85;
+                }
+
                 *correction = value * strength;
             },
         );

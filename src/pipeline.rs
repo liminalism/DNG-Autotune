@@ -119,6 +119,7 @@ fn develop(
                 snr10_ev,
                 full_dng_color: options.full_dng_color,
                 lens_correction: options.lens_correction,
+                dump_stages: options.dump_stages.clone(),
             },
         ),
     }
@@ -635,6 +636,12 @@ fn process_job_inner(
         None
     };
     let local_tone_report = local_tone.as_ref().map(|map| map.report().clone());
+
+    // Gamut diagnostics: display-linear before/after compress_gamut
+    if let Some(dir) = &options.dump_stages {
+        let stem = job.input.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "unnamed".to_string());
+        crate::tone::dump_gamut_diagnostics(&linear, &parameters, local_tone.as_ref(), working_to_display.as_ref(), dir, &stem);
+    }
 
     if options.dry_run {
         return Ok(ProcessReport {

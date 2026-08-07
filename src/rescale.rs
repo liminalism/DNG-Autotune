@@ -151,6 +151,31 @@ impl std::fmt::Debug for NormalizedSamples {
     }
 }
 
+/// Per-sample clip confidence in 0.0..=1.0, smoothstep around white.
+///
+/// Computed in normalized space (0 is black, 1 is the per-channel white
+/// level) so it is already per-channel white_level aware.  Values near
+/// white are near 1, well-exposed are 0.  Preserved through hot-pixel
+/// correction and demosaiced alongside the samples so highlight reconstruction
+/// does not have to infer clipping from a demosaiced value that has been
+/// averaged below the threshold.
+#[derive(Debug)]
+pub enum ClipConfidence {
+    Mosaic(Vec<f32>),
+    Linear3(Vec<[f32; 3]>),
+    Linear4(Vec<[f32; 4]>),
+}
+
+#[inline]
+fn smoothstep_clip(x: f32) -> f32 {
+    const T0: f32 = 0.92;
+    const T1: f32 = 0.985;
+    if x <= T0 { return 0.0; }
+    if x >= T1 { return 1.0; }
+    let t = ((x - T0) / (T1 - T0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// The result of [`normalize`]: samples in `0.0..=1.0` for an in-range sensor,
 /// below zero where the noise floor dips under black and the policy kept it, and
 /// above one where a sample exceeds the white level.
@@ -159,6 +184,7 @@ pub struct Normalized {
     pub samples: NormalizedSamples,
     pub width: usize,
     pub height: usize,
+    pub clip_confidence: ClipConfidence,
     pub report: RescaleReport,
 }
 
@@ -362,10 +388,34 @@ pub fn normalize(raw: &RawImage, policy: SubBlack) -> Result<Normalized> {
         notes,
     };
 
+    let clip_confidence = match &samples {
+        NormalizedSamples::Mosaic(data) => {
+            ClipConfidence::Mosaic(data.iter().map(|&x| smoothstep_clip(x)).collect())
+        }
+        NormalizedSamples::Linear3(data) => ClipConfidence::Linear3(
+            data.iter()
+                .map(|px| [smoothstep_clip(px[0]), smoothstep_clip(px[1]), smoothstep_clip(px[2])])
+                .collect(),
+        ),
+        NormalizedSamples::Linear4(data) => ClipConfidence::Linear4(
+            data.iter()
+                .map(|px| {
+                    [
+                        smoothstep_clip(px[0]),
+                        smoothstep_clip(px[1]),
+                        smoothstep_clip(px[2]),
+                        smoothstep_clip(px[3]),
+                    ]
+                })
+                .collect(),
+        ),
+    };
+
     Ok(Normalized {
         samples,
         width,
         height,
+        clip_confidence,
         report,
     })
 }

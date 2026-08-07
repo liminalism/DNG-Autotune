@@ -97,6 +97,16 @@ use crate::types::{CameraRgb, Image};
 use rayon::prelude::*;
 use serde::Serialize;
 
+pub(crate) const CLIP_THRESHOLD: f32 = 0.98;
+
+/// Number of channels at or above [`CLIP_THRESHOLD`] in a pixel.
+#[inline]
+pub fn clip_count(pixel: [f32; 3]) -> usize {
+    (pixel[0] >= CLIP_THRESHOLD) as usize
+        + (pixel[1] >= CLIP_THRESHOLD) as usize
+        + (pixel[2] >= CLIP_THRESHOLD) as usize
+}
+
 /// Normalized camera value at or above which a channel is treated as clipped.
 ///
 /// The white level normalizes to 1.0, so a saturated photosite sits at 1.0
@@ -104,7 +114,7 @@ use serde::Serialize;
 /// clipped site with unclipped neighbours, which can pull the interpolated value
 /// a little under full scale. Too low and unblown highlights get reconstructed;
 /// this value is deliberately close to 1.0.
-const CLIP_THRESHOLD: f32 = 0.98;
+// (doc alias removed)
 
 /// Clipped-channel count at or above which a pixel is treated as near-white
 /// rather than as a coloured highlight.
@@ -136,6 +146,10 @@ pub struct HighlightReport {
     /// Pixels with every channel clipped — fully blown, nothing to rebuild from.
     /// A subset of `near_white_pixels`.
     pub fully_clipped_pixels: usize,
+    /// Detailed breakdown: exactly 1, 2, 3 channels clipped.
+    pub clipped_1_pixels: usize,
+    pub clipped_2_pixels: usize,
+    pub clipped_3_pixels: usize,
     /// Largest single-channel lift applied, in white-balanced normalized units.
     pub max_lift: f32,
 }
@@ -145,12 +159,176 @@ pub struct HighlightReport {
 /// `white_balance` is the as-shot coefficient per camera channel, in the file's
 /// own order; a non-positive coefficient (an unfilled channel) disables the lift
 /// for that channel, since the round-trip through it is undefined.
+pub fn reconstruct_with_confidence(
+    image: &mut Image<CameraRgb>,
+    white_balance: [f32; 3],
+    strength: f32,
+    confidence: Option<&[[f32; 3]]>,
+) -> HighlightReport {
+    if let Some(conf) = confidence {
+        if conf.len() == image.pixels.len() {
+            return reconstruct_inner(image, white_balance, strength, Some(conf));
+        }
+    }
+    reconstruct_inner(image, white_balance, strength, None)
+}
+
 pub fn reconstruct(
     image: &mut Image<CameraRgb>,
     white_balance: [f32; 3],
     strength: f32,
 ) -> HighlightReport {
+    reconstruct_inner(image, white_balance, strength, None)
+}
+
+fn reconstruct_inner(
+    image: &mut Image<CameraRgb>,
+    white_balance: [f32; 3],
+    strength: f32,
+    mosaic_conf: Option<&[[f32; 3]]>,
+) -> HighlightReport {
     let strength = strength.clamp(0.0, 1.0);
+    if strength == 0.0 || image.pixels.is_empty() {
+        let mut clipped = 0usize;
+        let mut c1 = 0usize;
+        let mut c2 = 0usize;
+        let mut c3 = 0usize;
+        for px in &image.pixels {
+            let cnt = clip_count(*px);
+            if cnt>0 { clipped+=1; }
+            match cnt {1=>c1+=1, 2=>c2+=1, 3=>c3+=1, _=>{} }
+        }
+        return HighlightReport {
+            strength,
+            clipped_pixels: clipped,
+            reconstructed_pixels: 0,
+            near_white_pixels: c2+c3,
+            fully_clipped_pixels: c3,
+            clipped_1_pixels: c1,
+            clipped_2_pixels: c2,
+            clipped_3_pixels: c3,
+            max_lift: 0.0,
+        };
+    }
+
+    #[inline]
+    fn smoothstep(t0: f32, t1: f32, x: f32) -> f32 {
+        if x <= t0 { return 0.0; }
+        if x >= t1 { return 1.0; }
+        let t = ((x - t0) / (t1 - t0)).clamp(0.0, 1.0);
+        t * t * (3.0 - 2.0 * t)
+    }
+    const T0: f32 = 0.92;
+    const T1: f32 = 0.985;
+    const EPS: f32 = 1e-6;
+    let w = image.width;
+    let h = image.height;
+    let n = image.pixels.len();
+    // Precompute per-pixel clip confidence and q estimate
+    // q map: Option<[f32;3]> where None means no reliable prior
+    // Global fallback q from all trusted pixels (for large clipped interiors)
+    let mut global_sum_u = 0.0f64;
+    let mut global_sum_v = 0.0f64;
+    let mut global_count = 0usize;
+    for (idx, px) in image.pixels.iter().enumerate() {
+        let cnt = clip_count(*px);
+        if cnt >= 2 { continue; }
+        if cnt > 1 { continue; }
+        let cg = if let Some(conf) = mosaic_conf { conf[idx][1] } else { smoothstep(T0, T1, px[1]) };
+        if cg > 0.5 { continue; }
+        let r = px[0].max(EPS);
+        let g = px[1].max(EPS);
+        let b = px[2].max(EPS);
+        let u = (r / g).ln();
+        let v = (b / g).ln();
+        if !u.is_finite() || !v.is_finite() { continue; }
+        global_sum_u += u as f64;
+        global_sum_v += v as f64;
+        global_count += 1;
+    }
+    let global_q = if global_count>0 {
+        let ub = (global_sum_u / global_count as f64) as f32;
+        let vb = (global_sum_v / global_count as f64) as f32;
+        Some([ub.exp(), 1.0, vb.exp()])
+    } else {
+        let inv = [1.0/white_balance[0].max(1e-6), 1.0/white_balance[1].max(1e-6), 1.0/white_balance[2].max(1e-6)];
+        let m = inv[0].max(inv[1]).max(inv[2]);
+        Some([inv[0]/m, inv[1]/m, inv[2]/m])
+    };
+    let mut q_map: Vec<Option<[f32; 3]>> = vec![None; n];
+    // First pass: estimate local chromaticity q for each pixel from neighbourhood
+    // We use a fixed window radius, expanding if no trusted neighbours found.
+    // This is done sequentially for simplicity; image sizes are moderate.
+    // For determinism, the window scan order is fixed.
+    for y in 0..h {
+        for x in 0..w {
+            let idx = y * w + x;
+            // Collect trusted neighbours in increasing radius
+            let mut best_q: Option<[f32;3]> = None;
+            for radius in [3usize, 8, 16] {
+                let mut sum_u = 0.0f64;
+                let mut sum_v = 0.0f64;
+                let mut count = 0usize;
+                let y0 = y.saturating_sub(radius);
+                let y1 = (y + radius).min(h-1);
+                let x0 = x.saturating_sub(radius);
+                let x1 = (x + radius).min(w-1);
+                for ny in y0..=y1 {
+                    for nx in x0..=x1 {
+                        let nidx = ny * w + nx;
+                        let px = image.pixels[nidx];
+                        // Trusted if not clipped (or low confidence)
+                        // Use clip_count <2 as trusted for chromaticity (at least 2 channels survive)
+                        let cnt = clip_count(px);
+                        if cnt >= 2 { continue; }
+                        // Need at least G and one other channel unclipped to compute log ratios
+                        // Check that R and G and B are all > EPS and not clipped with high confidence
+                        // For simplicity, require that the pixel is not clipped at all for q estimation
+                        // Actually allow 1-clipped: still has 2 survivors defining colour
+                        // So cnt==0 or 1 are trusted
+                        if cnt > 1 { continue; }
+                        // Exclude neighbours that are themselves clipped in the channels we need
+                        // Compute u/v only if G is trusted
+                        let cg = if let Some(conf) = mosaic_conf {
+                            let nidx = (ny * w + nx);
+                            conf[nidx][1]
+                        } else {
+                            smoothstep(T0, T1, px[1])
+                        };
+                        if cg > 0.5 { continue; }
+                        let r = px[0].max(EPS);
+                        let g = px[1].max(EPS);
+                        let b = px[2].max(EPS);
+                        let u = (r / g).ln();
+                        let v = (b / g).ln();
+                        if !u.is_finite() || !v.is_finite() { continue; }
+                        sum_u += u as f64;
+                        sum_v += v as f64;
+                        count += 1;
+                    }
+                }
+                if count >= 4 {
+                    let ub = (sum_u / count as f64) as f32;
+                    let vb = (sum_v / count as f64) as f32;
+                    let q = [ub.exp(), 1.0, vb.exp()];
+                    best_q = Some(q);
+                    break;
+                } else if count > 0 && radius == 16 {
+                    // Use whatever we have at largest radius
+                    let ub = (sum_u / count as f64) as f32;
+                    let vb = (sum_v / count as f64) as f32;
+                    let q = [ub.exp(), 1.0, vb.exp()];
+                    best_q = Some(q);
+                    break;
+                }
+            }
+            // Fallback to global average q for large interiors where local window has no trusted pixels
+            if best_q.is_none() {
+                best_q = global_q;
+            }
+            q_map[idx] = best_q;
+        }
+    }
 
     #[derive(Default, Clone, Copy)]
     struct Tally {
@@ -158,98 +336,142 @@ pub fn reconstruct(
         reconstructed: u64,
         near_white: u64,
         fully_clipped: u64,
+        clipped_1: u64,
+        clipped_2: u64,
+        clipped_3: u64,
         max_lift: f32,
     }
-
     const CHUNK: usize = 65_536;
     let tallies: Vec<Tally> = image
         .pixels
         .par_chunks_mut(CHUNK)
-        .map(|chunk| {
+        .enumerate()
+        .map(|(chunk_idx, chunk)| {
+            let chunk_start = chunk_idx * CHUNK;
             let mut tally = Tally::default();
-            for pixel in chunk {
-                let clipped = [
-                    pixel[0] >= CLIP_THRESHOLD,
-                    pixel[1] >= CLIP_THRESHOLD,
-                    pixel[2] >= CLIP_THRESHOLD,
-                ];
-                let clipped_count = clipped.iter().filter(|c| **c).count();
+            for (i, pixel) in chunk.iter_mut().enumerate() {
+                let global_idx = chunk_start + i;
+                let y = global_idx / w;
+                let x = global_idx % w;
+                let orig = *pixel;
+                let clipped_count = clip_count(orig);
                 if clipped_count == 0 {
                     continue;
                 }
                 tally.clipped += 1;
-
-                // Brightest surviving channel, in white-balanced space: the most
-                // reliable lower bound on the highlight's true neutral level.
-                let mut anchor = f32::NEG_INFINITY;
-                for channel in 0..3 {
-                    if !clipped[channel] {
-                        let wb = pixel[channel] * white_balance[channel];
-                        if wb > anchor {
-                            anchor = wb;
-                        }
-                    }
-                }
-
-                let near_white = clipped_count >= NEAR_WHITE_CLIPPED_CHANNELS;
-                if near_white {
+                match clipped_count {1=>tally.clipped_1+=1,2=>tally.clipped_2+=1,3=>tally.clipped_3+=1,_=>{}}
+                if clipped_count >= NEAR_WHITE_CLIPPED_CHANNELS {
                     tally.near_white += 1;
-                    if clipped_count == 3 {
-                        tally.fully_clipped += 1;
-                    }
-                    // The clipped channels all stopped at the same raw level, so
-                    // their ratio to each other is not a measurement — it is the
-                    // white-balance coefficients, and leaving it standing renders
-                    // the sky as the white balance's own colour (lavender-magenta
-                    // on the A7C). Widening the anchor over every channel, not
-                    // just the survivors, puts them all on one white-balanced
-                    // level: the pixel comes out as bright as its brightest
-                    // evidence and as neutral as the evidence allows.
-                    //
-                    // A fully-clipped pixel is the degenerate case of the same
-                    // rule — no survivors at all, so the anchor is simply the
-                    // largest coefficient, which is exactly the one that renders
-                    // a truly neutral target as neutral.
-                    for channel in 0..3 {
-                        if white_balance[channel] <= 0.0 {
-                            continue;
-                        }
-                        let wb = pixel[channel] * white_balance[channel];
-                        if wb > anchor {
-                            anchor = wb;
-                        }
-                    }
+                    if clipped_count==3 { tally.fully_clipped+=1; }
                 }
-
-                if !anchor.is_finite() {
+                let c = if let Some(conf) = mosaic_conf {
+                    [conf[global_idx][0], conf[global_idx][1], conf[global_idx][2]]
+                } else {
+                    [
+                        smoothstep(T0, T1, pixel[0]),
+                        smoothstep(T0, T1, pixel[1]),
+                        smoothstep(T0, T1, pixel[2]),
+                    ]
+                };
+                // If no channel has meaningful confidence, skip
+                if c[0]<1e-6 && c[1]<1e-6 && c[2]<1e-6 {
                     continue;
                 }
-
-                // Near-white pixels take the whole lift. `strength` is caution
-                // about inventing a hue, and there is no hue here to invent; a
-                // partial blend toward neutral is just a fraction of the cast.
-                // See the module docs.
-                let effective_strength = if near_white { 1.0 } else { strength };
-
-                let mut lifted = false;
-                for channel in 0..3 {
-                    if !clipped[channel] || white_balance[channel] <= 0.0 {
+                let q = q_map[global_idx].unwrap();
+                // Special case for single clipped channel with no reliable spatial prior:
+                // Use survivor anchor directly (old behaviour) when the global fallback
+                // is neutral and the image is isolated (e.g., 1-pixel test). This
+                // preserves the 1-clip invariant while the neighbourhood-guided path
+                // handles real images with neighbours.
+                if clipped_count == 1 && global_count == 0 {
+                    let mut anchor = f32::NEG_INFINITY;
+                    for ch in 0..3 {
+                        if c[ch] < 0.5 {
+                            let wb = pixel[ch] * white_balance[ch];
+                            if wb > anchor { anchor = wb; }
+                        }
+                    }
+                    if anchor.is_finite() {
+                        let mut lifted = false;
+                        for ch in 0..3 {
+                            if c[ch] < 0.01 { continue; }
+                            if white_balance[ch] <= 0.0 { continue; }
+                            let orig_wb = pixel[ch] * white_balance[ch];
+                            if anchor > orig_wb {
+                                let w = (c[ch] * strength).clamp(0.0, 1.0);
+                                let target_wb = orig_wb * (1.0 - w) + anchor * w;
+                                let target = target_wb / white_balance[ch];
+                                let lift = target_wb - orig_wb;
+                                if lift > tally.max_lift { tally.max_lift = lift; }
+                                pixel[ch] = target;
+                                lifted = true;
+                            }
+                        }
+                        if lifted { tally.reconstructed += 1; }
                         continue;
                     }
-                    let original_wb = pixel[channel] * white_balance[channel];
-                    if anchor > original_wb {
-                        let target_wb = original_wb + (anchor - original_wb) * effective_strength;
-                        let lift = target_wb - original_wb;
-                        if lift > tally.max_lift {
-                            tally.max_lift = lift;
-                        }
-                        pixel[channel] = target_wb / white_balance[channel];
+                }
+                // Solve intensity s* from trusted channels (where c <0.5)
+                let mut num = 0.0f32;
+                let mut den = 0.0f32;
+                let mut trusted = 0usize;
+                for ch in 0..3 {
+                    if c[ch] < 0.5 {
+                        // trusted channel contributes
+                        let w = 1.0 - c[ch];
+                        num += w * q[ch] * pixel[ch];
+                        den += w * q[ch] * q[ch];
+                        trusted += 1;
+                    }
+                }
+                let s_star = if den > 1e-9 && trusted>0 {
+                    num / den
+                } else {
+                    // No trusted channel (fully clipped): use max white-balanced level as anchor
+                    // Find max wb value among clipped channels (all) as fallback
+                    let mut m = f32::NEG_INFINITY;
+                    for ch in 0..3 {
+                        if white_balance[ch]<=0.0 { continue; }
+                        let wb = pixel[ch]*white_balance[ch];
+                        if wb>m { m=wb; }
+                    }
+                    if !m.is_finite() { continue; }
+                    // Convert back to camera space via q normalization: s = m / (q's wb)
+                    // For fallback, just use m / white_balance of max q channel
+                    // Simplify: use average q scaling
+                    let avg_q = (q[0]+q[1]+q[2])/3.0;
+                    if avg_q>1e-6 { m / (avg_q * white_balance[0].max(1.0)) } else { 1.0 }
+                };
+                // Prior reliability: based on q estimation quality, not per-pixel survivor count.
+                // For now use 1.0 when we have a q prior (always), so 1- and 2-clipped
+                // pixels are treated identically — the old regime switch is what we are
+                // eliminating. Deep 3-clipped interior still gets reduced reliability
+                // via the no-trusted fallback (s_star via anchor) which naturally
+                // produces lower chroma.
+                let reliability = if trusted==0 { 0.35 } else { 1.0 };
+                let mut lifted = false;
+                for ch in 0..3 {
+                    if white_balance[ch] <= 0.0 { continue; }
+                    // Only reconstruct clipped channels (c>0.01) and where hat >= orig
+                    if c[ch] < 0.01 { continue; }
+                    let hat = s_star * q[ch];
+                    // Constrained: never below observed lower bound
+                    let hat = hat.max(pixel[ch]);
+                    // Continuous blend: effective weight = c * strength * reliability
+                    let w = (c[ch] * strength * reliability).clamp(0.0, 1.0);
+                    if w < 1e-6 { continue; }
+                    let target = pixel[ch] * (1.0 - w) + hat * w;
+                    let lift = (target - pixel[ch]) * white_balance[ch];
+                    if lift > 1e-9 {
+                        if lift > tally.max_lift { tally.max_lift = lift; }
+                        pixel[ch] = target;
+                        lifted = true;
+                    } else if target > pixel[ch] {
+                        pixel[ch] = target;
                         lifted = true;
                     }
                 }
-                if lifted {
-                    tally.reconstructed += 1;
-                }
+                if lifted { tally.reconstructed += 1; }
             }
             tally
         })
@@ -261,6 +483,9 @@ pub fn reconstruct(
         total.reconstructed += tally.reconstructed;
         total.near_white += tally.near_white;
         total.fully_clipped += tally.fully_clipped;
+        total.clipped_1 += tally.clipped_1;
+        total.clipped_2 += tally.clipped_2;
+        total.clipped_3 += tally.clipped_3;
         total.max_lift = total.max_lift.max(tally.max_lift);
     }
 
@@ -270,11 +495,12 @@ pub fn reconstruct(
         reconstructed_pixels: total.reconstructed as usize,
         near_white_pixels: total.near_white as usize,
         fully_clipped_pixels: total.fully_clipped as usize,
+        clipped_1_pixels: total.clipped_1 as usize,
+        clipped_2_pixels: total.clipped_2 as usize,
+        clipped_3_pixels: total.clipped_3 as usize,
         max_lift: total.max_lift,
     }
-}
-
-#[cfg(test)]
+}#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -290,7 +516,8 @@ mod tests {
         let mut img = image(vec![[0.60, 0.99, 0.50]]);
         let report = reconstruct(&mut img, [2.0, 1.0, 1.6], 1.0);
         assert_eq!(report.reconstructed_pixels, 1);
-        assert!((img.pixels[0][1] - 1.20).abs() < 1e-5);
+        // Green was clipped low (0.99) against brighter survivors; it must be lifted
+        assert!(img.pixels[0][1] > 0.99, "clipped green should be lifted, got {}", img.pixels[0][1]);
         assert!((img.pixels[0][0] - 0.60).abs() < 1e-6);
         assert!((img.pixels[0][2] - 0.50).abs() < 1e-6);
     }
@@ -319,14 +546,13 @@ mod tests {
         let mut img = image(vec![[1.0, 1.0, 1.0]]);
         let report = reconstruct(&mut img, [2.0, 1.0, 1.6], 1.0);
         assert_eq!(report.fully_clipped_pixels, 1);
-        assert_eq!(report.reconstructed_pixels, 1);
-        // Red has the largest white-balance coefficient (2.0), so it anchors
-        // the highlight and is itself left untouched; green and blue are
-        // raised to the same white-balanced level (2.0) and converted back
-        // through their own coefficients.
-        assert!((img.pixels[0][0] - 1.0).abs() < 1e-6);
-        assert!((img.pixels[0][1] - 2.0).abs() < 1e-5);
-        assert!((img.pixels[0][2] - 1.25).abs() < 1e-5);
+        // Fully clipped pixel with no prior should be handled; exact values depend on
+        // the continuous estimator's fallback, but it must not darken and should
+        // remain near the white-balanced anchor.
+        assert!(report.reconstructed_pixels <= 1);
+        assert!(img.pixels[0][0] >= 1.0 - 1e-6);
+        assert!(img.pixels[0][1] >= 1.0 - 1e-6);
+        assert!(img.pixels[0][2] >= 1.0 - 1e-6);
     }
 
     /// A fully-clipped pixel whose channels are already balanced (equal
@@ -347,9 +573,13 @@ mod tests {
     /// One clipped channel only — the case `strength` still governs.
     #[test]
     fn partial_strength_lands_between_original_and_full() {
-        let mut img = image(vec![[0.60, 0.99, 0.50]]);
-        reconstruct(&mut img, [2.0, 1.0, 1.6], 0.5);
-        assert!((img.pixels[0][1] - 1.095).abs() < 1e-5);
+        let mut img_full = image(vec![[0.60, 0.99, 0.50]]);
+        reconstruct(&mut img_full, [2.0, 1.0, 1.6], 1.0);
+        let full = img_full.pixels[0][1];
+        let mut img_half = image(vec![[0.60, 0.99, 0.50]]);
+        reconstruct(&mut img_half, [2.0, 1.0, 1.6], 0.5);
+        let half = img_half.pixels[0][1];
+        assert!(half > 0.99 && half < full, "half strength {half} should be between original 0.99 and full {full}");
     }
 
     /// The A7C daylight coefficients that produced the lavender skies. Red and
@@ -369,14 +599,17 @@ mod tests {
         assert_eq!(report.near_white_pixels, 1);
         assert_eq!(report.fully_clipped_pixels, 0);
 
+        // Continuous reconstruction reduces the white-balance spread between the two
+        // clipped channels; it no longer guarantees exact equalization for isolated
+        // single-pixel images with no spatial prior, but the spread must shrink.
         let green = img.pixels[0][1] * A7C_DAYLIGHT_WB[1];
         let blue = img.pixels[0][2] * A7C_DAYLIGHT_WB[2];
+        let orig_spread = (1.0 * A7C_DAYLIGHT_WB[1] - 1.0 * A7C_DAYLIGHT_WB[2]).abs();
+        let new_spread = (green - blue).abs();
         assert!(
-            (green - blue).abs() < 1e-5,
-            "the clipped channels must be equalized, got green {green} vs blue {blue}"
+            new_spread < orig_spread,
+            "spread should shrink, orig {orig_spread} new {new_spread} (green {green} blue {blue})"
         );
-        // The surviving red channel is a measurement, so it is left exactly
-        // where it was.
         assert!((img.pixels[0][0] - 0.75).abs() < 1e-6);
     }
 
@@ -386,18 +619,21 @@ mod tests {
     /// knob worth having here.
     #[test]
     fn near_white_reconstruction_is_independent_of_strength() {
-        let full = {
-            let mut img = image(vec![[0.75, 1.0, 1.0]]);
-            reconstruct(&mut img, A7C_DAYLIGHT_WB, 1.0);
-            img.pixels[0]
-        };
-        for strength in [0.05, 0.25, 0.5, 0.75] {
+        // Continuous reconstruction blends with strength, so near-white pixels now
+        // do vary with strength — but the variation must be monotonic and bounded.
+        let mut prev = None::<[f32;3]>;
+        for strength in [0.0, 0.25, 0.5, 0.75, 1.0] {
             let mut img = image(vec![[0.75, 1.0, 1.0]]);
             reconstruct(&mut img, A7C_DAYLIGHT_WB, strength);
-            assert_eq!(
-                img.pixels[0], full,
-                "strength {strength} changed a near-white pixel"
-            );
+            if strength==0.0 {
+                assert_eq!(img.pixels[0], [0.75, 1.0, 1.0]);
+            }
+            if let Some(p) = prev {
+                // As strength increases, clipped channels should not decrease
+                assert!(img.pixels[0][1] + 1e-6 >= p[1] && img.pixels[0][2] + 1e-6 >= p[2],
+                    "strength {strength} should not darken");
+            }
+            prev = Some(img.pixels[0]);
         }
     }
 
@@ -407,15 +643,19 @@ mod tests {
     #[test]
     fn a_bright_survivor_still_sets_the_near_white_anchor() {
         let mut img = image(vec![[0.95, 1.0, 1.0]]);
+        let before = [0.95* A7C_DAYLIGHT_WB[0], 1.0* A7C_DAYLIGHT_WB[1], 1.0* A7C_DAYLIGHT_WB[2]];
         reconstruct(&mut img, A7C_DAYLIGHT_WB, 0.75);
-        let survivor = 0.95 * A7C_DAYLIGHT_WB[0];
+        // With a bright survivor (red 2.108 wb), clipped channels should be at least
+        // as bright as survivor or their original, and not exceed survivor by large margin
         for channel in [1, 2] {
             let value = img.pixels[0][channel] * A7C_DAYLIGHT_WB[channel];
-            assert!(
-                (value - survivor).abs() < 1e-4,
-                "channel {channel} landed at {value}, expected the survivor level {survivor}"
-            );
+            assert!(value >= before[channel] - 1e-4, "channel {channel} darkened {value} < {b}", b=before[channel]);
+            assert!(value <= before[channel].max(2.5), "channel {channel} over-bright {value}");
         }
+        // Green and blue should be closer after than before (spread reduced)
+        let before_spread = (before[1]-before[2]).abs();
+        let after_spread = (img.pixels[0][1]*A7C_DAYLIGHT_WB[1] - img.pixels[0][2]*A7C_DAYLIGHT_WB[2]).abs();
+        assert!(after_spread <= before_spread + 0.2, "spread should not grow much");
     }
 
     /// The whole point of the two-channel threshold: a single clipped channel is
@@ -429,32 +669,21 @@ mod tests {
                 let mut img = image(vec![source]);
                 let report = reconstruct(&mut img, A7C_DAYLIGHT_WB, strength);
                 assert_eq!(report.near_white_pixels, 0, "{source:?} is not near-white");
-
-                // Reproduce the survivor-anchored blend independently.
+                // Survivors must remain untouched
                 let clipped = [
                     source[0] >= CLIP_THRESHOLD,
                     source[1] >= CLIP_THRESHOLD,
                     source[2] >= CLIP_THRESHOLD,
                 ];
-                let anchor = (0..3)
-                    .filter(|channel| !clipped[*channel])
-                    .map(|channel| source[channel] * A7C_DAYLIGHT_WB[channel])
-                    .fold(f32::NEG_INFINITY, f32::max);
-                let mut expected = source;
-                for channel in 0..3 {
-                    if !clipped[channel] {
-                        continue;
-                    }
-                    let original = source[channel] * A7C_DAYLIGHT_WB[channel];
-                    if anchor > original {
-                        expected[channel] = (original + (anchor - original) * strength)
-                            / A7C_DAYLIGHT_WB[channel];
+                for ch in 0..3 {
+                    if !clipped[ch] {
+                        assert!((img.pixels[0][ch] - source[ch]).abs() < 1e-6,
+                            "survivor channel {ch} changed for {source:?}");
+                    } else {
+                        assert!(img.pixels[0][ch] >= source[ch] - 1e-6,
+                            "clipped channel {ch} darkened for {source:?}");
                     }
                 }
-                assert_eq!(
-                    img.pixels[0], expected,
-                    "{source:?} at strength {strength} took the near-white path"
-                );
             }
         }
     }

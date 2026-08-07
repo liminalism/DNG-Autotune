@@ -659,6 +659,57 @@ fn apply_default_crop<T: Copy>(
     }
 }
 
+/// Propagate per-CFA confidence to per-output-pixel RGB confidence.
+///
+/// For each output pixel and each channel, average the confidence of that
+/// channel's CFA sites in a 3x3 window around the corresponding mosaic
+/// coordinate. This preserves the raw-domain evidence that demosaic would
+/// otherwise average below threshold.
+fn propagate_mosaic_confidence(
+    mosaic_conf: &[f32],
+    width: usize,
+    height: usize,
+    cfa: &rawler::CFA,
+    roi: Rect,
+    out_w: usize,
+    out_h: usize,
+) -> Vec<[f32; 3]> {
+    let mut out = Vec::with_capacity(out_w * out_h);
+    for y_out in 0..out_h {
+        for x_out in 0..out_w {
+            let x = roi.p.x + x_out;
+            let y = roi.p.y + y_out;
+            let mut acc = [0.0f32; 3];
+            let mut cnt = [0usize; 3];
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    if nx < 0 || ny < 0 || nx >= width as i32 || ny >= height as i32 {
+                        continue;
+                    }
+                    let nx = nx as usize;
+                    let ny = ny as usize;
+                    let color = cfa.cfa_color_at(ny, nx);
+                    let idx = ny * width + nx;
+                    let conf = mosaic_conf[idx];
+                    match color {
+                        rawler::cfa::CFAColor::RED => { acc[0] += conf; cnt[0] += 1; }
+                        rawler::cfa::CFAColor::GREEN => { acc[1] += conf; cnt[1] += 1; }
+                        rawler::cfa::CFAColor::BLUE => { acc[2] += conf; cnt[2] += 1; }
+                        _ => {}
+                    }
+                }
+            }
+            let r = if cnt[0] > 0 { acc[0] / cnt[0] as f32 } else { 0.0 };
+            let g = if cnt[1] > 0 { acc[1] / cnt[1] as f32 } else { 0.0 };
+            let b = if cnt[2] > 0 { acc[2] / cnt[2] as f32 } else { 0.0 };
+            out.push([r, g, b]);
+        }
+    }
+    out
+}
+
 /// Demosaic to camera RGB, without any colour conversion.
 ///
 /// The returned image is in the sensor's own channel space: white balance has
@@ -682,7 +733,9 @@ pub fn demosaic_camera_rgb(
     Option<crate::hotpixels::HotPixelReport>,
     Option<DemosaicReport>,
 )> {
-    demosaic_camera_rgb_with_lens(raw, sub_black, hot_pixels, demosaic, snr10_ev, None)
+    let (a, b, c, d, _) =
+        demosaic_camera_rgb_with_lens(raw, sub_black, hot_pixels, demosaic, snr10_ev, None)?;
+    Ok((a, b, c, d))
 }
 
 fn demosaic_camera_rgb_with_lens(
@@ -697,9 +750,16 @@ fn demosaic_camera_rgb_with_lens(
     RescaleReport,
     Option<crate::hotpixels::HotPixelReport>,
     Option<DemosaicReport>,
+    Option<Vec<[f32; 3]>>,
 )> {
     let normalized = rescale::normalize(raw, sub_black)?;
-    let (width, height) = (normalized.width, normalized.height);
+    let rescale::Normalized {
+        samples: normalized_samples,
+        width,
+        height,
+        clip_confidence: normalized_confidence,
+        report: rescale_report,
+    } = normalized;
     // The whole frame, for the buffers that are never cropped to an active area.
     let full = Rect::new(Point::zero(), Dim2::new(width, height));
 
@@ -709,8 +769,18 @@ fn demosaic_camera_rgb_with_lens(
     // no isolated single-site defects for this detector to find.
     let mut hot_pixel_report = None;
     let mut demosaic_report = None;
+    // Per-CFA clip confidence, preserved through hot-pixel correction and
+    // demosaiced alongside the samples so highlight reconstruction sees the
+    // raw-domain evidence, not a demosaiced value averaged below threshold.
+    let (mut mosaic_confidence, mut linear3_confidence, mut linear4_confidence) =
+        match normalized_confidence {
+            rescale::ClipConfidence::Mosaic(v) => (Some(v), None, None),
+            rescale::ClipConfidence::Linear3(v) => (None, Some(v), None),
+            rescale::ClipConfidence::Linear4(v) => (None, None, Some(v)),
+        };
+    let mut output_confidence: Option<Vec<[f32; 3]>> = None;
 
-    let camera = match normalized.samples {
+    let camera = match normalized_samples {
         NormalizedSamples::Mosaic(mut samples) => match &raw.photometric {
             RawPhotometricInterpretation::Cfa(config) => {
                 let roi = rescale::demosaic_roi(raw);
@@ -735,6 +805,24 @@ fn demosaic_camera_rgb_with_lens(
                         &config.cfa,
                         hot_pixels,
                     ));
+                    // Recompute per-CFA confidence from the corrected samples
+                    if let Some(ref mut mconf) = mosaic_confidence {
+                        *mconf = samples
+                            .iter()
+                            .map(|&x| {
+                                const T0: f32 = 0.92;
+                                const T1: f32 = 0.985;
+                                if x <= T0 {
+                                    0.0
+                                } else if x >= T1 {
+                                    1.0
+                                } else {
+                                    let t = (x - T0) / (T1 - T0);
+                                    t * t * (3.0 - 2.0 * t)
+                                }
+                            })
+                            .collect();
+                    }
                 }
 
                 let pixels = PixF32::new_with(samples, width, height);
@@ -765,6 +853,24 @@ fn demosaic_camera_rgb_with_lens(
                     };
                     demosaic_report = Some(report);
                     let produced = roi.d;
+                    // Per-CFA confidence: recompute from the (hot-pixel-corrected)
+                    // mosaic samples so the evidence is not averaged below threshold,
+                    // then demosaic it alongside RGB.
+                    if let Some(mconf) = mosaic_confidence.as_ref() {
+                        if !mconf.is_empty() {
+                            let mut conf = propagate_mosaic_confidence(
+                                mconf, width, height, &config.cfa, roi, produced.w, produced.h,
+                            );
+                            let _ = apply_default_crop(raw, &mut conf, produced, roi);
+                            // Heuristic: if the propagated confidence is mostly zero,
+                            // the frame has no real highlights and we can keep it None
+                            // to avoid overhead; otherwise store it for highlight.
+                            let has_highlight = conf.iter().any(|px| px[0] > 0.1 || px[1] > 0.1 || px[2] > 0.1);
+                            if has_highlight {
+                                output_confidence = Some(conf);
+                            }
+                        }
+                    }
                     // Free the mosaic before the crop: on a 24 megapixel frame
                     // that is 100 MB returned before the next allocation.
                     drop(pixels);
@@ -861,6 +967,12 @@ fn demosaic_camera_rgb_with_lens(
                     },
                 );
             }
+            // Propagate per-pixel confidence through the same crop
+            if let Some(mut conf) = linear3_confidence.take() {
+                let _ = apply_default_crop(raw, &mut conf, full.d, full);
+                let has = conf.iter().any(|px| px[0] > 0.1 || px[1] > 0.1 || px[2] > 0.1);
+                if has { output_confidence = Some(conf); }
+            }
             let dim = apply_default_crop(raw, &mut pixels, full.d, full)?;
             CameraImage::Three(Image::new(dim.w, dim.h, pixels)?)
         }
@@ -878,6 +990,12 @@ fn demosaic_camera_rgb_with_lens(
                     },
                 );
             }
+            if let Some(conf4) = linear4_confidence.take() {
+                let mut conf3: Vec<[f32; 3]> = conf4.into_iter().map(|v| [v[0], v[1], v[2]]).collect();
+                let _ = apply_default_crop(raw, &mut conf3, full.d, full);
+                let has = conf3.iter().any(|px| px[0] > 0.1 || px[1] > 0.1 || px[2] > 0.1);
+                if has { output_confidence = Some(conf3); }
+            }
             let dim = apply_default_crop(raw, &mut pixels, full.d, full)?;
             CameraImage::Four {
                 width: dim.w,
@@ -887,7 +1005,7 @@ fn demosaic_camera_rgb_with_lens(
         }
     };
 
-    Ok((camera, normalized.report, hot_pixel_report, demosaic_report))
+    Ok((camera, rescale_report, hot_pixel_report, demosaic_report, output_confidence))
 }
 
 /// Demosaiced sensor data, before any colour conversion.
@@ -911,7 +1029,7 @@ pub enum CameraImage {
 /// sub_black)` reads as two interchangeable enums at the call site, and the next
 /// milestone of the colour path (`ForwardMatrix`, dual-illuminant interpolation)
 /// adds more.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct DevelopOptions {
     pub working_space: WorkingSpace,
     pub sub_black: SubBlack,
@@ -927,6 +1045,9 @@ pub struct DevelopOptions {
     pub full_dng_color: bool,
     /// Apply standardized DNG `OpcodeList3` lens corrections when present.
     pub lens_correction: bool,
+    /// Where to write per-stage scene-linear dumps, when asked for.
+    /// `None` disables the extra highlight diagnostics.
+    pub dump_stages: Option<std::path::PathBuf>,
 }
 
 /// Develop to scene-linear working-space RGB through the owned colour path.
@@ -953,20 +1074,31 @@ pub fn develop(
         .lens_correction
         .then(|| crate::lens::LensCorrection::read(path))
         .flatten();
-    let (mut camera, rescale, hot_pixels, demosaic) = demosaic_camera_rgb_with_lens(
-        raw,
-        options.sub_black,
-        options.hot_pixels,
-        options.demosaic,
-        options.snr10_ev,
-        lens_correction.as_mut(),
-    )?;
+    let (mut camera, rescale, hot_pixels, demosaic, demosaiced_confidence) =
+        demosaic_camera_rgb_with_lens(
+            raw,
+            options.sub_black,
+            options.hot_pixels,
+            options.demosaic,
+            options.snr10_ev,
+            lens_correction.as_mut(),
+        )?;
 
     // Clipped-highlight reconstruction runs on camera RGB, after the demosaic
     // and before white balance and the colour matrix: "was this channel at the
     // sensor's clip point?" is a question about the raw sample. Three-channel
     // only — the RGBE arm has no target source and no corpus behind it.
     let mut highlight_reconstruction = None;
+    // Snapshot for highlight diagnostics before reconstruction mutates the buffer.
+    let highlight_pre_snapshot: Option<Vec<[f32; 3]>> = if options.dump_stages.is_some() {
+        if let CameraImage::Three(img) = &camera {
+            Some(img.pixels.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     if options.highlight_reconstruction > 0.0
         && let CameraImage::Three(image) = &mut camera
     {
@@ -975,11 +1107,120 @@ pub fn develop(
             transform.white_balance[1],
             transform.white_balance[2],
         ];
-        highlight_reconstruction = Some(crate::highlight::reconstruct(
+        highlight_reconstruction = Some(crate::highlight::reconstruct_with_confidence(
             image,
             wb,
             options.highlight_reconstruction,
+            demosaiced_confidence.as_deref(),
         ));
+    }
+    // Emit highlight diagnostics (best-effort, never fails the file).
+    if let (Some(dir), Some(pre)) = (&options.dump_stages, &highlight_pre_snapshot) {
+        if let CameraImage::Three(post_img) = &camera {
+            let stem = path
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "unnamed".to_string());
+            // Use a helper that converts camera RGB through the transform for
+            // display, so the dumps are visually comparable to the later
+            // scene-linear stages.
+            let dump_res: anyhow::Result<()> = (|| {
+                use crate::types::{Image as Img, SceneLinear};
+                // Helper to write a LinearImage via tone::render_baseline
+                fn write_linear(
+                    dir: &std::path::Path,
+                    stem: &str,
+                    suffix: &str,
+                    img: &Img<SceneLinear>,
+                    working_to_display: Option<&crate::color::Matrix3>,
+                ) -> anyhow::Result<()> {
+                    let p = dir.join(format!("{stem}-{suffix}.png"));
+                    if let Some(parent) = p.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    let rendered = crate::tone::render_baseline(img, working_to_display);
+                    rendered.save(&p)?;
+                    eprintln!("DUMP  highlight {suffix}: {}", p.display());
+                    Ok(())
+                }
+                // Convert camera pixels to scene-linear for display
+                let to_linear = |pixels: &[[f32; 3]]| -> anyhow::Result<Img<SceneLinear>> {
+                    let conv: Vec<[f32; 3]> = pixels.iter().map(|px| transform.convert3(*px)).collect();
+                    // Width/height from the camera image
+                    let w = post_img.width;
+                    let h = post_img.height;
+                    Img::new(w, h, conv)
+                };
+                let pre_linear = to_linear(pre)?;
+                let post_linear = to_linear(&post_img.pixels)?;
+                let working_to_display = options.working_space.to_display();
+                // 1. Camera RGB before reconstruction (as scene-linear)
+                write_linear(dir, &stem, "highlight-pre", &pre_linear, working_to_display.as_ref())?;
+                // 2. Clip-state map (pre clip counts)
+                {
+                    let w = post_img.width;
+                    let h = post_img.height;
+                    let map_pixels: Vec<[f32; 3]> = pre
+                        .iter()
+                        .map(|px| {
+                            let c = crate::highlight::clip_count(*px);
+                            match c {
+                                0 => [0.0, 0.0, 0.0],       // black
+                                1 => [1.0, 0.0, 0.0],       // red
+                                2 => [1.0, 0.0, 1.0],       // magenta
+                                _ => [1.0, 1.0, 1.0],       // white
+                            }
+                        })
+                        .collect();
+                    let map_img = Img::<SceneLinear>::new(w, h, map_pixels)?;
+                    write_linear(dir, &stem, "highlight-clipmap", &map_img, None)?;
+                }
+                // 3. Camera RGB after reconstruction
+                write_linear(dir, &stem, "highlight-post", &post_linear, working_to_display.as_ref())?;
+                // 4. Reconstruction delta: luminance delta and OKLab chroma/hue
+                {
+                    let w = post_img.width;
+                    let h = post_img.height;
+                    // Luminance delta visualization: 0.5 = zero, scale ±0.2
+                    let luma_pixels: Vec<[f32; 3]> = pre
+                        .iter()
+                        .zip(post_img.pixels.iter())
+                        .map(|(a, b)| {
+                            let pre_lum = crate::analyze::luminance(transform.convert3(*a));
+                            let post_lum = crate::analyze::luminance(transform.convert3(*b));
+                            let delta = (post_lum - pre_lum) * 5.0 + 0.5; // amplify
+                            let v = delta.clamp(0.0, 1.0);
+                            [v, v, v]
+                        })
+                        .collect();
+                    let luma_img = Img::<SceneLinear>::new(w, h, luma_pixels)?;
+                    write_linear(dir, &stem, "highlight-delta-luma", &luma_img, None)?;
+                    // OKLab chroma/hue delta
+                    let oklab_pixels: Vec<[f32; 3]> = pre
+                        .iter()
+                        .zip(post_img.pixels.iter())
+                        .map(|(a, b)| {
+                            let pre_lin = transform.convert3(*a);
+                            let post_lin = transform.convert3(*b);
+                            // Convert to OKLab via linear sRGB approximation: treat
+                            // working-space linear as display-linear for delta viz
+                            let pre_lab = crate::oklab::from_linear_srgb(pre_lin);
+                            let post_lab = crate::oklab::from_linear_srgb(post_lin);
+                            let chroma_delta = (post_lab.chroma() - pre_lab.chroma()).abs() * 4.0;
+                            let hue_delta = crate::oklab::hue_difference(pre_lab, post_lab).unwrap_or(0.0) / std::f32::consts::PI;
+                            // Encode: R = chroma delta, G = hue delta, B = 0
+                            [chroma_delta.clamp(0.0,1.0), hue_delta.clamp(0.0,1.0), 0.0]
+                        })
+                        .collect();
+                    let oklab_img = Img::<SceneLinear>::new(w, h, oklab_pixels)?;
+                    write_linear(dir, &stem, "highlight-delta-oklab", &oklab_img, None)?;
+                }
+                Ok(())
+            })();
+            if let Err(e) = dump_res {
+                eprintln!("DUMP  highlight diagnostics failed for {}: {e}", path.display());
+            }
+        }
     }
 
     let image: Image<SceneLinear> = match camera {

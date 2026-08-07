@@ -1,0 +1,66 @@
+akr 0.1
+project raw-autotune
+
+record raw-autotune.requirement.constraints-and-non-goals/1 : requirement {
+    title "Constraints And Non-goals"
+    state proposed
+    scope [ all ]
+    statement """
+        - Do not add an earlier clamp or reintroduce `clip_euclidean_norm_avg` semantics; `docs/white-blowout-advice.md:13` explicitly forbids it (owned path corrected the Rawler clip).
+        - Keep the regression gate from `docs/STATUS.md:1-3` intact: new opt-in features byte-identical at strength 0, `--dry-run --summary` diff ignores only `elapsed_ms`, determinism under `--jobs 8`. `src/rescale.rs` and `src/color.rs` invariants must not be broken (no `&mut RawImage` normalization, `SubBlack` semantics preserved).
+        - Do not enable `--local-tone` by default and do not build HDR output (PQ/gain-map) inside this plan; HDR belongs after reconstruction+gamut fixes per advice §§"Where HDR belongs" and "Recommended implementation order:8".
+        - `--highlight-contrast` stays a diagnostic/user preference (advice step 9), not the correction.
+        - Non-goal: semantic sky/face/subject detection, multi-frame HDR, luma denoising, DCP creative tables.
+        """
+    source {
+        kind legacy
+        path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
+        excerpt """
+            - Do not add an earlier clamp or reintroduce `clip_euclidean_norm_avg` semantics; `docs/white-blowout-advice.md:13` explicitly forbids it (owned path corrected the Rawler clip).
+            - Keep the regression gate from `docs/STATUS.md:1-3` intact: new opt-in features byte-identical at strength 0, `--dry-run --summary` diff ignores only `elapsed_ms`, determinism under `--jobs 8`. `src/rescale.rs` and `src/color.rs` invariants must not be broken (no `&mut RawImage` normalization, `SubBlack` semantics preserved).
+            - Do not enable `--local-tone` by default and do not build HDR output (PQ/gain-map) inside this plan; HDR belongs after reconstruction+gamut fixes per advice §§"Where HDR belongs" and "Recommended implementation order:8".
+            - `--highlight-contrast` stays a diagnostic/user preference (advice step 9), not the correction.
+            - Non-goal: semantic sky/face/subject detection, multi-frame HDR, luma denoising, DCP creative tables.
+            """
+    }
+}
+
+record raw-autotune.requirement.slice-5-continuous-log-chromaticity/1 : requirement {
+    title "Slice 5 — Continuous log-chromaticity reconstruction (Phase B.5)"
+    state proposed
+    scope [ all ]
+    statement """
+        - **Owns:** `src/highlight.rs` (major), optionally new `src/guided.rs`.
+        - **Does:** implement `u=log(R+eps/G+eps)`, `v=log(B+eps/G+eps)` confidence-weighted edge-aware filtered `q`, solve `s*` over trusted channels, synthesize clipped channels toward `s* q` with `x'_i >= x_i` lower bound, continuous per-channel blend `(1-c_i)x_i + c_i x̂_i`, second confidence for prior reliability with smooth neutralization toward neutral deep inside 3-clipped components. Collapse the two `near_white` special cases in current `highlight.rs:194` into the one continuous path. Preserve `strength` as uniform scale, `0` = skip module.
+        - **Depends on:** Slice 4; validated by Slice 2 synthetic suite (must turn the synthetic ramp from fail to pass).
+        """
+    source {
+        kind legacy
+        path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
+        excerpt """
+            - **Owns:** `src/highlight.rs` (major), optionally new `src/guided.rs`.
+            - **Does:** implement `u=log(R+eps/G+eps)`, `v=log(B+eps/G+eps)` confidence-weighted edge-aware filtered `q`, solve `s*` over trusted channels, synthesize clipped channels toward `s* q` with `x'_i >= x_i` lower bound, continuous per-channel blend `(1-c_i)x_i + c_i x̂_i`, second confidence for prior reliability with smooth neutralization toward neutral deep inside 3-clipped components. Collapse the two `near_white` special cases in current `highlight.rs:194` into the one continuous path. Preserve `strength` as uniform scale, `0` = skip module.
+            - **Depends on:** Slice 4; validated by Slice 2 synthetic suite (must turn the synthetic ramp from fail to pass).
+            """
+    }
+}
+
+record raw-autotune.requirement.slice-7-perceptual-gamut-compressor-phase-c-7/1 : requirement {
+    title "Slice 7 — Perceptual gamut compressor (Phase C.7)"
+    state proposed
+    scope [ all ]
+    statement """
+        - **Owns:** `src/tone.rs:102` `compress_gamut`, `src/oklab.rs`.
+        - **Does:** OKLab path: display-linear → OKLab → preserve L,h, binary-search chroma to in-gamut sRGB with smooth onset (no hard channel clamp). Remove the current scale-around-`mapped_luminance` + clamp. Add cusp-approximation optimisation only after correctness. Tests on five blown-sky frames: pre/post-gamut hue delta bound; `crushed_fraction` regression check from `docs/STATUS.md:378` still 108/108 tied.
+        - **Depends on:** Slice 5-6 (upstream hue must be correct first; advice says gamut fix "will not recover a wrong hue created upstream").
+        """
+    source {
+        kind legacy
+        path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
+        excerpt """
+            - **Owns:** `src/tone.rs:102` `compress_gamut`, `src/oklab.rs`.
+            - **Does:** OKLab path: display-linear → OKLab → preserve L,h, binary-search chroma to in-gamut sRGB with smooth onset (no hard channel clamp). Remove the current scale-around-`mapped_luminance` + clamp. Add cusp-approximation optimisation only after correctness. Tests on five blown-sky frames: pre/post-gamut hue delta bound; `crushed_fraction` regression check from `docs/STATUS.md:378` still 108/108 tied.
+            - **Depends on:** Slice 5-6 (upstream hue must be correct first; advice says gamut fix "will not recover a wrong hue created upstream").
+            """
+    }
+}

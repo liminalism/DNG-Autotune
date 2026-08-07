@@ -8,6 +8,7 @@
 
 pub mod analyze;
 pub mod api;
+pub mod synthetic;
 pub mod chroma;
 pub mod cli;
 pub mod color;
