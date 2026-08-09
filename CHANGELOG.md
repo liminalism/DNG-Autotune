@@ -37,6 +37,43 @@ abstention rule, not a colour guess: it keeps fully clipped dome reconstruction
 separate and prevents a spatially changing sky from turning one valid channel
 into an unbounded green/blue lift.
 
+### Highlight chromaticity transport fades across a region edge
+
+The post-demosaic u'v' transport required three quarters of a pixel's 5x5
+neighbourhood to be underdetermined before it would correct that pixel at all.
+Because the test was a yes/no gate, a clipped region's interior was corrected at
+full strength while its outermost pixels were not corrected at all, so every
+region kept a ring of its original invented hue. That ring is the thin pink
+contour visible along occluder edges — leaves, ridges, branches silhouetted
+against clipped sky — on `_DSC1290`. The neighbourhood fraction is now a
+continuous weight over 0.50 to 0.75: unchanged where the old gate passed, fading
+to zero below, so the correction can no longer step at a region boundary. An
+isolated near-white speckle still measures under 0.10 and is still left alone.
+
+On the occluded-sky bench fixture this moves p90 clip-boundary hue error from
+14.60 to 12.28 degrees and edge energy ratio from 1.0398 to 1.0244, while p99
+boundary a/b error rises from 0.0463 to 0.0798 — the outermost ring is genuinely
+mixed foliage and sky after demosaic, so correcting it is a net gain in the bulk
+and a loss in the tail. On the three Sony targets at harmonic full strength the
+strong-magenta area falls on `_DSC1290` from 0.7526% to 0.7047% and on
+`_DSC1283` from 0.4952% to 0.4520%; `_DSC1289` is unchanged to four decimals,
+having almost no two-channel clipping. `_DSC1290` now transports 438,897 pixels
+rather than 387,688.
+
+Two related changes were implemented, measured and rejected rather than shipped.
+Discounting a cell's measured boundary data by luminance, so a cell straddling
+an occluder asserts less, moved fixture hue error 12.28 to 12.67 degrees.
+Weighting the bilinear field sample by luminance affinity, so an occluder cell
+could not donate colour to sky one cell away, moved it to 16.56 degrees: picking
+donors by luminance starves a boundary pixel of its nearest evidence, and the
+weighted-Laplace solve has already decoupled across that edge. The residual thin
+fringe at the immediate occluder edge is therefore not a chromaticity-transport
+defect and is not pursued as one. The rejection is recorded at the sampling
+function so it is not retried.
+
+The stage runs only under `--highlight-method harmonic`, so unattended output is
+unchanged. Repeated `--jobs 8` runs of `_DSC1289` are byte-identical.
+
 ### Exact lens profiles and compression-aware highlight color are opt-in
 
 Sony ARW files do not carry DNG `OpcodeList3`, so the previous lens stage did

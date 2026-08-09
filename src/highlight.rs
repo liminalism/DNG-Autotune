@@ -474,6 +474,8 @@ const SPATIAL_CHROMA_FULL_WEIGHT: f32 = 0.75;
 const SPATIAL_CHROMA_TOLERANCE: f32 = 0.010;
 const SPATIAL_CHROMA_MAX_SHIFT: f32 = 0.040;
 const SPATIAL_CHROMA_AREA_RADIUS: isize = 2;
+const SPATIAL_CHROMA_AREA_LOW: f32 = 0.50;
+const SPATIAL_CHROMA_AREA_HIGH: f32 = 0.75;
 const SPATIAL_CHROMA_SWEEPS: usize = 240;
 const SPATIAL_CHROMA_RELAXATION: f32 = 1.0;
 const SPATIAL_CHROMA_GUIDE_K: f32 = 0.15;
@@ -550,14 +552,22 @@ fn spatial_chroma_support(confidence: [f32; 3]) -> f32 {
         .fold(0.0_f32, f32::max)
 }
 
-fn spatial_chroma_has_area_support(
+/// What fraction of the neighbourhood is itself underdetermined, in `[0, 1]`.
+///
+/// Transport is only meaningful where the ambiguity is area-filling: an isolated
+/// near-white speckle has no region whose boundary colour could be carried into
+/// it. Returning the fraction rather than a yes/no keeps the applied correction
+/// continuous across the edge of a region, which a hard gate could not — it left
+/// the outermost ring of a clipped area at its original hue while its immediate
+/// neighbours were fully transported, drawing a contour along every occluder.
+fn spatial_chroma_area_support(
     confidence: &[[f32; 3]],
     width: usize,
     height: usize,
     index: usize,
-) -> bool {
+) -> f32 {
     if width.min(height) <= 16 {
-        return true;
+        return 1.0;
     }
     let x = index % width;
     let y = index / width;
@@ -577,9 +587,36 @@ fn spatial_chroma_has_area_support(
             }
         }
     }
-    core * 4 >= valid * 3
+    if valid == 0 {
+        return 0.0;
+    }
+    core as f32 / valid as f32
 }
 
+/// How strongly two samples at luminances `a` and `b` should share chromaticity,
+/// in `(0, 1]`.
+///
+/// Symmetric and scale-free, so it neither prefers the brighter sample nor
+/// changes meaning with exposure. This is the coupling the weighted-Laplace
+/// solve uses between cells, and it is what keeps a dark occluder from donating
+/// its chromaticity to the bright region it sits in front of.
+#[inline]
+fn spatial_chroma_guide_affinity(a: f32, b: f32) -> f32 {
+    let scale = a.abs().max(b.abs()).max(0.05);
+    let delta = (a - b).abs();
+    (-(delta / (SPATIAL_CHROMA_GUIDE_K * scale)).powi(2))
+        .exp()
+        .max(SPATIAL_CHROMA_WEIGHT_FLOOR)
+}
+
+/// Bilinear sample of the solved field.
+///
+/// Weighting these four cells by luminance affinity — so a cell lying on an
+/// occluder could not donate its colour to sky one cell away — was measured and
+/// rejected: on the occluded-sky fixture it moved p90 boundary hue error from
+/// 14.60 to 16.56 degrees. Selecting donors by luminance starves a boundary
+/// pixel of its nearest evidence, and the solve has already decoupled across
+/// that edge. The interpolation stays plain; the edge handling belongs upstream.
 fn sample_spatial_chroma_grid(
     field: &[[f32; 2]],
     grid_width: usize,
@@ -755,11 +792,7 @@ pub(crate) fn transport_spatial_chromaticity(
                         if cells[n].valid_pixels == 0 {
                             continue;
                         }
-                        let scale = guide[i].abs().max(guide[n].abs()).max(0.05);
-                        let delta = (guide[i] - guide[n]).abs();
-                        let edge_weight = (-(delta / (SPATIAL_CHROMA_GUIDE_K * scale)).powi(2))
-                            .exp()
-                            .max(SPATIAL_CHROMA_WEIGHT_FLOOR);
+                        let edge_weight = spatial_chroma_guide_affinity(guide[i], guide[n]);
                         numerator[0] += field[n][0] * edge_weight;
                         numerator[1] += field[n][1] * edge_weight;
                         denominator += edge_weight;
@@ -790,7 +823,12 @@ pub(crate) fn transport_spatial_chromaticity(
         if confidence_weight <= SPATIAL_CHROMA_MASK_LOW {
             continue;
         }
-        if !spatial_chroma_has_area_support(confidence, image.width, image.height, i) {
+        let area_weight = ramp(
+            spatial_chroma_area_support(confidence, image.width, image.height, i),
+            SPATIAL_CHROMA_AREA_LOW,
+            SPATIAL_CHROMA_AREA_HIGH,
+        );
+        if area_weight <= 0.0 {
             continue;
         }
         let Some((uv, luminance)) = cie_uv(image.pixels[i], &working_to_xyz) else {
@@ -806,11 +844,12 @@ pub(crate) fn transport_spatial_chromaticity(
         }
         let keep = SPATIAL_CHROMA_TOLERANCE / distance;
         let limited = [target[0] + keep * delta[0], target[1] + keep * delta[1]];
-        let weight = ramp(
-            confidence_weight,
-            SPATIAL_CHROMA_MASK_LOW,
-            SPATIAL_CHROMA_FULL_WEIGHT,
-        );
+        let weight = area_weight
+            * ramp(
+                confidence_weight,
+                SPATIAL_CHROMA_MASK_LOW,
+                SPATIAL_CHROMA_FULL_WEIGHT,
+            );
         let mut corrected = [
             uv[0] + weight * (limited[0] - uv[0]),
             uv[1] + weight * (limited[1] - uv[1]),
@@ -1430,6 +1469,57 @@ mod tests {
             "harmonic transport only reduced u'v' distance from {original_distance} to {distance}"
         );
         assert!(report.max_uv_shift <= SPATIAL_CHROMA_MAX_SHIFT + 1.0e-6);
+    }
+
+    /// The area-support requirement must fade, not switch.
+    ///
+    /// A yes/no gate transported a region's interior at full strength and left
+    /// its outermost pixels untouched, so every clipped region kept a ring of its
+    /// original invented hue — the thin pink contour seen along occluder edges on
+    /// `_DSC1290`. The correction must instead decay across that ring: still
+    /// weaker there, because a pixel whose neighbourhood is half occluder has
+    /// weaker evidence, but never zero next to a fully corrected neighbour.
+    #[test]
+    fn spatial_transport_fades_across_the_edge_of_a_region_instead_of_stepping() {
+        const SIZE: usize = 41;
+        const LOW: usize = 10;
+        const HIGH: usize = 30;
+        // Near-equal luminance, far apart in hue: the solve coupling is a
+        // luminance affinity, so a region and the boundary it draws from must be
+        // comparably bright for the transport to be exercised at all.
+        let measured_blue = [0.20, 0.45, 1.05];
+        let invented_magenta = [0.62, 0.33, 0.72];
+        let mut pixels = vec![measured_blue; SIZE * SIZE];
+        let mut confidence = vec![[0.0_f32; 3]; SIZE * SIZE];
+        for y in LOW..=HIGH {
+            for x in LOW..=HIGH {
+                pixels[y * SIZE + x] = invented_magenta;
+                confidence[y * SIZE + x] = [1.0, 1.0, 0.0];
+            }
+        }
+        let mut img = linear_image(SIZE, SIZE, pixels);
+        let to_xyz = WorkingSpace::Srgb.to_xyz_d65();
+        let before = cie_uv(invented_magenta, &to_xyz).expect("valid interior").0;
+        let shift = |img: &LinearImage, x: usize, y: usize| {
+            let uv = cie_uv(img.pixels[y * SIZE + x], &to_xyz)
+                .expect("valid corrected pixel")
+                .0;
+            (uv[0] - before[0]).hypot(uv[1] - before[1])
+        };
+
+        transport_spatial_chromaticity(&mut img, Some(&confidence), to_xyz);
+
+        let edge = shift(&img, SIZE / 2, LOW);
+        let inside = shift(&img, SIZE / 2, LOW + 1);
+        let interior = shift(&img, SIZE / 2, SIZE / 2);
+        assert!(
+            edge > 0.0,
+            "the outermost ring of the region was left at its original hue"
+        );
+        assert!(
+            edge < inside && inside <= interior + 1.0e-6,
+            "correction must grow inward, got edge {edge}, next {inside}, interior {interior}"
+        );
     }
 
     /// A single clipped channel still leaves two measured channels and therefore

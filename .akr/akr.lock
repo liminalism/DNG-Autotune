@@ -5,8 +5,7 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.2"
-    commit git:cf76ea8a9051f8da031e876d273f0f2c0b25e944
-    source_graph "sha256:356b83f8b82feef3c59c80d37edc4d25982428186e76beb52c13660e986a1770"
+    source_graph "sha256:d38636844daa9896724c34bbc0806b89c3576672aeba57b1f201b9c5055ba02d"
 }
 
 source ".akr/project.akr" {
@@ -25,8 +24,8 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:f97a122c860fa461915fe0b8ceb9660e00064c94fb94cfe829a0c1c9a28eef59"
-    records 34
+    hash "sha256:cdfedfdf568c039aa7aa41d5f58870b58e40ebe319a0e5792a55efa9a5cbbe5e"
+    records 37
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
@@ -45,13 +44,23 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:782bd879a42eb992ff69c9cc78e8b4a3ffc6f02397fb76794d609dc9a277ea54"
-    records 22
+    hash "sha256:5b633ad664f87f31753a2e71c2a491a0178efcb093bd8489d9fe41a115128a6f"
+    records 23
 }
 
 seal @raw-autotune.assessment.sky-blowout-estimator-handoff/1 {
     state verified
     hash "sha256:2639b99f2b61219165f9b8c9d8887af65e0e51d6c6eae57a9357b99b7bda1a81"
+}
+
+seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/1 {
+    state superseded
+    hash "sha256:bc81544383ac1f996fdfb73f48f815b3bbdb6db580c3d49969193ae5c0d80c2e"
+}
+
+seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 {
+    state verified
+    hash "sha256:15600de1a45586995ef7498d1a8afd6aed0661f4499589d411755c60c8f3e914"
 }
 
 seal @raw-autotune.evidence.blown-sky-renders-white-again/1 {
@@ -217,6 +226,11 @@ seal @raw-autotune.evidence.slice-4-confidence-plumbing-verify/1 {
 seal @raw-autotune.evidence.slice-6-uncertainty-gated-chroma-verify/1 {
     state verified
     hash "sha256:178d1ede83406cf7f995ebc0bf148def5dec5fe2b0cdc807cbb6755ed5bf5c5a"
+}
+
+seal @raw-autotune.evidence.transport-area-ramp-20260809/1 {
+    state verified
+    hash "sha256:8fbe9f539703fd3ccf32a9a43c64c49b0c1ad202accd2756b959568a84565ad1"
 }
 
 seal @raw-autotune.evidence.uncertainty-gate-consolidation/1 {
