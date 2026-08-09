@@ -30,6 +30,13 @@ ramps, an intensity-dependent sky, correlated and independent detail, a
 foliage/ridge occluder, coloured highlights, a radial clipped core and an
 analytic sensor knee.
 
+The harmonic fit now rejects two-guide regressions whose predictors are
+effectively collinear, and high-gain colour fits softly stop extrapolating once
+a surviving channel moves beyond three measured guide spans. This is an
+abstention rule, not a colour guess: it keeps fully clipped dome reconstruction
+separate and prevents a spatially changing sky from turning one valid channel
+into an unbounded green/blue lift.
+
 ### Exact lens profiles and compression-aware highlight color are opt-in
 
 Sony ARW files do not carry DNG `OpcodeList3`, so the previous lens stage did

@@ -832,10 +832,34 @@ mod tests {
     }
 
     #[test]
+    fn clipped_samples_do_not_encode_post_clip_chromaticity() {
+        let blue = fixture(FixtureKind::BlueRamp, 128, 64);
+        let varying = fixture(FixtureKind::BlueToNeutralSky, 128, 64);
+        let (blue_truth, blue_captured, _) = sample_rggb(&blue);
+        let (varying_truth, varying_captured, _) = sample_rggb(&varying);
+
+        let ambiguous_sites = blue_captured
+            .iter()
+            .zip(&varying_captured)
+            .zip(blue_truth.iter().zip(&varying_truth))
+            .filter(|((blue_observed, varying_observed), (blue, varying))| {
+                **blue_observed == 1.0
+                    && **varying_observed == 1.0
+                    && (**blue - **varying).abs() > 0.05
+            })
+            .count();
+        assert!(
+            ambiguous_sites > 500,
+            "the fixture must contain many clipped sites with different hidden truths, got {ambiguous_sites}"
+        );
+    }
+
+    #[test]
     fn harmonic_bench_exposes_absolute_quality_across_fixture_families() {
         for kind in FixtureKind::ALL {
             let metrics =
                 evaluate_raw_to_render(kind, crate::raw_highlight::HighlightMethod::Harmonic);
+            eprintln!("Harmonic {kind:?}: {metrics:?}");
             assert!(metrics.normalized_linear_rmse.is_finite());
             assert!(metrics.final_oklab_rmse.is_finite());
             assert!(metrics.boundary_p99_ab_error.is_finite());
@@ -856,6 +880,9 @@ mod tests {
                 FixtureKind::BlueToNeutralSky => {
                     assert!(metrics.boundary_p99_ab_error <= 0.01, "{metrics:?}");
                     assert!(metrics.boundary_p90_hue_error_degrees <= 5.0, "{metrics:?}");
+                    assert!(metrics.normalized_luminance_rmse <= 0.10, "{metrics:?}");
+                    assert!(metrics.peak_luminance_ratio <= 1.20, "{metrics:?}");
+                    assert!(metrics.tone_boundary_p99_step <= 0.03, "{metrics:?}");
                 }
                 FixtureKind::IndependentChannels => {
                     assert!(metrics.edge_energy_ratio <= 1.10, "{metrics:?}");

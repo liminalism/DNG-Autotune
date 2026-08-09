@@ -18,7 +18,7 @@ record raw-autotune.work.goal/1 : work {
 
 record raw-autotune.work.harmonic-highlight-experiment/1 : work {
     title "Harmonic pre-demosaic highlight experiment"
-    state active
+    state superseded
     scope [
         path "Cargo.lock",
         path "Cargo.toml",
@@ -46,6 +46,46 @@ record raw-autotune.work.harmonic-highlight-experiment/1 : work {
     depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
 }
 
+record raw-autotune.work.harmonic-highlight-experiment/2 : work {
+    title "Harmonic pre-demosaic highlight experiment"
+    state active
+    scope [
+        path "Cargo.lock",
+        path "Cargo.toml",
+        path "THIRD_PARTY.md",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/memory.rs",
+        path "src/pipeline.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Add and validate an opt-in CLI-only clean-room harmonic highlight
+        experiment on the normalized Bayer mosaic. Use connected clipped
+        regions, local one/two-guide affine colour fits with quality gates,
+        clipping-aware pyramid initialization, anisotropic obstacle-constrained
+        transport, verified sensor-knee inversion, and a separate fully clipped
+        luminance dome. Use pure-Rust faer f64 sparse Cholesky for bounded
+        systems and deterministic projected relaxation for larger or failed
+        systems. Keep measured sites and floors invariant and keep `current` as
+        the unattended default.
+
+        Coloured-highlight abstention now rejects non-identifiable collinear
+        two-guide fits and applies a monotone soft leverage bound when a
+        high-gain one-guide colour relation is extrapolated beyond three
+        measured guide spans at a partially clipped site. The analytical
+        blue-to-neutral sky peak ratio fell from 1.633 to 1.122 and normalized
+        luminance RMSE from 0.219 to 0.064 without materially changing the
+        constant-blue ramp or fully clipped dome. The work remains active
+        pending real-frame corpus gates, measured 24 MP RSS, and reduction of
+        residual false-colour and edge-energy error on spatially varying and
+        deliberately independent-colour fixtures.
+        """
+    depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
+    supersedes [ @raw-autotune.work.harmonic-highlight-experiment/1 ]
+}
+
 record raw-autotune.work.highlight-boundary-fringe-diagnosis/1 : work {
     title "Diagnose and remove the residual highlight-boundary colour fringe"
     state completed
@@ -65,21 +105,30 @@ record raw-autotune.work.highlight-boundary-fringe-diagnosis/1 : work {
                 The visible fringe is localized against raw-domain reconstruction confidence and compared across reconstruction-off and multiple demosaic controls.
                 """
             method observation
-            verified_by [ @raw-autotune.evidence.highlight-fringe-origin-controls/1 ]
+            verified_by [
+                @raw-autotune.evidence.highlight-fringe-origin-controls/1,
+                @raw-autotune.evidence.highlight-fringe-origin-controls/2
+            ]
         }
         check regression-gate {
             statement """
                 Formatting, library/tests lint, and the project test suite pass; reconstruction strength zero remains the compatibility path.
                 """
             method command
-            verified_by [ @raw-autotune.evidence.highlight-white-path-regression-gate/1 ]
+            verified_by [
+                @raw-autotune.evidence.highlight-white-path-regression-gate/1,
+                @raw-autotune.evidence.highlight-white-path-regression-gate/2
+            ]
         }
         check target-frames-improve {
             statement """
                 A repeatable image-space measurement shows the boundary fringe decreases on `_DSC1283` and `_DSC1289` without restoring the dark taupe inversion.
                 """
             method command
-            verified_by [ @raw-autotune.evidence.highlight-white-path-target-grade/1 ]
+            verified_by [
+                @raw-autotune.evidence.highlight-white-path-target-grade/1,
+                @raw-autotune.evidence.highlight-white-path-target-grade/2
+            ]
         }
     }
 }
@@ -128,28 +177,40 @@ record raw-autotune.work.profiled-purple-sky-experiment/1 : work {
                 The external lens path requires one canonical camera/lens match, applies distortion and TCA without fuzzy selection or vignetting, aligns external-profile RGB and raw clip-confidence coordinates, and remains opt-in.
                 """
             method command
-            verified_by [ @raw-autotune.evidence.exact-lens-profile-gate/1 ]
+            verified_by [
+                @raw-autotune.evidence.exact-lens-profile-gate/1,
+                @raw-autotune.evidence.exact-lens-profile-gate/2
+            ]
         }
         check memory-fails-safe {
             statement """
                 Exact-profile memory is included in planning, numeric --jobs is only an upper bound, and a batch is refused before decode when the reserved share of available memory cannot fit one frame.
                 """
             method command
-            verified_by [ @raw-autotune.evidence.profile-memory-safety-gate/1 ]
+            verified_by [
+                @raw-autotune.evidence.profile-memory-safety-gate/1,
+                @raw-autotune.evidence.profile-memory-safety-gate/2
+            ]
         }
         check regression-gate {
             statement """
                 Formatting, tests, lint, exact-profile integration, and AKR validation pass, while the embedded default retains its historical confidence-map behavior.
                 """
             method command
-            verified_by [ @raw-autotune.evidence.profile-experiment-regression-gate/1 ]
+            verified_by [
+                @raw-autotune.evidence.profile-experiment-regression-gate/1,
+                @raw-autotune.evidence.profile-experiment-regression-gate/2
+            ]
         }
         check research-experiment-is-gated {
             statement """
                 Compression-aware colour ratios preserve mapped luminance and the default is an exact no-op; target and full-batch measurements decide whether the experiment is promoted.
                 """
             method command
-            verified_by [ @raw-autotune.evidence.compression-ratio-batch-gate/1 ]
+            verified_by [
+                @raw-autotune.evidence.compression-ratio-batch-gate/1,
+                @raw-autotune.evidence.compression-ratio-batch-gate/2
+            ]
         }
     }
 }
@@ -206,21 +267,30 @@ record raw-autotune.work.residual-purple-sky-external-scope/1 : work {
                 Darktable mechanisms are grounded in pinned source and official documentation, while Sony and Samsung descriptions cite primary vendor documentation and label proprietary algorithm details unknown.
                 """
             method manual
-            verified_by [ @raw-autotune.evidence.residual-purple-sky-scope-review/1 ]
+            verified_by [
+                @raw-autotune.evidence.residual-purple-sky-scope-review/1,
+                @raw-autotune.evidence.residual-purple-sky-scope-review/2
+            ]
         }
         check next-research-is-actionable {
             statement """
                 The brief supplies staged experiments, external-review questions, reproduction materials, acceptance gates, and explicit OOM/memory constraints.
                 """
             method manual
-            verified_by [ @raw-autotune.evidence.residual-purple-sky-scope-review/1 ]
+            verified_by [
+                @raw-autotune.evidence.residual-purple-sky-scope-review/1,
+                @raw-autotune.evidence.residual-purple-sky-scope-review/2
+            ]
         }
         check unresolved-scope-is-honest {
             statement """
                 The document does not describe the issue as solved and distinguishes observations, inferences, unknowns, measurement limitations, and rejected experiments.
                 """
             method manual
-            verified_by [ @raw-autotune.evidence.residual-purple-sky-scope-review/1 ]
+            verified_by [
+                @raw-autotune.evidence.residual-purple-sky-scope-review/1,
+                @raw-autotune.evidence.residual-purple-sky-scope-review/2
+            ]
         }
     }
 }

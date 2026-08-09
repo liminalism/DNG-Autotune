@@ -23,6 +23,8 @@ const PYRAMID_KERNEL: [f32; 5] = [1.0, 4.0, 6.0, 4.0, 1.0];
 const HARMONIC_SWEEPS: usize = 240;
 const HARMONIC_POLISH_SWEEPS: usize = 60;
 const DIRECT_SOLVE_MAX_UNKNOWNS: usize = 1 << 14;
+const MAX_AFFINE_EXTRAPOLATION_SPANS: f32 = 3.0;
+const HIGH_GAIN_COLOR_SLOPE: f32 = 2.5;
 const GUIDE_K: f32 = 0.15;
 const WEIGHT_FLOOR: f32 = 1.0e-4;
 const KNEE_LOW: f32 = 0.80;
@@ -102,6 +104,8 @@ struct PyramidLevel {
 struct LineFit {
     guides: [usize; 2],
     slopes: [f32; 2],
+    guide_min: [f32; 2],
+    guide_max: [f32; 2],
     guide_count: usize,
     intercept: f32,
     r2: f32,
@@ -313,6 +317,8 @@ fn knee_reference_line(grid: &Grid, target: usize, guide: usize) -> Option<LineF
     (r2 > 0.85 && slope.is_finite() && slope.abs() < 64.0).then_some(LineFit {
         guides: [guide, guide],
         slopes: [slope as f32, 0.0],
+        guide_min: [pairs.first().map_or(0.0, |pair| pair.0), 0.0],
+        guide_max: [pairs.last().map_or(0.0, |pair| pair.0), 0.0],
         guide_count: 1,
         intercept: intercept as f32,
         r2,
@@ -578,6 +584,8 @@ fn fit_line(grid: &Grid, region: &Region, target: usize, guide: usize) -> Option
     (r2 > 0.25).then_some(LineFit {
         guides: [guide, guide],
         slopes: [slope as f32, 0.0],
+        guide_min: [pairs.first().map_or(0.0, |pair| pair.0), 0.0],
+        guide_max: [pairs.last().map_or(0.0, |pair| pair.0), 0.0],
         guide_count: 1,
         intercept: intercept as f32,
         r2,
@@ -641,6 +649,16 @@ fn fit_two_guides(grid: &Grid, region: &Region, target: usize) -> Option<LineFit
     if var_y <= 1.0e-12 {
         return None;
     }
+    // A two-guide fit is only identifiable when the guides contain genuinely
+    // independent information.  Bayer channels on a smooth constant-colour
+    // ramp are almost perfectly collinear: the normal equations may still be
+    // numerically invertible, but large cancelling slopes then extrapolate an
+    // arbitrary colour once one guide clips.  Judge independence before the
+    // ridge term masks that degeneracy.
+    let predictor_independence = (c00 * c11 - c01 * c01) / (c00 * c11).max(f64::MIN_POSITIVE);
+    if !predictor_independence.is_finite() || predictor_independence < 0.01 {
+        return None;
+    }
     let ridge = 1.0e-3 * (c00 + c11) * 0.5 / n;
     c00 += ridge;
     c11 += ridge;
@@ -670,6 +688,26 @@ fn fit_two_guides(grid: &Grid, region: &Region, target: usize) -> Option<LineFit
     (r2 > 0.25).then_some(LineFit {
         guides: [g0, g1],
         slopes: [slope0 as f32, slope1 as f32],
+        guide_min: [
+            samples
+                .iter()
+                .map(|value| value.0)
+                .fold(f32::INFINITY, f32::min),
+            samples
+                .iter()
+                .map(|value| value.1)
+                .fold(f32::INFINITY, f32::min),
+        ],
+        guide_max: [
+            samples
+                .iter()
+                .map(|value| value.0)
+                .fold(f32::NEG_INFINITY, f32::max),
+            samples
+                .iter()
+                .map(|value| value.1)
+                .fold(f32::NEG_INFINITY, f32::max),
+        ],
         guide_count: 2,
         intercept: intercept as f32,
         r2,
@@ -817,11 +855,44 @@ fn dome_model(grid: &Grid, region: &Region, current: &[[f32; 3]]) -> (f32, f32) 
     }
 }
 
-fn fit_data(line: LineFit, current: &[[f32; 3]], index: usize) -> f32 {
+fn soft_extrapolation_limit(value: f32, measured_min: f32, measured_max: f32) -> f32 {
+    let span = (measured_max - measured_min).max(EPSILON);
+    let transition = 0.5 * span;
+    let upper = measured_max + MAX_AFFINE_EXTRAPOLATION_SPANS * span;
+    let lower = measured_min - MAX_AFFINE_EXTRAPOLATION_SPANS * span;
+    let soft_upper = |sample: f32, limit: f32| {
+        let start = limit - transition;
+        if sample <= start {
+            return sample;
+        }
+        let t = ((sample - start) / (2.0 * transition)).clamp(0.0, 1.0);
+        start + transition * (2.0 * t - t * t)
+    };
+    if value < lower + transition {
+        -soft_upper(-value, -lower)
+    } else {
+        soft_upper(value, upper)
+    }
+}
+
+fn fit_data(line: LineFit, current: &[[f32; 3]], index: usize, bound_extrapolation: bool) -> f32 {
+    let high_gain_color_fit = line.slopes[..line.guide_count]
+        .iter()
+        .any(|slope| slope.abs() > HIGH_GAIN_COLOR_SLOPE);
+    let bounded_guide = |slot: usize| {
+        if !bound_extrapolation || !high_gain_color_fit {
+            return current[index][line.guides[slot]];
+        }
+        soft_extrapolation_limit(
+            current[index][line.guides[slot]],
+            line.guide_min[slot],
+            line.guide_max[slot],
+        )
+    };
     line.intercept
-        + line.slopes[0] * current[index][line.guides[0]]
+        + line.slopes[0] * bounded_guide(0)
         + if line.guide_count == 2 {
-            line.slopes[1] * current[index][line.guides[1]]
+            line.slopes[1] * bounded_guide(1)
         } else {
             0.0
         }
@@ -908,8 +979,11 @@ fn solve_region_direct(
             if let Some(line) = line {
                 let weight = 8.0 * line.r2 / (1.05 - line.r2).max(0.05);
                 diagonal += f64::from(weight);
-                rhs[row] +=
-                    f64::from(weight * fit_data(line, &candidate, i).max(grid.floor[i][target]));
+                rhs[row] += f64::from(
+                    weight
+                        * fit_data(line, &candidate, i, grid.valid[i] != [false; 3])
+                            .max(grid.floor[i][target]),
+                );
             }
             triplets.push(Triplet::new(row, row, diagonal));
         }
@@ -1039,7 +1113,8 @@ fn harmonic_prediction(
                         denominator += w;
                     }
                     if let Some(line) = fit {
-                        let data = fit_data(line, &current, i).max(grid.floor[i][target]);
+                        let data = fit_data(line, &current, i, grid.valid[i] != [false; 3])
+                            .max(grid.floor[i][target]);
                         // A near-perfect colour line is stronger evidence than
                         // four neighbouring guesses. The denominator softens
                         // rapidly near the R² gate, so weak fits cannot paint an
@@ -1280,6 +1355,55 @@ mod tests {
         );
         assert!(first_report.fully_clipped_cores > 0);
         assert_eq!(first_report.solver_fallbacks, 0);
+    }
+
+    #[test]
+    fn two_guide_fit_rejects_collinear_predictors() {
+        let width = 32;
+        let mut valid = vec![[true; 3]; width];
+        for item in &mut valid[16..] {
+            item[2] = false;
+        }
+        let value: Vec<[f32; 3]> = (0..width)
+            .map(|x| {
+                let intensity = 0.1 + x as f32 * 0.025;
+                [intensity, intensity * 2.0, intensity * 0.7]
+            })
+            .collect();
+        let grid = Grid {
+            width,
+            height: 1,
+            floor: value.clone(),
+            value,
+            valid,
+        };
+        let region = Region {
+            cells: (16..width).collect(),
+            boundary: vec![16],
+        };
+        assert!(fit_two_guides(&grid, &region, 2).is_none());
+        assert!(fit_line(&grid, &region, 2, 0).is_some());
+    }
+
+    #[test]
+    fn affine_data_term_abstains_beyond_measured_guide_leverage() {
+        let line = LineFit {
+            guides: [0, 0],
+            slopes: [3.0, 0.0],
+            guide_min: [0.1, 0.0],
+            guide_max: [0.3, 0.0],
+            guide_count: 1,
+            intercept: 0.05,
+            r2: 1.0,
+            trusted_mass: 1.0,
+        };
+        let current = [[2.0, 0.0, 0.0]];
+        let supported_max = 0.3 + MAX_AFFINE_EXTRAPOLATION_SPANS * (0.3 - 0.1);
+        assert_eq!(
+            fit_data(line, &current, 0, true),
+            0.05 + 3.0 * supported_max
+        );
+        assert_eq!(fit_data(line, &current, 0, false), 6.05);
     }
 
     #[test]

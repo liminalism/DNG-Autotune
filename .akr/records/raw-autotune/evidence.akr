@@ -15,7 +15,7 @@ record raw-autotune.evidence.blown-sky-renders-white-again/1 : evidence {
 
 record raw-autotune.evidence.compression-ratio-batch-gate/1 : evidence {
     title "The ratio test preserved luminance and exact midtones. On _DSC1289 profile plus exponent 0.6 reduced sky green deficit to 7.6%, but the 58-frame gate rejected promotion because maximum hard clipping rose 0.204% to 3.178% and maximum near-white share rose 2.0% to 28.0%."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
@@ -26,9 +26,26 @@ record raw-autotune.evidence.compression-ratio-batch-gate/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.compression-ratio-batch-gate/2 : evidence {
+    title "The rejected compression-ratio batch result remains retained after the work entered history."
+    state verified
+    result pass
+    method command
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    command "jq empty output2/summary.json; rg '3.178|28.0|7.6' CHANGELOG.md docs/PURPLE_SKY_PROBLEM_SCOPE.md"
+    artifact "output2/summary.json"
+    summary """
+        The committed batch summary and documentation retain the failed
+        promotion gate: exponent 0.6 improved _DSC1289 green deficit to 7.6%,
+        but maximum clipping rose from 0.204% to 3.178% and maximum near-white
+        share from 2.0% to 28.0%, so the experiment remains opt-in.
+        """
+    supersedes [ @raw-autotune.evidence.compression-ratio-batch-gate/1 ]
+}
+
 record raw-autotune.evidence.exact-lens-profile-gate/1 : evidence {
     title "Three integration tests passed: the Sony ILCE-7C / FE 24mm F2.8 G resolves exactly, off is inert, and external-profile RGB and clip-confidence planes receive identical resampling."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
@@ -37,6 +54,22 @@ record raw-autotune.evidence.exact-lens-profile-gate/1 : evidence {
     summary """
         Three integration tests passed: the Sony ILCE-7C / FE 24mm F2.8 G resolves exactly, off is inert, and external-profile RGB and clip-confidence planes receive identical resampling.
         """
+}
+
+record raw-autotune.evidence.exact-lens-profile-gate/2 : evidence {
+    title "Exact lens-profile integration gates pass after the work entered history."
+    state verified
+    result pass
+    method command
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    command "cargo test --all-targets"
+    artifact "tests/profile_lens.rs"
+    summary """
+        All three profile_lens integration tests passed in the 312-test suite:
+        the Sony ILCE-7C / FE 24mm F2.8 G resolves exactly, off is inert, and
+        RGB plus clip-confidence planes receive identical resampling.
+        """
+    supersedes [ @raw-autotune.evidence.exact-lens-profile-gate/1 ]
 }
 
 record raw-autotune.evidence.first-principles-highlight-suite-20260809/1 : evidence {
@@ -52,15 +85,58 @@ record raw-autotune.evidence.first-principles-highlight-suite-20260809/1 : evide
         """
 }
 
+record raw-autotune.evidence.harmonic-abstention-full-suite-20260809/1 : evidence {
+    title "All 312 tests passed: 302 library tests and 10 integration tests, including the 129-second real decoder probe. Formatting, diff whitespace checks, and clippy with all targets and features under -D warnings also passed."
+    state verified
+    result pass
+    method command
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    command "cargo test --all-targets"
+    artifact "src/raw_highlight.rs"
+    summary """
+        All 312 tests passed: 302 library tests and 10 integration tests, including the 129-second real decoder probe. Formatting, diff whitespace checks, and clippy with all targets and features under -D warnings also passed.
+        """
+}
+
+record raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 : evidence {
+    title "The analytical suite passed. Relative to revision 1, BlueToNeutralSky peak luminance ratio changed from 1.633 to 1.122 and normalized luminance RMSE from 0.219 to 0.064; constant BlueRamp remained at 0.00289 normalized linear RMSE and 1.196 edge-energy ratio, while FullyClippedCore remained at 0.0234 luminance RMSE and 1.008 peak ratio. Residual BlueToNeutralSky false-colour fraction 0.313 and edge-energy ratio 1.638 keep the experiment active."
+    state verified
+    result pass
+    method command
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    command "cargo test synthetic::tests::harmonic_bench_exposes_absolute_quality_across_fixture_families -- --nocapture"
+    artifact "src/synthetic.rs"
+    summary """
+        The analytical suite passed. Relative to revision 1, BlueToNeutralSky peak luminance ratio changed from 1.633 to 1.122 and normalized luminance RMSE from 0.219 to 0.064; constant BlueRamp remained at 0.00289 normalized linear RMSE and 1.196 edge-energy ratio, while FullyClippedCore remained at 0.0234 luminance RMSE and 1.008 peak ratio. Residual BlueToNeutralSky false-colour fraction 0.313 and edge-energy ratio 1.638 keep the experiment active.
+        """
+}
+
 record raw-autotune.evidence.highlight-fringe-origin-controls/1 : evidence {
     title "Reconstruction-off, PPG, RCD, AMaZE, and Rawler controls retained the lavender/purple source colour; only about 0.7% of _DSC1289 purple-mask pixels had nonzero reconstruction uncertainty, while a spatial neutralisation prototype produced visible white halos."
-    state verified
+    state superseded
     result pass
     method observation
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
     summary """
         Reconstruction-off, PPG, RCD, AMaZE, and Rawler controls retained the lavender/purple source colour; only about 0.7% of _DSC1289 purple-mask pixels had nonzero reconstruction uncertainty, while a spatial neutralisation prototype produced visible white halos.
         """
+}
+
+record raw-autotune.evidence.highlight-fringe-origin-controls/2 : evidence {
+    title "Committed origin controls remain retained after the work entered history."
+    state verified
+    result pass
+    method observation
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    artifact "docs/PURPLE_SKY_PROBLEM_SCOPE.md"
+    summary """
+        Re-audited the committed control result: reconstruction-off, PPG, RCD,
+        AMaZE, and Rawler retained the lavender source colour; about 0.7% of
+        the _DSC1289 purple mask had reconstruction uncertainty, and spatial
+        neutralisation produced white halos. The external-scope brief retains
+        the result and labels the residual defect unresolved.
+        """
+    supersedes [ @raw-autotune.evidence.highlight-fringe-origin-controls/1 ]
 }
 
 record raw-autotune.evidence.highlight-method-bench-20260809/1 : evidence {
@@ -90,7 +166,7 @@ record raw-autotune.evidence.highlight-real-frame-gate-unavailable-20260809/1 : 
 
 record raw-autotune.evidence.highlight-white-path-regression-gate/1 : evidence {
     title "cargo test passed 285 library tests and all integration/doc tests; cargo fmt --check and cargo clippy --lib --bins --tests -- -D warnings also passed. The existing uncertainty test confirmed u=0 is byte-identical to no map, and the 58-frame batch retained maximum clipped_fraction 0.000284."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
@@ -100,9 +176,26 @@ record raw-autotune.evidence.highlight-white-path-regression-gate/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.highlight-white-path-regression-gate/2 : evidence {
+    title "Current full regression suite passes after the work entered history."
+    state verified
+    result pass
+    method command
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    command "cargo test --all-targets; cargo fmt --all -- --check; cargo clippy --all-targets --all-features -- -D warnings"
+    artifact "src/highlight.rs"
+    summary """
+        At ee9670b and the current worktree, all 312 tests passed, formatting
+        passed, and all-target/all-feature clippy passed under -D warnings. The
+        compatibility and reconstruction-uncertainty tests remain included in
+        that suite.
+        """
+    supersedes [ @raw-autotune.evidence.highlight-white-path-regression-gate/1 ]
+}
+
 record raw-autotune.evidence.highlight-white-path-target-grade/1 : evidence {
     title "_DSC1289 sky moved -0.43 to -0.36 EV and green deficit 16.0% to 14.0%; _DSC1283 moved -0.20 to -0.18 EV and 2.7% to 2.5%, with ground shifts at most 0.01 EV and no taupe inversion."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
@@ -112,9 +205,27 @@ record raw-autotune.evidence.highlight-white-path-target-grade/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.highlight-white-path-target-grade/2 : evidence {
+    title "Committed target-frame grade remains retained after the work entered history."
+    state verified
+    result pass
+    method command
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    command "git show --stat --oneline ee9670b; sha256sum output2/raw_3rd_batch/_DSC1283_auto.jpg output2/raw_3rd_batch/_DSC1289_auto.jpg"
+    artifact "output2/raw_3rd_batch/_DSC1289_auto.jpg"
+    summary """
+        The committed target renders and original grade are retained: _DSC1289
+        moved from -0.43 to -0.36 EV and green deficit 16.0% to 14.0%; _DSC1283
+        moved from -0.20 to -0.18 EV and 2.7% to 2.5%, with ground shifts at
+        most 0.01 EV and no taupe inversion. This chronology repair does not
+        claim a new render of the currently unavailable RAW inputs.
+        """
+    supersedes [ @raw-autotune.evidence.highlight-white-path-target-grade/1 ]
+}
+
 record raw-autotune.evidence.profile-experiment-regression-gate/1 : evidence {
     title "Formatting and clippy completed cleanly. All 289 library tests and every integration/example target passed, including corpus dimension probing and three exact-profile tests."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
@@ -125,9 +236,25 @@ record raw-autotune.evidence.profile-experiment-regression-gate/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.profile-experiment-regression-gate/2 : evidence {
+    title "Current profile experiment regression suite passes after the work entered history."
+    state verified
+    result pass
+    method command
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    command "cargo test --all-targets; cargo fmt --all -- --check; cargo clippy --all-targets --all-features -- -D warnings"
+    artifact "src/lens.rs"
+    summary """
+        All 312 tests passed, including corpus dimension probing and the three
+        exact-profile tests. Formatting and all-target/all-feature clippy also
+        passed under -D warnings.
+        """
+    supersedes [ @raw-autotune.evidence.profile-experiment-regression-gate/1 ]
+}
+
 record raw-autotune.evidence.profile-memory-safety-gate/1 : evidence {
     title "With 4.82 GiB MemAvailable, the planner capped an explicit request for eight concurrent images to one before decode. Unit tests also prove a zero-fit budget returns zero so plan refuses the run."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
@@ -136,6 +263,23 @@ record raw-autotune.evidence.profile-memory-safety-gate/1 : evidence {
     summary """
         With 4.82 GiB MemAvailable, the planner capped an explicit request for eight concurrent images to one before decode. Unit tests also prove a zero-fit budget returns zero so plan refuses the run.
         """
+}
+
+record raw-autotune.evidence.profile-memory-safety-gate/2 : evidence {
+    title "Profile memory-safety unit gates pass after the work entered history."
+    state verified
+    result pass
+    method command
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    command "cargo test --all-targets"
+    artifact "src/memory.rs"
+    summary """
+        The full suite passed the planner tests that cap numeric job requests,
+        reject a budget that cannot fit one image, and include exact-profile
+        resampling memory. The previously measured 4.82 GiB configuration and
+        its eight-to-one job cap remain retained in revision 1.
+        """
+    supersedes [ @raw-autotune.evidence.profile-memory-safety-gate/1 ]
 }
 
 record raw-autotune.evidence.raw-highlight-invariants-20260809/1 : evidence {
@@ -153,7 +297,7 @@ record raw-autotune.evidence.raw-highlight-invariants-20260809/1 : evidence {
 
 record raw-autotune.evidence.residual-purple-sky-scope-review/1 : evidence {
     title "Reviewed the external brief end to end. It states the defect is unresolved, separates measured facts from inference and proprietary unknowns, grounds Darktable in pinned source and Sony/Samsung in primary vendor documentation, records failed gates and metric limitations, and supplies phased memory-safe experiments and ten reviewer questions."
-    state verified
+    state superseded
     result pass
     method manual
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
@@ -161,6 +305,23 @@ record raw-autotune.evidence.residual-purple-sky-scope-review/1 : evidence {
     summary """
         Reviewed the external brief end to end. It states the defect is unresolved, separates measured facts from inference and proprietary unknowns, grounds Darktable in pinned source and Sony/Samsung in primary vendor documentation, records failed gates and metric limitations, and supplies phased memory-safe experiments and ten reviewer questions.
         """
+}
+
+record raw-autotune.evidence.residual-purple-sky-scope-review/2 : evidence {
+    title "The committed external-scope brief remains complete and explicitly unresolved."
+    state verified
+    result pass
+    method manual
+    observed_at git:ee9670b7bdcb57dd30574c8834bd4f58552a8ef1
+    artifact "docs/PURPLE_SKY_PROBLEM_SCOPE.md"
+    summary """
+        Re-audited the committed brief and its retained review: it separates
+        observations, inference, and proprietary unknowns; grounds Darktable,
+        Sony, and Samsung claims; records failed gates and metric limitations;
+        supplies staged memory-safe experiments and reviewer questions; and
+        continues to state that the residual defect is unresolved.
+        """
+    supersedes [ @raw-autotune.evidence.residual-purple-sky-scope-review/1 ]
 }
 
 record raw-autotune.evidence.sky-stage-attribution-20260809/1 : evidence {
