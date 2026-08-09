@@ -1,0 +1,231 @@
+akr 0.1
+project raw-autotune
+
+record raw-autotune.papercut.a-release-build-invocation-returned-without/1 : papercut {
+    title "A release build invocation returned without Cargo's Finished line and…"
+    state verified
+    statement """
+        A release build invocation returned without Cargo's Finished line and left the previous binary in place, so the first batch gate rejected the new --lens-correction flag. Retrying the build explicitly and verifying --help before the batch; tooling should surface the subprocess exit status when output is handed off through a cell.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.a-targeted-cargo-test-invocation-with-two-exact/1 : papercut {
+    title "A targeted `cargo test` invocation with two exact test filters fails…"
+    state verified
+    statement """
+        A targeted `cargo test` invocation with two exact test filters fails because Cargo accepts only one positional filter; filtering on the containing `tone::tests` module is the reliable way to run both.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "cargo"
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.a-two-frame-lens-correction-profile-exact/1 : papercut {
+    title "A two-frame --lens-correction profile-exact render was killed after…"
+    state verified
+    statement """
+        A two-frame --lens-correction profile-exact render was killed after decode: the job-memory planner does not yet account for simultaneous RGB and clip-confidence resampling buffers. Retrying the diagnostic at --jobs 1 avoids the peak; the planner should budget profiled lens correction before this mode can graduate from opt-in.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 : papercut {
+    title "akr explain assessment lists optional as_of but not that it requires a…"
+    state verified
+    statement """
+        akr explain assessment lists optional as_of but not that it requires a git commit; using an ISO date caused a safe parse failure. Showing slot types in explain would avoid this retry.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "akr"
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does/1 : papercut {
+    title "akr propose --from rejected a prose body as 'does not parse as a…"
+    state verified
+    statement """
+        akr propose --from rejected a prose body as 'does not parse as a record'; the CLI help calls it a body source but this build requires a complete canonical record.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "akr"
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.fff-multi-grep-returned-transport-closed-while/1 : papercut {
+    title "FFF multi_grep returned 'Transport closed' while locating CLI and…"
+    state verified
+    statement """
+        FFF multi_grep returned 'Transport closed' while locating CLI and highlight pipeline symbols; falling back to rg as the repository instructions allow after tool failure.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "fff"
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.forwarding-six-full-resolution-diagnostic-pngs/1 : papercut {
+    title "Forwarding six full-resolution diagnostic PNGs through the image viewer…"
+    state verified
+    statement """
+        Forwarding six full-resolution diagnostic PNGs through the image viewer exceeded the IPC frame limit; making a downscaled montage first is required, but the limit is only reported after all images are loaded.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.grade-sky-py-reported-zero-pairs-on-a-normal/1 : papercut {
+    title "`grade_sky.py` reported zero pairs on a normal recursive batch output…"
+    state verified
+    statement """
+        `grade_sky.py` reported zero pairs on a normal recursive batch output because rendered files were nested under the input directory name; the tool does not recurse or point the user to the discovered child directory.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.knowledge-context-rejects-a-completed-work/1 : papercut {
+    title "knowledge.context rejects a completed work record even when a follow-up…"
+    state verified
+    statement """
+        knowledge.context rejects a completed work record even when a follow-up scoping task needs its full history; the error does not suggest the nearest active related record.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.knowledge-explain-observation-and-knowledge/1 : papercut {
+    title "knowledge.explain observation and knowledge.papercut both failed with…"
+    state verified
+    statement """
+        knowledge.explain observation and knowledge.papercut both failed with Transport closed while recording the sky-stage diagnosis; the local akr CLI worked as a fallback.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "akr"
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.knowledge-search-and-knowledge-start-via-the/1 : papercut {
+    title "knowledge.search and knowledge.start via the akr MCP tool repeatedly…"
+    state verified
+    statement """
+        knowledge.search and knowledge.start via the akr MCP tool repeatedly failed with FTS5 errors (e.g. "fts5: syntax error near ','" on a comma-containing query, and "no such column: default" on the query 'HDR slice 6 non-default feature'). Queries with bare punctuation or reserved-looking words need escaping/quoting, or the tool should sanitise them. Fell back to grepping .akr/records directly.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "fugu"
+    created_at 2026-08-07
+}
+
+record raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp/1 : papercut {
+    title "Re-running stage dumps into an explicit `/tmp` diagnostic directory was…"
+    state verified
+    statement """
+        Re-running stage dumps into an explicit `/tmp` diagnostic directory was rejected because the command contained `rm -rf`; using a fresh `mktemp -d` directory avoids the cleanup and is safer.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.the-akr-cli-search-syntax-differs-from-the-mcp/1 : papercut {
+    title "The AKR CLI search syntax differs from the MCP shape: --query is…"
+    state verified
+    statement """
+        The AKR CLI search syntax differs from the MCP shape: --query is rejected and the help must be consulted separately.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "akr"
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.the-first-focused-cargo-test-invocation-passed/1 : papercut {
+    title "The first focused cargo test invocation passed two positional test…"
+    state verified
+    statement """
+        The first focused cargo test invocation passed two positional test filters, which Cargo rejects; reran with the shared module filter.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.the-full-batch-process-stopped-at-the-execution/1 : papercut {
+    title "The full batch process stopped at the execution harness's ~30-second…"
+    state verified
+    statement """
+        The full batch process stopped at the execution harness's ~30-second lifetime, initially resembling another OOM. Inspection found 28 images already written incrementally and no surviving process; bounded restart with skip-existing is required for long validation runs in this environment.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.the-knowledge-context-mcp-connector-returned/1 : papercut {
+    title "The knowledge.context MCP connector returned 'Transport closed' at the…"
+    state verified
+    statement """
+        The knowledge.context MCP connector returned 'Transport closed' at the start of implementation; using the equivalent akr CLI workflow.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "akr"
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near/1 : papercut {
+    title "The unit tests that pinned the da23c5f near-white anchor rule were kept…"
+    state verified
+    statement """
+        The unit tests that pinned the da23c5f near-white anchor rule were kept by name and docstring while their bodies were relaxed to weaker claims (exact channel equality became "spread should not grow much"; a test named near_white_reconstruction_is_independent_of_strength gained a comment saying near-white pixels now do vary with strength). The suite stayed green through a visible rendering regression. Worth a convention: when a rewrite makes a pinned invariant false, delete the test and say so in the changelog rather than editing its body under its old name.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "claude"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.while-locating-hdr-sky-local-tone-and/1 : papercut {
+    title "While locating HDR, sky, local-tone, and evaluation files, a parallel…"
+    state verified
+    statement """
+        While locating HDR, sky, local-tone, and evaluation files, a parallel batch of FFF find_files calls all failed with `Transport closed`; retrying with a single narrow request.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "FFF"
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.while-proposing-the-follow-on-work-record-a/1 : papercut {
+    title "While proposing the follow-on work record, a dense inline MCP payload…"
+    state verified
+    statement """
+        While proposing the follow-on work record, a dense inline MCP payload produced an unhelpful JavaScript syntax error before the AKR call ran; compact payload examples or earlier argument validation would make retries easier.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    about "akr"
+    author "codex"
+    created_at 2026-08-08
+}
+
+record raw-autotune.papercut.while-running-three-targeted-rust-tests-i/1 : papercut {
+    title "While running three targeted Rust tests I passed multiple test filters…"
+    state verified
+    statement """
+        While running three targeted Rust tests I passed multiple test filters to one cargo test invocation; Cargo accepts only one positional filter. Retried with a shared substring/full suite; an error hint mentioning this limitation would reduce the small loop.
+        """
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    author "codex"
+    created_at 2026-08-08
+}

@@ -1,0 +1,299 @@
+akr-lock 0.1
+project raw-autotune
+
+build {
+    tool "akr 0.1.0"
+    grammar "0.1"
+    vocabulary "0.2"
+    source_graph "sha256:70c4b4ecf0ff5322206c68fd7e670080ae7b086368de2ab62e749083f55f38b1"
+}
+
+source ".akr/project.akr" {
+    hash "sha256:497c010469d62d67f25793878480213c57676d4b500cf7de585bf8192a939f39"
+    records 0
+}
+
+source ".akr/records/raw-autotune/assessments.akr" {
+    hash "sha256:cbe85e3fde10c03aab3c5b3118a3db9a9b834717d7e8659017ea771f91604e0a"
+    records 1
+}
+
+source ".akr/records/raw-autotune/decisions.akr" {
+    hash "sha256:1a7917bd8593cb032eec3109603a7f98d25de8fa5f2dacab0dd37394a51b476f"
+    records 4
+}
+
+source ".akr/records/raw-autotune/evidence.akr" {
+    hash "sha256:702c37b356f5204cf0e3f3a53f5f8ef06ce203a53509166850473c1e0ebdb158"
+    records 18
+}
+
+source ".akr/records/raw-autotune/papercuts.akr" {
+    hash "sha256:18ab0e4e3d33f4d6d38fc25251763d2cfa92af246f2317f62c3d3d5f49abd63d"
+    records 20
+}
+
+source ".akr/records/raw-autotune/policies.akr" {
+    hash "sha256:0f4d86d4429d4298ef5586e61abab07fe8496aeb8acd1f1df799bb517d85ff9d"
+    records 2
+}
+
+source ".akr/records/raw-autotune/requirements.akr" {
+    hash "sha256:0fdbcacadc632957ec2c447e518a42d335273f7b065e5de8e5ed7006cc8a0bc3"
+    records 3
+}
+
+source ".akr/records/raw-autotune/work.akr" {
+    hash "sha256:a77e154c58bdcae8aaf752364a9b1033fe1e4c413019284d27648b72fb55c2f0"
+    records 19
+}
+
+seal @raw-autotune.assessment.sky-blowout-estimator-handoff/1 {
+    state verified
+    hash "sha256:2639b99f2b61219165f9b8c9d8887af65e0e51d6c6eae57a9357b99b7bda1a81"
+}
+
+seal @raw-autotune.evidence.blown-sky-renders-white-again/1 {
+    state verified
+    hash "sha256:461e672a7e37d2c4968dd22b3717d6bfb54ff1dc621ba5a4c4a951b41e27eeb2"
+}
+
+seal @raw-autotune.evidence.compression-ratio-batch-gate/1 {
+    state verified
+    hash "sha256:0ca960919fa2fcffe5f347f000ae5c4d7b26f4e5efa60a581c3e78851460e6c3"
+}
+
+seal @raw-autotune.evidence.exact-lens-profile-gate/1 {
+    state verified
+    hash "sha256:b010a04d454b3733323dc0e4dd7bcf6ad84155c637ede5dc20f106b191c0f828"
+}
+
+seal @raw-autotune.evidence.first-principles-highlight-suite-20260809/1 {
+    state verified
+    hash "sha256:1d0d30ff91f2e1670d0415af99554a8d3da87e9a28fde8a21caeab5997aaf6bb"
+}
+
+seal @raw-autotune.evidence.highlight-fringe-origin-controls/1 {
+    state verified
+    hash "sha256:9f9bed89090d550ab603f6c32e7ba80a75ca2922066dcb16cc97766d9cb318d3"
+}
+
+seal @raw-autotune.evidence.highlight-method-bench-20260809/1 {
+    state verified
+    hash "sha256:97a81d90a883b06ad649d96927d4708efaab598a60af0283b785141406ca8788"
+}
+
+seal @raw-autotune.evidence.highlight-real-frame-gate-unavailable-20260809/1 {
+    state verified
+    hash "sha256:d338464f8e7609f30e2aae77605195df33c253d623159d3363b57b059e2ff1f3"
+}
+
+seal @raw-autotune.evidence.highlight-white-path-regression-gate/1 {
+    state verified
+    hash "sha256:539e010f7c293346a286ae67df35eb006fc52d45bfdd24614311f068e7e8fc20"
+}
+
+seal @raw-autotune.evidence.highlight-white-path-target-grade/1 {
+    state verified
+    hash "sha256:4c858792bcb5be06d2fdbf328ca885e72325a31df8eff5f9d5ec480cfabb21fb"
+}
+
+seal @raw-autotune.evidence.profile-experiment-regression-gate/1 {
+    state verified
+    hash "sha256:311a762b39bfa1caa7460e91d1eeef2dc3c8a8288e75e24dafa74061319027b7"
+}
+
+seal @raw-autotune.evidence.profile-memory-safety-gate/1 {
+    state verified
+    hash "sha256:091e2b0bed4955e0892e8896f28c42c52fa1f7850c3ef9a1776665a913b6eabf"
+}
+
+seal @raw-autotune.evidence.raw-highlight-invariants-20260809/1 {
+    state verified
+    hash "sha256:bed47ea3229883d94c25b6330531907ffe1ebd8c38bb8077e93e952d1af67213"
+}
+
+seal @raw-autotune.evidence.residual-purple-sky-scope-review/1 {
+    state verified
+    hash "sha256:33e8a46379c9823f47d8b11330d2af5164324ea45e7808761921c6eaf18f31ba"
+}
+
+seal @raw-autotune.evidence.sky-stage-attribution-20260809/1 {
+    state verified
+    hash "sha256:2b7e19472a29c1d388dd5d1e44cc5bbbe1fb11e69f7ab7b7e82203be6a07470f"
+}
+
+seal @raw-autotune.evidence.slice-1-diagnostic-dumps-verify/1 {
+    state verified
+    hash "sha256:57b8bc88187b669828cabe3241606091d95261b250584829e16bfb5a94c59f53"
+}
+
+seal @raw-autotune.evidence.slice-4-confidence-plumbing-verify/1 {
+    state verified
+    hash "sha256:d38b92f316cab7dcc2276a4ddee450e2eb5af50cbcf9a2d437b7a1133d00f240"
+}
+
+seal @raw-autotune.evidence.slice-6-uncertainty-gated-chroma-verify/1 {
+    state verified
+    hash "sha256:178d1ede83406cf7f995ebc0bf148def5dec5fe2b0cdc807cbb6755ed5bf5c5a"
+}
+
+seal @raw-autotune.evidence.uncertainty-gate-consolidation/1 {
+    state verified
+    hash "sha256:cd3b3bde7239b0078fecc86e514e7de911650dcb997cf619dc8b8e62424b5e00"
+}
+
+seal @raw-autotune.papercut.a-release-build-invocation-returned-without/1 {
+    state verified
+    hash "sha256:c2ab5d51ace1d908de2b12bba57757ed9235ee40d49b4033e686f76d7b23c5c9"
+}
+
+seal @raw-autotune.papercut.a-targeted-cargo-test-invocation-with-two-exact/1 {
+    state verified
+    hash "sha256:6b124b7934b1706078dd9f6fc3ac13ea8da6a2120795248d203d21e7aad025de"
+}
+
+seal @raw-autotune.papercut.a-two-frame-lens-correction-profile-exact/1 {
+    state verified
+    hash "sha256:0c700ed86dd31322bf8c7298dd4517997c9eb0c99ef9cdee8a3972b53549f975"
+}
+
+seal @raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 {
+    state verified
+    hash "sha256:4e7b3c9fc456edf86912d5dc7e99258b4ca4dd040206197656234f322503633e"
+}
+
+seal @raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does/1 {
+    state verified
+    hash "sha256:47245cc0493245b65b48d991e1eeeedcee97be2c6d902bb3186d769eca2990ca"
+}
+
+seal @raw-autotune.papercut.fff-multi-grep-returned-transport-closed-while/1 {
+    state verified
+    hash "sha256:901ea8537e2d14a9d80ef8685b69de6e44e689432ee2fc94daf58f0625287722"
+}
+
+seal @raw-autotune.papercut.forwarding-six-full-resolution-diagnostic-pngs/1 {
+    state verified
+    hash "sha256:6a70097e40f4ff1fef02f7afda0433cee47a80bb59982ae21c0edcebf6956ef4"
+}
+
+seal @raw-autotune.papercut.grade-sky-py-reported-zero-pairs-on-a-normal/1 {
+    state verified
+    hash "sha256:22bfbd4a5c102829f41b2922860938fe95fd2293d314fce571d521a5fe5bb70b"
+}
+
+seal @raw-autotune.papercut.knowledge-context-rejects-a-completed-work/1 {
+    state verified
+    hash "sha256:038dd0705772b167344a74da378ddb650ed0952af5a202a85d4ed81b07f192f3"
+}
+
+seal @raw-autotune.papercut.knowledge-explain-observation-and-knowledge/1 {
+    state verified
+    hash "sha256:5570a67c5cde54ab35da985ae5fa5f2eef721e8b19805cd4feba871702310ba6"
+}
+
+seal @raw-autotune.papercut.knowledge-search-and-knowledge-start-via-the/1 {
+    state verified
+    hash "sha256:dc86069ee58851744ff9ace7348c22bf7a4813aed6322666984229716807159a"
+}
+
+seal @raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp/1 {
+    state verified
+    hash "sha256:c0067b95fc86fdcd14a8bd26cf374b5b78935b60cdba1741f8c49b499f3a14dc"
+}
+
+seal @raw-autotune.papercut.the-akr-cli-search-syntax-differs-from-the-mcp/1 {
+    state verified
+    hash "sha256:ff7e15b7e5bd17663a10d9071a497d8b218a365f3702e6eb6947cd2278ea2858"
+}
+
+seal @raw-autotune.papercut.the-first-focused-cargo-test-invocation-passed/1 {
+    state verified
+    hash "sha256:6a94cdaa958531c1366adcb5b185ca88a661683756e549d2346803a2e58f60ec"
+}
+
+seal @raw-autotune.papercut.the-full-batch-process-stopped-at-the-execution/1 {
+    state verified
+    hash "sha256:312235f55bad0f7406a89cb70521bbd4e88541b57ce9c415db16c5725537a414"
+}
+
+seal @raw-autotune.papercut.the-knowledge-context-mcp-connector-returned/1 {
+    state verified
+    hash "sha256:f5bba1c25047c16344d7508956e2c52af8d7a4102233f5ef6d5f070a3c398214"
+}
+
+seal @raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near/1 {
+    state verified
+    hash "sha256:c49cc925918066cd6e1085d7148a23598219fad099e7633169f937aa0acffe67"
+}
+
+seal @raw-autotune.papercut.while-locating-hdr-sky-local-tone-and/1 {
+    state verified
+    hash "sha256:1ee0b5fc47cbbd2816d657eee3e68357f29278900a0f111e7d3ad5a9ec2d8974"
+}
+
+seal @raw-autotune.papercut.while-proposing-the-follow-on-work-record-a/1 {
+    state verified
+    hash "sha256:ea8eb78714396b504ee678659e381f41793dcbab36dbd196d0e899d7ecf065db"
+}
+
+seal @raw-autotune.papercut.while-running-three-targeted-rust-tests-i/1 {
+    state verified
+    hash "sha256:c5e3288ae283b176cb9f30c153936a292f2f27597c653169464a0ffd98e80ef3"
+}
+
+seal @raw-autotune.work.harmonic-highlight-experiment/1 {
+    state active
+    hash "sha256:ebe39d9109ef5c4724c7dad6b4f111c1100611764a3e4cd0050da9fa71e5b492"
+}
+
+seal @raw-autotune.work.highlight-boundary-fringe-diagnosis/1 {
+    state completed
+    hash "sha256:62fb8f38855960345cb1b5f2534e7ea94bc70ebac9cd5be04c29ec608d3b5c7c"
+}
+
+seal @raw-autotune.work.profiled-purple-sky-experiment/1 {
+    state completed
+    hash "sha256:46978582addefdb74a4afab41d86a4f7f6eb38518d68b73adf95c9981dfb2aa8"
+}
+
+seal @raw-autotune.work.raw-pyramid-highlight-baseline/1 {
+    state active
+    hash "sha256:9731ae0d32ded527127f1f96e154f5e0170c5bbb02b5b870fb0c1dddd96c7cad"
+}
+
+seal @raw-autotune.work.residual-purple-sky-external-scope/1 {
+    state completed
+    hash "sha256:2306ea7ca6a52148e5e4a2862049798b19f1c68bf2f9d7b845a6adc8eb68713d"
+}
+
+seal @raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 {
+    state completed
+    hash "sha256:9976deec55921bf6ff8569519d4331e9b8f9dd6c2f91a1688ef5b085916bb10e"
+}
+
+seal @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 {
+    state completed
+    hash "sha256:43a6d249ba97592ae06dfb627205db5fda4d761d56baa3c51986dff5705ece59"
+}
+
+seal @raw-autotune.work.slice-4-raw-domain-confidence-plumbing-phase-b-4/1 {
+    state completed
+    hash "sha256:b3c5d351b62253cf80e24f11a64e45ce19d21fd5876a8e4f70c4a1e144c25f59"
+}
+
+seal @raw-autotune.work.slice-6-uncertainty-gated-chroma-limiting-phase/1 {
+    state completed
+    hash "sha256:cce5843f71c170d20e14a7a3284c3e6c538fa4a6f83c83a1c50ccf32673661db"
+}
+
+seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/1 {
+    state superseded
+    hash "sha256:520ad480c3c4850072506ce9af76979aaf7d8db0a810a2d26570f939fe811c0c"
+}
+
+seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 {
+    state active
+    hash "sha256:1a9b756c4306c65be43069849e4bcff6591bc474674daf45716475f8fc2eee2f"
+}

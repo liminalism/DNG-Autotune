@@ -1,0 +1,12 @@
+akr 0.1
+project raw-autotune
+
+record raw-autotune.assessment.sky-blowout-estimator-handoff/1 : assessment {
+    title "Sky blowout estimator handoff attribution"
+    state verified
+    statement """
+        The `_DSC1289.ARW` sky defect is two coupled failures, not one global colour cast. Before reconstruction, incomplete channel evidence leaves a smooth magenta-biased sky. Reconstruction then maps one-channel and two-channel clip cohorts to materially different chromatic estimates; the max-channel-weighted tone shoulder amplifies their boundary discontinuity by about 4.5x, producing cyan/lavender terraces. Local tone, HDR, saturation, and gamut compression occur after the missing-colour decision and cannot restore sky hue from first principles.
+
+        The next promotion gate should therefore be an end-to-end synthetic raw ground-truth bench, followed by spatial raw-domain reconstruction that propagates one coherent local colour model across each connected clipped region while conditioning it on channels that remain measured. Smoothly blending disagreeing per-pixel estimators is not sufficient. Open-source implementations are useful as auditable hypotheses and ablations, but another program's output should not be the reference truth.
+        """
+}

@@ -128,7 +128,12 @@ fn compress_gamut(mut rgb: [f32; 3], anchor: f32) -> [f32; 3] {
         return rgb;
     }
     // Highlight case: OKLab hue-preserving chroma reduction.
-    let in_gamut = rgb[0] >= 0.0 && rgb[0] <= 1.0 && rgb[1] >= 0.0 && rgb[1] <= 1.0 && rgb[2] >= 0.0 && rgb[2] <= 1.0;
+    let in_gamut = rgb[0] >= 0.0
+        && rgb[0] <= 1.0
+        && rgb[1] >= 0.0
+        && rgb[1] <= 1.0
+        && rgb[2] >= 0.0
+        && rgb[2] <= 1.0;
     if in_gamut {
         return rgb;
     }
@@ -136,19 +141,40 @@ fn compress_gamut(mut rgb: [f32; 3], anchor: f32) -> [f32; 3] {
     let chroma = lab.chroma();
     if chroma < crate::oklab::CHROMA_FLOOR {
         // Near-neutral but out of gamut (e.g., L out of range): clamp
-        return [rgb[0].clamp(0.0, 1.0), rgb[1].clamp(0.0, 1.0), rgb[2].clamp(0.0, 1.0)];
+        return [
+            rgb[0].clamp(0.0, 1.0),
+            rgb[1].clamp(0.0, 1.0),
+            rgb[2].clamp(0.0, 1.0),
+        ];
     }
     // Binary search for max chroma scale that yields in-gamut sRGB.
     let mut low = 0.0f32;
     let mut high = 1.0f32;
-    let achro = crate::oklab::to_linear_srgb(crate::oklab::Oklab { l: lab.l, a: 0.0, b: 0.0 });
-    let mut best = [achro[0].clamp(0.0,1.0), achro[1].clamp(0.0,1.0), achro[2].clamp(0.0,1.0)];
+    let achro = crate::oklab::to_linear_srgb(crate::oklab::Oklab {
+        l: lab.l,
+        a: 0.0,
+        b: 0.0,
+    });
+    let mut best = [
+        achro[0].clamp(0.0, 1.0),
+        achro[1].clamp(0.0, 1.0),
+        achro[2].clamp(0.0, 1.0),
+    ];
     // Achromatic is fallback, but we search for largest feasible chroma.
     for _ in 0..20 {
         let mid = (low + high) * 0.5;
-        let test_lab = crate::oklab::Oklab { l: lab.l, a: lab.a * mid, b: lab.b * mid };
+        let test_lab = crate::oklab::Oklab {
+            l: lab.l,
+            a: lab.a * mid,
+            b: lab.b * mid,
+        };
         let test_rgb = crate::oklab::to_linear_srgb(test_lab);
-        let feasible = test_rgb[0] >= 0.0 && test_rgb[0] <= 1.0 && test_rgb[1] >= 0.0 && test_rgb[1] <= 1.0 && test_rgb[2] >= 0.0 && test_rgb[2] <= 1.0;
+        let feasible = test_rgb[0] >= 0.0
+            && test_rgb[0] <= 1.0
+            && test_rgb[1] >= 0.0
+            && test_rgb[1] <= 1.0
+            && test_rgb[2] >= 0.0
+            && test_rgb[2] <= 1.0;
         if feasible {
             low = mid;
             best = test_rgb;
@@ -309,14 +335,30 @@ impl ToneLut {
 /// out of the per-pixel loop when there is no local tone map: `local_ev` is
 /// then the same `0.0` for every pixel in the image, so the gain is one
 /// constant, not up to ~31M redundant `exp2()` calls on a 10.5 MP frame.
+/// One pixel, rendered to display-linear RGB with diagnostic checkpoints after
+/// the tone curve, chroma scale, highlight white mix, and [`compress_gamut`].
+///
+/// `--dump-stages` needs every checkpoint and the renderer needs the last; they
+/// must be the same arithmetic or the diagnostic is measuring a different
+/// program from the one that shipped, which is how it was before this was one
+/// function.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RenderPixelStages {
+    pub(crate) after_curve: [f32; 3],
+    pub(crate) after_chroma: [f32; 3],
+    pub(crate) gamut_pre: [f32; 3],
+    pub(crate) gamut_post: [f32; 3],
+}
+
 #[inline]
-fn render_pixel_linear(
+fn render_pixel_stages(
     source: [f32; 3],
     params: &ToneParams,
     lut: &ToneLut,
     exposure_gain: f32,
+    reconstruction_uncertainty: f32,
     working_to_display: Option<&crate::color::Matrix3>,
-) -> [f32; 3] {
+) -> RenderPixelStages {
     let exposed = [
         source[0] * exposure_gain,
         source[1] * exposure_gain,
@@ -353,6 +395,7 @@ fn render_pixel_linear(
 
     let ratio = (mapped_norm / norm).clamp(0.0, 64.0);
     let mut rgb = [exposed[0] * ratio, exposed[1] * ratio, exposed[2] * ratio];
+    let after_curve = rgb;
 
     // Chroma work still anchors on the pixel's own rendered luminance, so the
     // norm blend changes how far highlights are rolled back but not the hue or
@@ -376,53 +419,49 @@ fn render_pixel_linear(
     // curve and the chroma anchor disagreed about where black is. They now agree.
     let mapped_luminance = luminance(rgb).clamp(params.black_output_linear, 1.0);
 
+    // Mantiuk et al.'s display-adaptive reconstruction expresses colour as a
+    // ratio to luminance and raises that ratio to an exponent `s`. Applying it
+    // only while the curve is actually compressing keeps shadows and midtones
+    // byte-identical, while `s=1` is an explicit exact no-op. Renormalising the
+    // candidate to the already-mapped luminance prevents the colour experiment
+    // from becoming a second exposure control.
+    let requested_exponent = params.highlight_color_ratio_exponent.clamp(0.0, 1.0);
+    if requested_exponent < 1.0
+        && mapped_luminance > 1.0e-8
+        && rgb
+            .iter()
+            .all(|channel| *channel > 0.0 && channel.is_finite())
+    {
+        let curve_ratio = (mapped_norm / norm).clamp(0.0, 1.0);
+        let compression_weight = smoothstep(((1.0 - curve_ratio) * 2.0).clamp(0.0, 1.0));
+        let exponent = 1.0 - (1.0 - requested_exponent) * compression_weight;
+        if exponent < 1.0 {
+            let mut candidate = rgb.map(|channel| (channel / mapped_luminance).powf(exponent));
+            let candidate_luminance = luminance(candidate);
+            if candidate_luminance.is_finite() && candidate_luminance > 1.0e-8 {
+                let preserve_luminance = mapped_luminance / candidate_luminance;
+                candidate
+                    .iter_mut()
+                    .for_each(|channel| *channel *= preserve_luminance);
+                rgb = candidate;
+            }
+        }
+    }
+
     let maximum = rgb[0].max(rgb[1]).max(rgb[2]);
     let minimum = rgb[0].min(rgb[1]).min(rgb[2]);
-    // Slice 6: uncertainty-gated chroma limiting. Where highlight
-    // reconstruction synthesized color, reduce the saturation/vibrance
-    // boost. Per-channel smoothstep 0.92->0.985 (per-white_level via
-    // normalized display linear) gives r = max(c_i); u blends with
-    // mean confidence so 1-clip (one channel near white) is mild,
-    // 2-clip stronger, 3-clip strongest, all continuous. This is
-    // C_gain = C_normal * (1 - u*d) from the advice, interpolated
-    // rather than hard-switched on clip count.
     let chroma = (maximum - minimum).clamp(0.0, 1.0);
     let midtone_weight = 1.0 - ((mapped_luminance - 0.5).abs() * 2.0).clamp(0.0, 1.0);
-    let mut adaptive_vibrance = 1.0 + params.vibrance * (1.0 - chroma) * midtone_weight;
-    {
-        // Use the pre-highlight_saturation rgb (still display linear)
-        // to estimate reconstruction uncertainty: how close to white
-        // were the source channels before the boost.
-        let cr = smoothstep(((maximum - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
-        // More precise per-channel: average confidence
-        let c0 = smoothstep(((rgb[0] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
-        let c1 = smoothstep(((rgb[1] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
-        let c2 = smoothstep(((rgb[2] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
-        let r = c0.max(c1).max(c2);
-        let mean_c = (c0 + c1 + c2) / 3.0;
-        let u = (r * (0.75 + 0.25 * mean_c)).clamp(0.0, 1.0);
-        // In highlights the preset's highlight_desaturation already pulls
-        // chroma in; uncertainty adds a further gain reduction. Reliable
-        // prior (u small) retains most chroma, 3-clip interior (u~1)
-        // strongly neutralizes. 0.45 keeps the Auto net 1.02 at the top
-        // from re-introducing false cyan/violet via the saturation boost.
-        let _ = cr; // keep for readability, r already captures it
-        adaptive_vibrance *= 1.0 - u * 0.45;
-        // Also gently increase highlight desaturation with u so the
-        // net 1.22*(1-0.16)=1.02 at the top becomes ~0.85 when uncertain.
-        // This is the per-pixel form of "global highlight_desaturation
-        // would flatten legitimate saturates" — we only flatten where
-        // color was synthesized.
-    }
-    let effective_highlight_desaturation = (params.highlight_desaturation + 0.35 * {
-        let c0 = smoothstep(((rgb[0] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
-        let c1 = smoothstep(((rgb[1] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
-        let c2 = smoothstep(((rgb[2] - 0.92) / (0.985 - 0.92)).clamp(0.0, 1.0));
-        let r = c0.max(c1).max(c2);
-        let mean_c = (c0 + c1 + c2) / 3.0;
-        (r * (0.75 + 0.25 * mean_c)).clamp(0.0, 1.0)
-    }).clamp(0.0, 1.0);
-    let highlight_saturation = 1.0 - effective_highlight_desaturation * normalized_highlight.powi(2);
+    let adaptive_vibrance = 1.0 + params.vibrance * (1.0 - chroma) * midtone_weight;
+    // Highlight desaturation is applied below as a path *toward white*: lower
+    // channels rise toward the brightest one while the brightest channel stays
+    // fixed. Its complementary scale remains useful as the lowest scale the
+    // headroom cap may choose: unlike an unconditional identity floor, it lets
+    // an already out-of-range chromatic highlight contract just enough to avoid
+    // clipping before taking the max-preserving path to white.
+    let highlight_white_mix =
+        (params.highlight_desaturation * normalized_highlight.powi(2)).clamp(0.0, 1.0);
+    let highlight_chroma_floor = 1.0 - highlight_white_mix;
 
     // Chroma is expanded around the pixel's own rendered luminance, so a large
     // enough scale drives the outermost channel past the white point the curve
@@ -438,14 +477,11 @@ fn render_pixel_linear(
     // headroom the curve left unused, and nothing more. `compress_gamut` still
     // follows, as the guard for what the curve itself put out of range.
     //
-    // The cap's floor is the scale the pixel would get with no saturation
-    // opinion at all, not 1.0. In the deep highlights `highlight_saturation`
-    // asks for less than 1.0, and a floor of 1.0 would *overrule* it — turning
-    // the guard into a way to push chroma up on exactly the pixels the preset
-    // wanted pulled in. Flooring at the unboosted scale means the cap can only
-    // ever withhold the boost, so a capped pixel renders as it did before the
-    // preset gained one.
-    let unboosted_scale = adaptive_vibrance * highlight_saturation;
+    // This is a safety floor for the cap, not the scale ultimately rendered.
+    // Keeping adaptive vibrance without the highlight factor here forced the
+    // result above available headroom on the corpus; using the shoulder's own
+    // floor retains the old no-new-clipping bound.
+    let headroom_floor = adaptive_vibrance * highlight_chroma_floor;
     let headroom_scale = {
         let upper = if maximum > mapped_luminance {
             (params.white_output_linear - mapped_luminance) / (maximum - mapped_luminance)
@@ -457,16 +493,108 @@ fn render_pixel_linear(
         } else {
             f32::INFINITY
         };
-        upper.min(lower).max(unboosted_scale)
+        upper.min(lower).max(headroom_floor)
     };
 
-    let chroma_scale = (params.saturation * unboosted_scale).min(headroom_scale);
+    // Withhold the chroma *boost* where highlight reconstruction synthesised the
+    // colour. The gate is the per-pixel reconstruction uncertainty carried from
+    // `highlight::reconstruct` (raw-domain clip confidence), not the pixel's
+    // display brightness — so a reconstructed highlight that tone-maps dim is
+    // still covered, which a brightness proxy cannot see.
+    //
+    // Withholding means interpolating back toward the adaptive-vibrance scale,
+    // but never past the scale that actually fits the available headroom.
+    // Scaling the result *down*
+    // instead, as this once did, does not withhold an opinion; it imposes the
+    // opposite one. At full uncertainty a factor of 0.15 collapsed every channel
+    // onto `mapped_luminance`, and since the tone curve lands a blown sky well
+    // under white, the most-blown pixels in the frame came out as the darkest:
+    // flat grey interiors ringed by the brighter, less-clipped pixels along
+    // every foliage edge. Reconstruction makes those pixels neutral in the raw
+    // domain; there is no cast left for a chroma cut to remove.
+    let gate = crate::highlight::synthesis_gate(reconstruction_uncertainty);
+    let boosted = (params.saturation * adaptive_vibrance).min(headroom_scale);
+    let gated_scale = adaptive_vibrance.min(headroom_scale);
+    let chroma_scale = (boosted + (gated_scale - boosted) * gate).min(boosted);
 
     for channel in &mut rgb {
         *channel = mapped_luminance + (*channel - mapped_luminance) * chroma_scale;
     }
+    let after_chroma = rgb;
 
-    compress_gamut(rgb, mapped_luminance)
+    // Travel toward white without darkening.  The peak is invariant, every
+    // other channel is monotone non-decreasing, and the operation is continuous
+    // in both source brightness and `highlight_desaturation`.  This is what
+    // removes a recorded blue/lavender strip beside a reconstructed near-white
+    // region without inventing a spatial halo or collapsing the region onto its
+    // much lower luminance.
+    let white_anchor = rgb[0].max(rgb[1]).max(rgb[2]);
+    for channel in &mut rgb {
+        *channel += (white_anchor - *channel) * highlight_white_mix;
+    }
+
+    let gamut_anchor = luminance(rgb).clamp(params.black_output_linear, 1.0);
+    RenderPixelStages {
+        after_curve,
+        after_chroma,
+        gamut_pre: rgb,
+        gamut_post: compress_gamut(rgb, gamut_anchor),
+    }
+}
+
+/// Renderer-exact display-linear checkpoints for an in-memory benchmark.
+///
+/// This is intentionally crate-visible rather than a second test renderer:
+/// synthetic truth and captured candidates must pass through the same
+/// arithmetic as production or the current tone-shoulder amplification is
+/// invisible to the gate.
+pub(crate) fn render_checkpoints(
+    image: &LinearImage,
+    params: &ToneParams,
+    reconstruction_uncertainty: Option<&[f32]>,
+    working_to_display: Option<&crate::color::Matrix3>,
+) -> Vec<RenderPixelStages> {
+    if let Some(map) = reconstruction_uncertainty {
+        assert_eq!(map.len(), image.pixels.len());
+    }
+    let lut = ToneLut::new(params);
+    let exposure_gain = params.exposure_ev.exp2();
+    image
+        .pixels
+        .par_iter()
+        .enumerate()
+        .map(|(index, source)| {
+            render_pixel_stages(
+                *source,
+                params,
+                &lut,
+                exposure_gain,
+                reconstruction_uncertainty.map_or(0.0, |map| map[index]),
+                working_to_display,
+            )
+        })
+        .collect()
+}
+
+/// One pixel, rendered to display-linear RGB.
+#[inline]
+fn render_pixel_linear(
+    source: [f32; 3],
+    params: &ToneParams,
+    lut: &ToneLut,
+    exposure_gain: f32,
+    reconstruction_uncertainty: f32,
+    working_to_display: Option<&crate::color::Matrix3>,
+) -> [f32; 3] {
+    render_pixel_stages(
+        source,
+        params,
+        lut,
+        exposure_gain,
+        reconstruction_uncertainty,
+        working_to_display,
+    )
+    .gamut_post
 }
 
 /// One pixel, sRGB-encoded. Test-only: `render`'s hot loop does not call
@@ -481,7 +609,7 @@ fn render_pixel_local(
 ) -> [u16; 3] {
     let exposure_gain = (params.exposure_ev + local_ev).exp2();
     let lut = ToneLut::new(params);
-    let rgb = render_pixel_linear(source, params, &lut, exposure_gain, working_to_display);
+    let rgb = render_pixel_linear(source, params, &lut, exposure_gain, 0.0, working_to_display);
     [
         to_u16(srgb_encode(rgb[0])),
         to_u16(srgb_encode(rgb[1])),
@@ -503,54 +631,53 @@ fn render_pixel(source: [f32; 3], params: &ToneParams) -> [u16; 3] {
 pub fn render(
     image: &LinearImage,
     params: &ToneParams,
-    local_tone: Option<&crate::localtone::LocalToneMap>,
+    local_tone: Option<&dyn crate::localtone::CorrectionField>,
+    reconstruction_uncertainty: Option<&[f32]>,
     working_to_display: Option<&crate::color::Matrix3>,
 ) -> Rgb16Image {
     let mut linear = vec![0.0_f32; image.pixels.len() * 3];
     let lut = ToneLut::new(params);
 
-    match local_tone {
-        Some(local_tone) => {
-            assert_eq!(
-                local_tone.dimensions(),
-                (image.width, image.height),
-                "local tone map dimensions must match the rendered image"
-            );
-            linear
-                .par_chunks_exact_mut(3)
-                .zip(image.pixels.par_iter())
-                .zip(local_tone.corrections_ev().par_iter())
-                .for_each(|((destination, source), local_ev)| {
-                    let exposure_gain = (params.exposure_ev + local_ev).exp2();
-                    let rendered = render_pixel_linear(
-                        *source,
-                        params,
-                        &lut,
-                        exposure_gain,
-                        working_to_display,
-                    );
-                    destination.copy_from_slice(&rendered);
-                });
-        }
-        None => {
-            // No local tone map: `local_ev` is 0.0 for every pixel, so the gain
-            // is one constant for the whole image, not a per-pixel `exp2()`.
-            let exposure_gain = params.exposure_ev.exp2();
-            linear
-                .par_chunks_exact_mut(3)
-                .zip(image.pixels.par_iter())
-                .for_each(|(destination, source)| {
-                    let rendered = render_pixel_linear(
-                        *source,
-                        params,
-                        &lut,
-                        exposure_gain,
-                        working_to_display,
-                    );
-                    destination.copy_from_slice(&rendered);
-                });
-        }
+    if let Some(local_tone) = local_tone {
+        assert_eq!(
+            local_tone.dimensions(),
+            (image.width, image.height),
+            "local tone map dimensions must match the rendered image"
+        );
     }
+    if let Some(map) = reconstruction_uncertainty {
+        assert_eq!(
+            map.len(),
+            image.pixels.len(),
+            "reconstruction uncertainty map must match the rendered image"
+        );
+    }
+    // With no local tone map every pixel shares one exposure gain, so the
+    // `exp2()` is hoisted out of the loop rather than run ~31M times.
+    let base_gain = params.exposure_ev.exp2();
+
+    linear
+        .par_chunks_exact_mut(3)
+        .enumerate()
+        .zip(image.pixels.par_iter())
+        .for_each(|((index, destination), source)| {
+            let exposure_gain = match local_tone {
+                Some(local_tone) => {
+                    (params.exposure_ev + local_tone.corrections_ev()[index]).exp2()
+                }
+                None => base_gain,
+            };
+            let uncertainty = reconstruction_uncertainty.map_or(0.0, |map| map[index]);
+            let rendered = render_pixel_linear(
+                *source,
+                params,
+                &lut,
+                exposure_gain,
+                uncertainty,
+                working_to_display,
+            );
+            destination.copy_from_slice(&rendered);
+        });
 
     let output = encode_srgb_u16(&linear);
 
@@ -558,88 +685,64 @@ pub fn render(
         .expect("rendered buffer dimensions are internally consistent")
 }
 
-/// Write gamut diagnostics: display-linear before and after `compress_gamut`.
+/// Write display-linear diagnostics after the curve, chroma scale, highlight
+/// white mix, and gamut compression.
 ///
 /// Best-effort, never fails the file. Called from the pipeline when
 /// `--dump-stages` is set, after `ToneParams` are solved.
 pub(crate) fn dump_gamut_diagnostics(
     image: &LinearImage,
     params: &ToneParams,
-    local_tone: Option<&crate::localtone::LocalToneMap>,
+    local_tone: Option<&dyn crate::localtone::CorrectionField>,
+    reconstruction_uncertainty: Option<&[f32]>,
     working_to_display: Option<&crate::color::Matrix3>,
     dump_dir: &std::path::Path,
     stem: &str,
 ) {
     let res: anyhow::Result<()> = (|| {
         let lut = ToneLut::new(params);
-        let mut pre_linear = vec![0.0f32; image.pixels.len() * 3];
-        let mut post_linear = vec![0.0f32; image.pixels.len() * 3];
-        // Replicate render_pixel_linear but split before/after compress_gamut
-        let mut fill = |source: [f32; 3], exposure_gain: f32| -> ([f32; 3], [f32; 3]) {
-            let exposed = [source[0]*exposure_gain, source[1]*exposure_gain, source[2]*exposure_gain];
-            let exposed = match working_to_display {
-                Some(m) => [m[0][0]*exposed[0]+m[0][1]*exposed[1]+m[0][2]*exposed[2],
-                            m[1][0]*exposed[0]+m[1][1]*exposed[1]+m[1][2]*exposed[2],
-                            m[2][0]*exposed[0]+m[2][1]*exposed[1]+m[2][2]*exposed[2]],
-                None => exposed,
-            };
-            let src_lum = luminance(exposed).max(1.0e-8);
-            let max_chan = exposed[0].max(exposed[1]).max(exposed[2]).max(1.0e-8);
-            let hw = lut.weight(src_lum);
-            let norm = src_lum*(1.0-hw)+max_chan*hw;
-            let (mapped_norm, norm_high) = lut.curve(norm);
-            let ratio = (mapped_norm / norm).clamp(0.0, 64.0);
-            let mut rgb = [exposed[0]*ratio, exposed[1]*ratio, exposed[2]*ratio];
-            let mapped_lum = luminance(rgb).clamp(params.black_output_linear, 1.0);
-            let highlight_sat = 1.0 - params.highlight_desaturation * norm_high.powi(2);
-            let maximum = rgb[0].max(rgb[1]).max(rgb[2]);
-            let minimum = rgb[0].min(rgb[1]).min(rgb[2]);
-            let chroma = (maximum - minimum).clamp(0.0, 1.0);
-            let mid_w = 1.0 - ((mapped_lum - 0.5).abs()*2.0).clamp(0.0,1.0);
-            let adaptive = 1.0 + params.vibrance*(1.0-chroma)*mid_w;
-            let unboosted = adaptive*highlight_sat;
-            let headroom = {
-                let upper = if maximum > mapped_lum { (params.white_output_linear - mapped_lum)/(maximum - mapped_lum) } else { f32::INFINITY };
-                let lower = if minimum < mapped_lum { (mapped_lum - params.black_output_linear)/(mapped_lum - minimum) } else { f32::INFINITY };
-                upper.min(lower).max(unboosted)
-            };
-            let scale = (params.saturation * unboosted).min(headroom);
-            for ch in &mut rgb { *ch = mapped_lum + (*ch - mapped_lum)*scale; }
-            let pre = rgb;
-            let post = compress_gamut(rgb, mapped_lum);
-            (pre, post)
-        };
-        match local_tone {
-            Some(lt) => {
-                pre_linear.par_chunks_exact_mut(3).zip(post_linear.par_chunks_exact_mut(3))
-                    .zip(image.pixels.par_iter()).zip(lt.corrections_ev().par_iter())
-                    .for_each(|(((pre, post), src), ev)| {
-                        let gain = (params.exposure_ev + ev).exp2();
-                        let (a,b)=fill(*src,gain);
-                        pre.copy_from_slice(&a); post.copy_from_slice(&b);
-                    });
-            }
-            None => {
-                let gain = params.exposure_ev.exp2();
-                pre_linear.par_chunks_exact_mut(3).zip(post_linear.par_chunks_exact_mut(3))
-                    .zip(image.pixels.par_iter())
-                    .for_each(|((pre, post), src)| {
-                        let (a,b)=fill(*src,gain);
-                        pre.copy_from_slice(&a); post.copy_from_slice(&b);
-                    });
-            }
-        }
-        for (label, buf) in [("gamut-pre", pre_linear), ("gamut-post", post_linear)] {
-            let out = encode_srgb_u16(&buf);
+        let base_gain = params.exposure_ev.exp2();
+        type StageSelector = fn(RenderPixelStages) -> [f32; 3];
+        let stages: [(&str, StageSelector); 4] = [
+            ("tone-after-curve", |stage| stage.after_curve),
+            ("tone-after-chroma", |stage| stage.after_chroma),
+            ("gamut-pre", |stage| stage.gamut_pre),
+            ("gamut-post", |stage| stage.gamut_post),
+        ];
+        for (label, select) in stages {
+            // Render one diagnostic plane at a time. Four passes cost more CPU,
+            // but `--dump-stages` is explicitly diagnostic and this keeps peak
+            // memory to one full-resolution RGB plane instead of four.
+            let mut linear = vec![0.0f32; image.pixels.len() * 3];
+            linear
+                .par_chunks_exact_mut(3)
+                .enumerate()
+                .zip(image.pixels.par_iter())
+                .for_each(|((index, destination), src)| {
+                    let gain = match local_tone {
+                        Some(lt) => (params.exposure_ev + lt.corrections_ev()[index]).exp2(),
+                        None => base_gain,
+                    };
+                    let u = reconstruction_uncertainty.map_or(0.0, |map| map[index]);
+                    let stage =
+                        render_pixel_stages(*src, params, &lut, gain, u, working_to_display);
+                    destination.copy_from_slice(&select(stage));
+                });
+            let out = encode_srgb_u16(&linear);
             let p = dump_dir.join(format!("{stem}-{label}.png"));
-            if let Some(parent)=p.parent(){ std::fs::create_dir_all(parent)?; }
-            let img: Rgb16Image = ImageBuffer::from_raw(image.width as u32, image.height as u32, out).expect("dims");
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let img: Rgb16Image =
+                ImageBuffer::from_raw(image.width as u32, image.height as u32, out).expect("dims");
             img.save(&p)?;
             eprintln!("DUMP  {label}: {}", p.display());
         }
         Ok(())
     })();
-    if let Err(e)=res { eprintln!("DUMP  gamut diagnostics failed for {stem}: {e}"); }
+    if let Err(e) = res {
+        eprintln!("DUMP  gamut diagnostics failed for {stem}: {e}");
+    }
 }
 
 /// Batch sRGB encode: linear `[0, 1]` values straight to `u16`, in chunks run
@@ -706,6 +809,7 @@ mod tests {
             saturation: 1.0,
             vibrance: 0.0,
             highlight_desaturation: 0.0,
+            highlight_color_ratio_exponent: 1.0,
             highlight_norm: 0.0,
             noise_floor_ev: None,
         }
@@ -717,6 +821,136 @@ mod tests {
             highlight_norm: 1.0,
             ..parameters()
         }
+    }
+
+    #[test]
+    fn color_ratio_exponent_reduces_only_compressed_chroma_and_preserves_luminance() {
+        let source = [6.0, 2.0, 6.0];
+        let baseline_params = parameters_protected();
+        let baseline_lut = ToneLut::new(&baseline_params);
+        let baseline =
+            render_pixel_stages(source, &baseline_params, &baseline_lut, 1.0, 0.0, None).gamut_pre;
+        let paper_params = ToneParams {
+            highlight_color_ratio_exponent: 0.6,
+            ..baseline_params
+        };
+        let paper_lut = ToneLut::new(&paper_params);
+        let paper =
+            render_pixel_stages(source, &paper_params, &paper_lut, 1.0, 0.0, None).gamut_pre;
+
+        let spread = |pixel: [f32; 3]| {
+            pixel.into_iter().fold(f32::NEG_INFINITY, f32::max)
+                - pixel.into_iter().fold(f32::INFINITY, f32::min)
+        };
+        assert!(spread(paper) < spread(baseline));
+        assert!((luminance(paper) - luminance(baseline)).abs() < 1.0e-6);
+
+        let midtone = [0.24, 0.12, 0.20];
+        let plain_mid = render_pixel_stages(
+            midtone,
+            &parameters_protected(),
+            &ToneLut::new(&parameters_protected()),
+            1.0,
+            0.0,
+            None,
+        )
+        .gamut_pre;
+        let paper_mid =
+            render_pixel_stages(midtone, &paper_params, &paper_lut, 1.0, 0.0, None).gamut_pre;
+        assert_eq!(plain_mid, paper_mid, "uncompressed midtones must be exact");
+    }
+
+    /// The per-pixel reconstruction-uncertainty map, not a display-brightness
+    /// proxy, drives the chroma gate, and `u = 0` is byte-identical to passing no
+    /// map at all.
+    ///
+    /// What the gate does is withhold the preset's saturation *boost*: at full
+    /// uncertainty the pixel renders as it would with no saturation opinion, and
+    /// no further. It does not cut chroma below that, and — the property the
+    /// `0.85` suppression factor broke — it does not change how bright the pixel
+    /// is. Collapsing chroma toward the mapped luminance darkens a blown pixel,
+    /// which is how the most-clipped pixels in a frame came out darker than the
+    /// less-clipped ones around them.
+    #[test]
+    fn reconstruction_uncertainty_withholds_the_chroma_boost_without_darkening() {
+        let mut params = parameters();
+        params.saturation = 1.22; // the auto preset's boost, which amplified the cast
+        // A bright pixel with green trailing red/blue — the white-balance spread a
+        // blown highlight leaves behind, i.e. magenta.
+        let magenta = [0.60_f32, 0.35, 0.60];
+        let image = LinearImage::new(1, 1, vec![magenta]).unwrap();
+
+        let trusted = render(&image, &params, None, Some(&[0.0]), None).into_raw();
+        let no_map = render(&image, &params, None, None, None).into_raw();
+        let synthesised = render(&image, &params, None, Some(&[1.0]), None).into_raw();
+
+        assert_eq!(
+            trusted, no_map,
+            "u = 0 must be byte-identical to passing no uncertainty map"
+        );
+
+        // The boost withheld is exactly the preset's saturation opinion.
+        let mut unopinionated = params.clone();
+        unopinionated.saturation = 1.0;
+        let expected = render(&image, &unopinionated, None, Some(&[0.0]), None).into_raw();
+        assert_eq!(
+            synthesised, expected,
+            "at full uncertainty the pixel must render as it would with no \
+             saturation boost, got {synthesised:?} against {expected:?}"
+        );
+
+        let chroma = |p: &[u16]| {
+            (p[0] as i32 - p[1] as i32)
+                .abs()
+                .max((p[2] as i32 - p[1] as i32).abs())
+        };
+        assert!(chroma(&trusted) > 0, "a trusted pixel keeps its colour");
+        assert!(
+            chroma(&synthesised) < chroma(&trusted),
+            "the boost must be withheld: kept {}, gated {}",
+            chroma(&trusted),
+            chroma(&synthesised)
+        );
+
+        // Rec. 709 luminance in u16 counts: the gate must not move it.
+        let luma = |p: &[u16]| 0.2126 * p[0] as f32 + 0.7152 * p[1] as f32 + 0.0722 * p[2] as f32;
+        assert!(
+            luma(&synthesised) >= luma(&trusted) - 0.01 * luma(&trusted),
+            "gating darkened the pixel: {} against {}",
+            luma(&synthesised),
+            luma(&trusted)
+        );
+    }
+
+    /// Highlight desaturation follows a max-preserving path to white.  At full
+    /// strength it may only lift the lower channels; contracting around
+    /// luminance would lower blue here and recreate the dark rim this control
+    /// exists to avoid.
+    #[test]
+    fn highlight_desaturation_lifts_to_white_without_lowering_the_peak() {
+        let sky = [0.60, 1.10, 4.40];
+        let coloured = render_pixel(sky, &parameters_protected());
+        let white = render_pixel(
+            sky,
+            &ToneParams {
+                highlight_desaturation: 1.0,
+                ..parameters_protected()
+            },
+        );
+
+        assert_eq!(white[0], white[1]);
+        assert_eq!(white[1], white[2]);
+        assert!(
+            white
+                .iter()
+                .zip(coloured)
+                .all(|(after, before)| *after >= before),
+            "path to white lowered a channel: {coloured:?} -> {white:?}"
+        );
+        assert_eq!(
+            white[2], coloured[2],
+            "the brightest channel must stay fixed"
+        );
     }
 
     /// The table is an approximation of the exact transcendental curve; this

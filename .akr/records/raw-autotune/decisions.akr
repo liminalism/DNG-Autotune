@@ -1,6 +1,19 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.decision.highlight-desaturation-uses-peak-preserving-white-path/1 : decision {
+    title "Highlight desaturation follows a peak-preserving path to white"
+    state proposed
+    scope [ path "src/color.rs", path "src/tone.rs" ]
+    decision """
+        Apply highlight desaturation by continuously lifting lower display-linear RGB channels toward the brightest channel while leaving the brightest channel invariant. Keep the existing headroom cap before this mix and recompute the gamut-compression luminance anchor afterwards.
+
+        Controlled renders with highlight reconstruction disabled and with PPG, RCD, AMaZE, and Rawler demosaicing retain the same lavender/purple source colour. On `_DSC1289` only about 0.7% of the purple-mask pixels carry nonzero reconstruction uncertainty, so another reconstruction rule would target the wrong signal. A spatial neutralisation prototype created visible white halos.
+
+        Consequences: the existing global highlight shoulder reduces the adjacency contrast without semantic sky detection, spatial halos, or the darkening caused by contraction around luminance. Recorded colour is reduced rather than erased, and reconstruction remains governed by raw-domain clipping evidence.
+        """
+}
+
 record raw-autotune.decision.key-decisions/1 : decision {
     title "Key Decisions"
     state proposed
@@ -15,4 +28,30 @@ record raw-autotune.decision.key-decisions/1 : decision {
             1. **Where the diagnostics live.** Advice says "inside the owned color path." Decision: add hooks in `src/color.rs:develop` (which calls `highlight::reconstruct` and owns the working→display matrix) to emit dumps before/after `highlight::reconstruct` and before/after `compress_gamut` in `src/tone.rs:282`. Alternative rejected: extending only `pipeline::dump_stage` (which sees `LinearImage` after develop) — it cannot see the pre-reconstruction camera-RGB buffer the advice specifies (items 1-4). Use a `--dump-stages` extension (or new `--dump-highlight-stages DIR`) that writes both the existing `LinearImage` baseline dumps and the new camera-RGB + gamut-stage PNGs, reusing `tone::render_baseline` with/without the working→display matrix consistently. Keep the "best effort, never fails the file" contract (`src/pipeline.rs:137`).
             """
     }
+}
+
+record raw-autotune.decision.near-whiteness-replaces-chromaticity-solve/1 : decision {
+    title "Highlight continuity comes from a near-whiteness weight, not a chromaticity prior"
+    state proposed
+    scope [ path "src/highlight.rs", path "src/synthetic.rs", path "src/tone.rs" ]
+    decision """
+        The neighbourhood-guided log-chromaticity reconstruction (`q` prior plus least-squares intensity solve `s*`) that ff74d3b landed is withdrawn. The `da23c5f` anchor rule is restored as the reconstruction, and the regime discontinuity it was meant to cure is removed instead by `highlight::near_whiteness` — the second-largest per-channel clip confidence — which drives the anchor width, the effective strength, and each channel's share of the lift. At its two ends the rule is exactly `da23c5f`, so every assertion of that commit holds verbatim.
+
+        The prior is not recoverable by tuning. Inside a large blown region there is no unclipped neighbour within any affordable radius, so `q` falls back to the frame's mean chromaticity — vegetation on a landscape — and the fully-clipped arm had no defined solve at all. Measured on `_DSC1283`, a fully-clipped sky pixel left reconstruction at camera `[255, 227, 255]`, about half the original white-balance cast, and the renderer's `1 - u*0.85` chroma cut then hid that cast by collapsing the pixel onto its tone-mapped luminance at sRGB 184 — darker than its less-clipped neighbours, which is the taupe-blob-with-posterized-edges defect.
+
+        Consequences: the chroma gate in `tone.rs` withholds the saturation boost (interpolating to `unboosted_scale`) rather than scaling chroma toward zero, because withholding an opinion cannot darken a pixel and imposing the opposite one can. ff74d3b's display-brightness proxy is removed as redundant with the raw-domain map. The Oklab perceptual gamut mapping from the same commit is kept — it was not implicated. Reconstruction is also no longer the dominant cost: the sequential O(W*H*r^2) neighbourhood scan is gone, `_DSC1283` renders in 2.3 s rather than 27 s.
+        """
+}
+
+record raw-autotune.decision.profile-experiments-remain-opt-in/1 : decision {
+    title "Lens and compression-ratio experiments remain opt-in"
+    state proposed
+    scope [ path "src/lens.rs", path "src/memory.rs", path "src/tone.rs" ]
+    decision """
+        Keep embedded DNG lens correction and highlight colour-ratio exponent 1.0 as the unattended defaults. Offer exact Lensfun distortion/TCA correction and compression-aware ratio exponents only as explicit experiments.
+
+        On _DSC1289 the exact Sony FE 24mm F2.8 G profile reduced an edge-localized purple mask from 0.59% to 0.34%, while the broad sky green deficit changed only from 13.8% to 13.6%. A compression-aware exponent of 0.6 then reduced that deficit to 7.6% without moving ground exposure, supporting the two-cause diagnosis. However, across 58 third-batch decoded JPEGs, the combined configuration raised maximum hard clipping from 0.204% to 3.178% and maximum near-white share from 2.0% to 28.0%, so it fails promotion.
+
+        External profile resampling keeps RGB and per-channel raw clip confidence on the same coordinates. Embedded DNG confidence behavior remains historical because changing it altered the default and produced a material DNG clipping regression. Exact-profile processing reserves an additional 16 bytes per pixel; all numeric worker requests are memory-capped, and insufficient reserved memory for one frame is a pre-decode error rather than an OOM risk.
+        """
 }

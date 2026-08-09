@@ -127,8 +127,11 @@ raw-autotune v0.1.19 | 376 file(s) | profile=archive-auto-v2 | preset=auto | con
   (auto: 22.76 GiB available, 2.67 GiB per image at 49.9 MP)
 ```
 
-Override it when something else on the machine needs the memory, or to pin a
-measurement (each image still uses the shared Rayon CPU pool whatever this is):
+Request a lower ceiling when something else on the machine needs the memory, or
+to pin a measurement (each image still uses the shared Rayon CPU pool whatever
+this is). A numeric request is an upper bound: the safety planner lowers it when
+necessary, and refuses to decode if its conservative half-`MemAvailable` budget
+cannot hold one frame:
 
 ```bash
 raw-autotune raw-folder --output processed --jobs 2
@@ -212,6 +215,21 @@ Apply local tone adaptation at half strength:
 ```bash
 raw-autotune photo.dng --local-tone 0.5
 ```
+
+Run a pre-demosaic highlight experiment at its required full strength:
+
+```bash
+raw-autotune photo.ARW --highlight-method raw-pyramid \
+  --highlight-reconstruction 1
+raw-autotune photo.ARW --highlight-method harmonic \
+  --highlight-reconstruction 1
+```
+
+`current` remains the default. The spatial methods are CLI-only evaluation
+paths: they keep trusted Bayer sites exact, preserve the original raw clip map
+for downstream uncertainty, and are not part of the automatic profile. A
+partial reconstruction strength is rejected because blending two estimators can
+recreate the very clip-boundary contour these methods are meant to measure.
 
 Override the archive JPEG quality:
 
@@ -507,9 +525,15 @@ The automatic lens path is similarly metadata-driven. DNG `OpcodeList3`
 tangential distortion plus per-channel lateral chromatic aberration.
 `FixVignetteRadial` gain instructions are also supported. The local ProShot
 phone DNG applies its embedded warp with a measured maximum displacement of
-about 10 pixels. `--no-lens-correction` is the diagnostic control. A file with
-no usable opcode is left alone—lens name and focal length are not enough
-information to invent coefficients.
+about 10 pixels. `--lens-correction embedded` is the default and
+`--no-lens-correction` remains an alias for `off`.
+
+`--lens-correction profile-exact` opts into the pinned Lensfun database for
+non-DNG files. It requires exactly one canonical camera/lens match, applies
+distortion and transverse chromatic aberration but not vignetting, and reports
+the database version, identities, components, and per-channel displacement.
+Missing or ambiguous metadata leaves the frame unchanged; no fuzzy candidate is
+ever selected unattended.
 
 ### What the missing DCP tables are
 
@@ -676,8 +700,8 @@ That distinction matters because each failure belongs to a different subsystem.
 - face/subject/sky detection;
 - semantic or face-aware local tone control;
 - profiled RAW denoising;
-- lens correction for files without standardized DNG opcodes, and newer
-  `WarpRectilinear2`/fisheye opcode variants;
+- default-on profiles for files without standardized DNG opcodes, profile
+  vignetting, and newer `WarpRectilinear2`/fisheye opcode variants;
 - DCP creative hue/saturation maps and camera looks;
 - scene-linear EXR export;
 - GPU processing;
@@ -687,9 +711,10 @@ See `docs/ROADMAP.md`, `docs/KNOWN_LIMITATIONS.md`, and `docs/BUILD_STATUS.md`.
 
 ## Licensing
 
-The project source is licensed **AGPL-3.0-or-later** (see `LICENSE`). It depends
-on Rawler, which is LGPL-2.1 — linking that from a copyleft program is exactly
-what the LGPL is for, so nothing special is required.
+The project source is licensed **AGPL-3.0-or-later** (see `LICENSE`). Its RAW
+decoder and optional lens-profile engine are LGPL-family dependencies; the
+bundled Lensfun calibration database is CC-BY-SA 3.0. See `THIRD_PARTY.md` for
+the versions, attribution, and redistribution notes.
 
 It was MIT until 0.1.18. The change is deliberate: this program interfaces with a
 codebase of GPL-family RAW tooling, and matching their licence removes a standing

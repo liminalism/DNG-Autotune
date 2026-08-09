@@ -104,9 +104,10 @@ fn develop(
     path: &Path,
     options: &RunOptions,
     snr10_ev: Option<f32>,
-) -> Result<(LinearImage, ColorReport)> {
+    highlight_method: crate::raw_highlight::HighlightMethod,
+) -> Result<(LinearImage, ColorReport, Option<Vec<f32>>)> {
     match options.raw_color_path {
-        RawColorPath::Rawler => Ok((develop_linear(raw)?, ColorReport::rawler(raw))),
+        RawColorPath::Rawler => Ok((develop_linear(raw)?, ColorReport::rawler(raw), None)),
         RawColorPath::Owned => crate::color::develop(
             raw,
             path,
@@ -115,6 +116,7 @@ fn develop(
                 sub_black: options.sub_black,
                 hot_pixels: options.hot_pixels,
                 highlight_reconstruction: options.highlight_reconstruction,
+                highlight_method,
                 demosaic: options.demosaic,
                 snr10_ev,
                 full_dng_color: options.full_dng_color,
@@ -211,12 +213,18 @@ fn limitations(options: &RunOptions, color: &ColorReport) -> Vec<String> {
     if color
         .lens_correction
         .as_ref()
-        .is_none_or(|report| report.opcodes_applied == 0)
+        .is_none_or(|report| report.corrections_applied == 0)
     {
-        limitations.push(
-            "no usable standardized lens correction metadata; no camera/lens model was guessed"
-                .to_string(),
-        );
+        limitations.push(match options.lens_correction {
+            crate::lens::LensCorrectionMode::ProfileExact => {
+                "no usable embedded warp or exact camera/lens profile match".to_string()
+            }
+            crate::lens::LensCorrectionMode::Embedded => {
+                "no usable standardized lens correction metadata; exact profiles were not requested"
+                    .to_string()
+            }
+            crate::lens::LensCorrectionMode::Off => "lens correction disabled".to_string(),
+        });
     }
     limitations.push("no camera-specific DCP creative rendering table".to_string());
     if color.highlight_reconstruction.is_none() {
@@ -248,8 +256,25 @@ pub fn process_job(
     options: &RunOptions,
     profile: Option<&NoiseProfile>,
 ) -> Result<ProcessReport> {
+    process_job_with_highlight_method(
+        job,
+        options,
+        profile,
+        crate::raw_highlight::HighlightMethod::Current,
+    )
+}
+
+/// Internal batch entry used by the CLI-only highlight experiments.  The
+/// public `process_job` above deliberately remains pinned to the current
+/// unattended estimator.
+pub fn process_job_with_highlight_method(
+    job: &InputJob,
+    options: &RunOptions,
+    profile: Option<&NoiseProfile>,
+    highlight_method: crate::raw_highlight::HighlightMethod,
+) -> Result<ProcessReport> {
     let result = catch_unwind(AssertUnwindSafe(|| {
-        process_job_inner(job, options, profile)
+        process_job_inner(job, options, profile, highlight_method)
     }));
     match result {
         Ok(result) => result.with_context(|| format!("while processing {}", job.input.display())),
@@ -265,6 +290,7 @@ fn process_job_inner(
     job: &InputJob,
     options: &RunOptions,
     profile: Option<&NoiseProfile>,
+    highlight_method: crate::raw_highlight::HighlightMethod,
 ) -> Result<ProcessReport> {
     let started = Instant::now();
     let paths = files::output_paths(job, options)?;
@@ -288,6 +314,7 @@ fn process_job_inner(
             shot: None,
             preview: None,
             local_tone: None,
+            hdr: None,
             chroma_denoise: None,
             sharpen: None,
             reference: None,
@@ -417,11 +444,12 @@ fn process_job_inner(
     };
     let source_orientation = raw.orientation;
 
-    let (mut linear, color) = develop(
+    let (mut linear, color, mut highlight_uncertainty) = develop(
         &raw,
         &job.input,
         options,
         noise_floor.as_ref().map(|floor| floor.snr10_ev),
+        highlight_method,
     )?;
     drop(raw);
 
@@ -456,20 +484,26 @@ fn process_job_inner(
     );
     if let Some(lens) = &color.lens_correction {
         eprintln!(
-            "LENS  {}: {} opcode(s) applied | {} warp | {} vignette | max shift {:.2}px | max gain {:.3}{}",
+            "LENS  {}: {} | {} correction(s) | {} distortion | {} TCA | {} vignette | max shift {:.2}px | max gain {:.3}{}",
             job.input.display(),
-            lens.opcodes_applied,
-            lens.rectilinear_warps,
+            lens.source,
+            lens.corrections_applied,
+            lens.distortion_corrections,
+            lens.transverse_chromatic_aberration_corrections,
             lens.radial_vignette_corrections,
             lens.max_displacement_pixels,
             lens.max_gain,
-            if lens.required_opcodes_unsupported == 0 {
-                String::new()
-            } else {
+            if lens.required_opcodes_unsupported > 0 {
                 format!(
                     " | {} required opcode(s) unsupported",
                     lens.required_opcodes_unsupported
                 )
+            } else if lens.corrections_applied == 0 {
+                lens.match_status
+                    .map(|status| format!(" | {status}"))
+                    .unwrap_or_default()
+            } else {
+                String::new()
             }
         );
     }
@@ -491,7 +525,19 @@ fn process_job_inner(
         );
     }
 
+    // The uncertainty map is on the pre-orientation grid; carry it through the
+    // exact same transform so it stays pixel-aligned with the rendered image.
+    let pre_orient_dims = (linear.width, linear.height);
     let mut linear = orientation::apply_orientation(linear, source_orientation);
+    if let Some(map) = highlight_uncertainty.take() {
+        let (_, _, oriented) = orientation::orient_data(
+            pre_orient_dims.0,
+            pre_orient_dims.1,
+            map,
+            source_orientation,
+        );
+        highlight_uncertainty = Some(oriented);
+    }
 
     if let Some(directory) = &options.dump_stages {
         dump_stage(
@@ -593,6 +639,7 @@ fn process_job_inner(
     // from: no exponent, no black point and no oracle inversion depends on it.
     // At the default 1.0 the multiplication is exact, so output does not move.
     parameters.saturation *= options.saturation_scale;
+    parameters.highlight_color_ratio_exponent = options.highlight_color_ratio_exponent;
     let parameters = parameters;
 
     // The comparison the corpus work actually runs on. Available here, before
@@ -620,6 +667,7 @@ fn process_job_inner(
             &linear,
             options.local_tone,
             noise_floor.as_ref().map(|floor| floor.snr1_ev),
+            highlight_uncertainty.as_deref(),
         )?;
         let report = map.report();
         eprintln!(
@@ -637,10 +685,56 @@ fn process_job_inner(
     };
     let local_tone_report = local_tone.as_ref().map(|map| map.report().clone());
 
+    let hdr = if options.hdr > 0.0 {
+        let map = crate::localtone::build_hdr(
+            &linear,
+            options.hdr,
+            noise_floor.as_ref().map(|floor| floor.snr1_ev),
+            highlight_uncertainty.as_deref(),
+        )?;
+        let report = map.report();
+        eprintln!(
+            "HDR   {}: strength {:.2} | base span {:.2}->{:.2} EV | correction {:+.2}..{:+.2} EV | lift {:.1}% compress {:.1}%",
+            job.input.display(),
+            report.strength,
+            report.base_span_ev,
+            report.compressed_base_span_ev,
+            report.correction_min_ev,
+            report.correction_max_ev,
+            report.shadow_lift_fraction * 100.0,
+            report.highlight_compression_fraction * 100.0,
+        );
+        Some(map)
+    } else {
+        None
+    };
+    let hdr_report = hdr.as_ref().map(|map| map.report().clone());
+
+    // One correction field feeds the renderer. The CLI rejects both operators at
+    // once, so this is the single active one, as `Option<&dyn CorrectionField>`.
+    let correction_field: Option<&dyn crate::localtone::CorrectionField> = match (&hdr, &local_tone)
+    {
+        (Some(map), _) => Some(map),
+        (None, Some(map)) => Some(map),
+        (None, None) => None,
+    };
+
     // Gamut diagnostics: display-linear before/after compress_gamut
     if let Some(dir) = &options.dump_stages {
-        let stem = job.input.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "unnamed".to_string());
-        crate::tone::dump_gamut_diagnostics(&linear, &parameters, local_tone.as_ref(), working_to_display.as_ref(), dir, &stem);
+        let stem = job
+            .input
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "unnamed".to_string());
+        crate::tone::dump_gamut_diagnostics(
+            &linear,
+            &parameters,
+            correction_field,
+            highlight_uncertainty.as_deref(),
+            working_to_display.as_ref(),
+            dir,
+            &stem,
+        );
     }
 
     if options.dry_run {
@@ -662,6 +756,7 @@ fn process_job_inner(
             shot: shot.clone(),
             preview: preview.clone(),
             local_tone: local_tone_report,
+            hdr: hdr_report,
             chroma_denoise,
             sharpen: None,
             reference,
@@ -682,7 +777,8 @@ fn process_job_inner(
     let mut rendered = tone::render(
         &linear,
         &parameters,
-        local_tone.as_ref(),
+        correction_field,
+        highlight_uncertainty.as_deref(),
         working_to_display.as_ref(),
     );
 
@@ -786,6 +882,7 @@ fn process_job_inner(
             shot: shot.clone(),
             local_white_balance: local_white_balance.clone(),
             local_tone: local_tone_report.clone(),
+            hdr: hdr_report.clone(),
             chroma_denoise: chroma_denoise.clone(),
             sharpen: sharpen.clone(),
             preview: preview.clone(),
@@ -818,6 +915,7 @@ fn process_job_inner(
         shot,
         preview,
         local_tone: local_tone_report,
+        hdr: hdr_report,
         chroma_denoise,
         sharpen,
         reference,

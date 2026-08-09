@@ -79,10 +79,16 @@ pub const PER_IMAGE_OVERHEAD_BYTES: u64 = 64 << 20;
 /// is pessimistic but is the only assumption that holds when the schedule is a
 /// shared queue.
 ///
-/// What it produces in practice: this 31 GiB development machine, 24.4 GiB
-/// reported available, a batch containing 50-megapixel Expert RAW frames, lands
-/// on 6 workers against the `--jobs 8` that `README.md` records as fatal.
-pub const AVAILABLE_PERCENT: u64 = 70;
+/// The deliberately conservative half-memory ceiling leaves room for the
+/// desktop, filesystem cache, allocator fragmentation, and changes in
+/// availability between planning and the workers reaching their peaks.
+pub const AVAILABLE_PERCENT: u64 = 50;
+
+/// Additional transient source/output planes reserved for exact-profile
+/// geometry. This is deliberately additive to the measured worst ordinary
+/// pipeline rather than assuming the two peaks can never overlap as the code
+/// evolves.
+pub const PROFILE_EXTRA_BYTES_PER_PIXEL: u64 = 16;
 
 /// Assumed pixels per byte of file when the dimensions cannot be read.
 ///
@@ -110,7 +116,7 @@ const PHOTOMETRIC_LINEAR_RAW: u32 = 34892;
 pub enum JobCount {
     /// Choose from available memory and the size of the largest input.
     Auto,
-    /// Exactly this many, whatever the machine has.
+    /// Request at most this many; the memory safety ceiling may lower it.
     Fixed(usize),
 }
 
@@ -167,6 +173,14 @@ impl Plan {
     /// batch that later dies of memory should not have hidden that.
     pub fn describe(&self, requested: JobCount) -> String {
         match requested {
+            JobCount::Fixed(count) if self.workers < count => format!(
+                " (memory safety capped requested {count} to {}; {} available, {} per image)",
+                self.workers,
+                self.available_bytes
+                    .map(gibibytes)
+                    .unwrap_or_else(|| "unknown".into()),
+                gibibytes(self.per_image_bytes),
+            ),
             JobCount::Fixed(_) => String::new(),
             JobCount::Auto => match self.available_bytes {
                 Some(available) => format!(
@@ -197,6 +211,29 @@ fn gibibytes(bytes: u64) -> String {
 /// Budgeted peak working set for one image of `pixels` pixels.
 pub fn peak_bytes(pixels: u64) -> u64 {
     PER_IMAGE_OVERHEAD_BYTES.saturating_add(pixels.saturating_mul(PEAK_BYTES_PER_PIXEL))
+}
+
+pub fn peak_bytes_for(pixels: u64, lens_correction: crate::lens::LensCorrectionMode) -> u64 {
+    peak_bytes_for_highlight(
+        pixels,
+        lens_correction,
+        crate::raw_highlight::HighlightMethod::Current,
+    )
+}
+
+pub fn peak_bytes_for_highlight(
+    pixels: u64,
+    lens_correction: crate::lens::LensCorrectionMode,
+    highlight_method: crate::raw_highlight::HighlightMethod,
+) -> u64 {
+    let bytes_per_pixel = PEAK_BYTES_PER_PIXEL
+        + if lens_correction == crate::lens::LensCorrectionMode::ProfileExact {
+            PROFILE_EXTRA_BYTES_PER_PIXEL
+        } else {
+            0
+        }
+        + highlight_method.extra_bytes_per_pixel();
+    PER_IMAGE_OVERHEAD_BYTES.saturating_add(pixels.saturating_mul(bytes_per_pixel))
 }
 
 /// Memory the operating system says can be handed out without swapping.
@@ -347,18 +384,33 @@ fn workers_for(available: u64, per_image: u64, processors: usize) -> usize {
     // short at exactly the round figures a test would pick.
     let budget = available.saturating_mul(AVAILABLE_PERCENT) / 100;
     let fits = (budget / per_image.max(1)) as usize;
-    // At least one: a machine too small for a single frame still has to try,
-    // and refusing to start would be a worse failure than being swapped.
-    fits.clamp(1, processors.max(1))
+    fits.min(processors.max(1))
 }
 
 /// Decide how many files to hold in flight.
 ///
-/// `JobCount::Fixed` is passed straight through — the user asked. `Auto` probes
-/// every input, budgets for the largest, and never exceeds the processor count,
-/// since per-image stages already use every core and a worker beyond that only
-/// adds a resident image.
-pub fn plan(requested: JobCount, jobs: &[InputJob]) -> Plan {
+/// Every input is probed and the largest sets the safety ceiling. `Auto` also
+/// respects the processor count; a fixed request is treated as an upper bound,
+/// never as permission to exceed the memory budget.
+pub fn plan(
+    requested: JobCount,
+    jobs: &[InputJob],
+    lens_correction: crate::lens::LensCorrectionMode,
+) -> Result<Plan, String> {
+    plan_with_highlight_method(
+        requested,
+        jobs,
+        lens_correction,
+        crate::raw_highlight::HighlightMethod::Current,
+    )
+}
+
+pub fn plan_with_highlight_method(
+    requested: JobCount,
+    jobs: &[InputJob],
+    lens_correction: crate::lens::LensCorrectionMode,
+    highlight_method: crate::raw_highlight::HighlightMethod,
+) -> Result<Plan, String> {
     let processors = std::thread::available_parallelism()
         .map(|count| count.get())
         .unwrap_or(1);
@@ -366,33 +418,42 @@ pub fn plan(requested: JobCount, jobs: &[InputJob]) -> Plan {
     let mut largest_pixels = 0;
     let mut probed = 0;
     let mut estimated = 0;
-    if matches!(requested, JobCount::Auto) {
-        for job in jobs {
-            let (pixels, from_directory) = pixels_for(&job.input);
-            largest_pixels = largest_pixels.max(pixels);
-            if from_directory {
-                probed += 1;
-            } else {
-                estimated += 1;
-            }
+    for job in jobs {
+        let (pixels, from_directory) = pixels_for(&job.input);
+        largest_pixels = largest_pixels.max(pixels);
+        if from_directory {
+            probed += 1;
+        } else {
+            estimated += 1;
         }
     }
 
-    let per_image_bytes = peak_bytes(largest_pixels);
-    let available_bytes = match requested {
-        JobCount::Auto => available_bytes(),
-        JobCount::Fixed(_) => None,
-    };
+    let per_image_bytes =
+        peak_bytes_for_highlight(largest_pixels, lens_correction, highlight_method);
+    let available_bytes = available_bytes();
 
     let workers = match (requested, available_bytes) {
-        (JobCount::Fixed(count), _) => count,
+        (JobCount::Fixed(count), Some(available)) => {
+            count.min(workers_for(available, per_image_bytes, processors))
+        }
+        (JobCount::Fixed(count), None) => count,
         (JobCount::Auto, Some(available)) => workers_for(available, per_image_bytes, processors),
         // No answer from the platform is not a licence to guess: one worker is
         // what this program did for its whole life before the budget existed.
         (JobCount::Auto, None) => 1,
     };
 
-    Plan {
+    if workers == 0 {
+        let available = available_bytes.unwrap_or(0);
+        return Err(format!(
+            "memory safety check refused to start: the largest input needs about {} but only {} of the reported {} available memory is reserved for raw-autotune; close other applications or add memory/swap, then retry",
+            gibibytes(per_image_bytes),
+            gibibytes(available.saturating_mul(AVAILABLE_PERCENT) / 100),
+            gibibytes(available),
+        ));
+    }
+
+    Ok(Plan {
         workers,
         largest_pixels,
         per_image_bytes,
@@ -400,7 +461,7 @@ pub fn plan(requested: JobCount, jobs: &[InputJob]) -> Plan {
         cpu_limited: workers == processors && workers > 1,
         probed,
         estimated,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -416,20 +477,27 @@ mod tests {
     }
 
     #[test]
-    fn a_fixed_count_is_passed_through_untouched() {
-        let plan = plan(JobCount::Fixed(8), &[job("nowhere.ARW")]);
-        assert_eq!(plan.workers, 8);
-        // And no probing happened, so nothing was read from a path that does
-        // not exist.
-        assert_eq!(plan.probed, 0);
-        assert_eq!(plan.largest_pixels, 0);
+    fn a_fixed_count_is_never_raised_and_is_still_memory_checked() {
+        let plan = plan(
+            JobCount::Fixed(8),
+            &[job("nowhere.ARW")],
+            crate::lens::LensCorrectionMode::Embedded,
+        )
+        .unwrap();
+        assert!((1..=8).contains(&plan.workers));
+        assert_eq!(plan.estimated, 1);
     }
 
     #[test]
     fn an_unreadable_input_falls_back_to_its_size_on_disk() {
         // Nonexistent, so both the probe and the metadata call fail; the batch
         // still has to run.
-        let plan = plan(JobCount::Auto, &[job("no-such-file.ARW")]);
+        let plan = plan(
+            JobCount::Auto,
+            &[job("no-such-file.ARW")],
+            crate::lens::LensCorrectionMode::Embedded,
+        )
+        .unwrap();
         assert_eq!(plan.probed, 0);
         assert_eq!(plan.estimated, 1, "the guess has to be reported as one");
         assert!(plan.workers >= 1);
@@ -437,9 +505,9 @@ mod tests {
 
     #[test]
     fn the_budget_is_the_stated_share_of_available_memory() {
-        // 10 GiB available, 1 GiB per image, plenty of processors: 70% of 10 is
-        // 7 whole images.
-        assert_eq!(workers_for(10 << 30, 1 << 30, 64), 7);
+        // 10 GiB available, 1 GiB per image, plenty of processors: the
+        // conservative half-memory budget admits five whole images.
+        assert_eq!(workers_for(10 << 30, 1 << 30, 64), 5);
     }
 
     #[test]
@@ -448,22 +516,21 @@ mod tests {
     }
 
     #[test]
-    fn a_machine_too_small_for_one_image_still_runs_one() {
-        assert_eq!(workers_for(1 << 28, 4 << 30, 8), 1);
-        assert_eq!(workers_for(0, 4 << 30, 8), 1);
+    fn a_machine_too_small_for_one_image_is_rejected() {
+        assert_eq!(workers_for(1 << 28, 4 << 30, 8), 0);
+        assert_eq!(workers_for(0, 4 << 30, 8), 0);
     }
 
     #[test]
     fn the_plan_never_budgets_more_than_it_was_given() {
         // The invariant the whole module exists for: whatever it chooses, the
-        // workers it chose fit inside the share of memory it was allowed. Only
-        // the forced floor of one worker may exceed it.
+        // workers it chose fit inside the share of memory it was allowed.
         for available in [1u64 << 30, 8 << 30, 31 << 30, 64 << 30] {
             for pixels in [10_000_000, 24_337_000, 49_939_200, 200_000_000] {
                 let per_image = peak_bytes(pixels);
                 let workers = workers_for(available, per_image, 20);
                 assert!(
-                    workers == 1 || workers as u64 * per_image <= available,
+                    workers as u64 * per_image <= available.saturating_mul(AVAILABLE_PERCENT) / 100,
                     "{workers} x {per_image} exceeds {available}"
                 );
             }
@@ -515,5 +582,30 @@ mod tests {
                 "the platform should have reported available memory"
             );
         }
+    }
+
+    #[test]
+    fn spatial_highlight_reserves_are_additive_with_exact_lens_profiles() {
+        let pixels = 24_000_000;
+        let current = peak_bytes_for_highlight(
+            pixels,
+            crate::lens::LensCorrectionMode::Embedded,
+            crate::raw_highlight::HighlightMethod::Current,
+        );
+        let pyramid = peak_bytes_for_highlight(
+            pixels,
+            crate::lens::LensCorrectionMode::Embedded,
+            crate::raw_highlight::HighlightMethod::RawPyramid,
+        );
+        let harmonic_profile = peak_bytes_for_highlight(
+            pixels,
+            crate::lens::LensCorrectionMode::ProfileExact,
+            crate::raw_highlight::HighlightMethod::Harmonic,
+        );
+        assert_eq!(pyramid - current, pixels * 24);
+        assert_eq!(
+            harmonic_profile - current,
+            pixels * (PROFILE_EXTRA_BYTES_PER_PIXEL + 48)
+        );
     }
 }

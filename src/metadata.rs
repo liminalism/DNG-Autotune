@@ -227,6 +227,34 @@ pub struct SourceMetadata {
     model: Option<String>,
 }
 
+/// Minimal recorded identity needed for deterministic exact lens matching.
+#[derive(Debug, Clone)]
+pub(crate) struct LensProfileMetadata {
+    pub camera_make: String,
+    pub camera_model: String,
+    pub lens_make: Option<String>,
+    pub lens_model: Option<String>,
+    pub focal_length: Option<Rational>,
+}
+
+pub(crate) fn lens_profile_metadata(path: &Path) -> LensProfileMetadata {
+    let metadata = SourceMetadata::read(path);
+    let resolved_lens = metadata.raw.lens.as_ref();
+    LensProfileMetadata {
+        camera_make: metadata.raw.make,
+        camera_model: metadata.raw.model,
+        lens_make: resolved_lens
+            .map(|lens| lens.lens_make.clone())
+            .filter(|value| !value.is_empty())
+            .or(metadata.raw.exif.lens_make),
+        lens_model: resolved_lens
+            .map(|lens| lens.lens_model.clone())
+            .filter(|value| !value.is_empty())
+            .or(metadata.raw.exif.lens_model),
+        focal_length: metadata.raw.exif.focal_length,
+    }
+}
+
 impl SourceMetadata {
     /// Read metadata from `path`. Best effort; never fails.
     pub fn read(path: &Path) -> Self {

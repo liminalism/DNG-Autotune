@@ -35,7 +35,14 @@ pub const MID_GRAY: f32 = 0.18;
 /// 15 adds per-frame `analysis` 1/2/3-channel clipped fractions and
 ///   `color.highlight_reconstruction.clipped_1/2/3_pixels`, replacing the
 ///   overloaded near-white semantic for reconstruction policy.
-pub const REPORT_SCHEMA_VERSION: u32 = 15;
+/// 16 adds the `hdr` block (edge-aware single-frame local tone), present only
+///   when `--hdr` asked for it. A run with `--hdr` off serializes identically to
+///   schema 15 apart from this integer, since the field is omitted when absent.
+/// 17 adds source-neutral lens-correction diagnostics and the experimental
+///   compression-aware highlight color-ratio exponent.
+/// 18 identifies the highlight estimator and records pre-demosaic spatial
+///   reconstruction, fit, connected-region, knee and solver counters.
+pub const REPORT_SCHEMA_VERSION: u32 = 18;
 
 /// Name for the exposure controller's current behaviour, frozen at the colour
 /// path's correctness boundary.
@@ -214,6 +221,9 @@ pub struct RunOptions {
     pub dry_run: bool,
     pub local_white_balance: f32,
     pub local_tone: f32,
+    /// HDR-like edge-aware single-frame local tone strength, 0 to 1. 0 is off
+    /// and byte-identical. Mutually exclusive with `local_tone`.
+    pub hdr: f32,
     /// `None` means the automatic decision: [`crate::preview::AUTO_STRENGTH`]
     /// on files whose embedded preview is a real rendering, and nothing at all
     /// on files that only carry a thumbnail, since `preview::read` rejects
@@ -246,6 +256,10 @@ pub struct RunOptions {
     /// preset as tuned. Raises where highlights land without moving middle grey,
     /// the black point or the shadow branch. See `analyze::derive_params`.
     pub highlight_contrast: f32,
+    /// Exponent applied to color/luminance ratios only where the tone curve is
+    /// compressing highlights. 1 preserves the existing ratios; 0.6 is the
+    /// display-adaptive experiment described by Mantiuk et al.
+    pub highlight_color_ratio_exponent: f32,
     /// Multiplier on the automatic chroma-denoise strength; 1.0 is automatic.
     pub chroma_denoise: f32,
     /// Multiplier on the automatic output-sharpening amount; 1.0 is automatic.
@@ -264,9 +278,9 @@ pub struct RunOptions {
     /// that carry it. On by default and owned colour path only; safely falls
     /// back to the decoder's camera matrix when a profile is incomplete.
     pub full_dng_color: bool,
-    /// Apply standardized DNG post-demosaic lens opcodes when the file carries
-    /// them. Unknown cameras and files without opcodes are left untouched.
-    pub lens_correction: bool,
+    /// Select the post-demosaic lens-correction source. The unattended default
+    /// remains embedded DNG metadata; exact database profiles are opt-in.
+    pub lens_correction: crate::lens::LensCorrectionMode,
 }
 
 impl RunOptions {
@@ -291,6 +305,7 @@ impl RunOptions {
             dry_run: false,
             local_white_balance: 0.0,
             local_tone: 0.0,
+            hdr: 0.0,
             preview_exposure: None,
             raw_color_path: crate::color::RawColorPath::Owned,
             working_space: crate::color::WorkingSpace::Srgb,
@@ -304,13 +319,14 @@ impl RunOptions {
             reference: crate::reference::ReferenceSource::Disabled,
             saturation_scale: 1.0,
             highlight_contrast: 1.0,
+            highlight_color_ratio_exponent: 1.0,
             chroma_denoise: 1.0,
             sharpen: 1.0,
             demosaic: crate::demosaic::DemosaicMethod::Auto,
             hot_pixels: 0.5,
             highlight_reconstruction: 0.75,
             full_dng_color: true,
-            lens_correction: true,
+            lens_correction: crate::lens::LensCorrectionMode::Embedded,
         }
     }
 }
@@ -471,6 +487,9 @@ pub struct ToneParams {
     pub saturation: f32,
     pub vibrance: f32,
     pub highlight_desaturation: f32,
+    /// Compression-aware color/luminance ratio exponent. One is the exact
+    /// historical path; lower values continuously neutralize compressed color.
+    pub highlight_color_ratio_exponent: f32,
     /// How far the tone curve is driven by the brightest channel rather than by
     /// luminance, in highlights. 0 is pure luminance; 1 fully protects the
     /// brightest channel from clipping. See `tone::render_pixel`.
@@ -528,6 +547,9 @@ pub struct Sidecar {
     pub preview: Option<crate::preview::PreviewOracle>,
     /// Full-resolution local tone adaptation, when requested.
     pub local_tone: Option<crate::localtone::LocalToneReport>,
+    /// HDR-like edge-aware single-frame local tone, when `--hdr` requested it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hdr: Option<crate::localtone::HdrReport>,
     /// Chroma noise reduction, when the frame was noisy enough to need it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
@@ -612,6 +634,8 @@ pub struct ProcessReport {
     /// The camera's own rendering, when it was read and used.
     pub preview: Option<crate::preview::PreviewOracle>,
     pub local_tone: Option<crate::localtone::LocalToneReport>,
+    /// HDR-like edge-aware single-frame local tone, when `--hdr` requested it.
+    pub hdr: Option<crate::localtone::HdrReport>,
     /// Chroma noise reduction, when one was applied.
     pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
     /// Output sharpening, when one was applied.
@@ -649,6 +673,8 @@ pub struct SummaryEntry {
     pub preview: Option<crate::preview::PreviewOracle>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub local_tone: Option<crate::localtone::LocalToneReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hdr: Option<crate::localtone::HdrReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
     #[serde(skip_serializing_if = "Option::is_none")]

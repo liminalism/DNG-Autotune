@@ -8,10 +8,12 @@
 //!   and per-plane lateral chromatic aberration.
 //! - `FixVignetteRadial` (opcode 3): a radial gain polynomial.
 //!
-//! No make/model guesses are made. A file without a usable opcode list is left
-//! untouched, which is the only safe general policy for interchangeable lenses
-//! and phones whose computational camera may already have corrected the raw.
+//! The unattended default remains embedded metadata only. The explicitly
+//! requested `profile-exact` mode may instead use the pinned Lensfun database,
+//! but only after one canonical camera and lens identity match; it never chooses
+//! a fuzzy candidate or invents coefficients.
 
+use clap::ValueEnum;
 use rawler::formats::tiff::reader::TiffReader;
 use rawler::formats::tiff::{Entry, GenericTiffReader, Value};
 use rayon::prelude::*;
@@ -19,6 +21,7 @@ use serde::Serialize;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::sync::OnceLock;
 
 const TAG_OPCODE_LIST_3: u16 = 51022;
 const OPCODE_WARP_RECTILINEAR: u32 = 1;
@@ -26,6 +29,28 @@ const OPCODE_FIX_VIGNETTE_RADIAL: u32 = 3;
 const MAX_SUPPORTED_DNG_VERSION: u32 = 0x0107_0100;
 const FLAG_OPTIONAL: u32 = 1;
 const MAX_REASONABLE_GAIN: f64 = 16.0;
+
+/// Source policy for post-demosaic lens correction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LensCorrectionMode {
+    /// Apply only standardized correction metadata embedded in the RAW.
+    Embedded,
+    /// Prefer an embedded warp, otherwise require one exact Lensfun match.
+    ProfileExact,
+    /// Leave the demosaiced image geometrically untouched.
+    Off,
+}
+
+impl LensCorrectionMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Embedded => "embedded",
+            Self::ProfileExact => "profile_exact",
+            Self::Off => "off",
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct WarpRectilinear {
@@ -72,6 +97,20 @@ pub struct LensCorrectionReport {
     pub clipped_channels: usize,
     pub max_displacement_pixels: f32,
     pub max_gain: f32,
+    /// Number of effective correction passes, independent of metadata source.
+    pub corrections_applied: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database_version: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_camera: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_lens: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_status: Option<&'static str>,
+    pub distortion_corrections: usize,
+    pub transverse_chromatic_aberration_corrections: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_displacement_by_channel: Option<[f32; 3]>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<String>,
 }
@@ -79,10 +118,38 @@ pub struct LensCorrectionReport {
 /// Parsed `OpcodeList3` plus its accumulating report.
 pub struct LensCorrection {
     operations: Vec<Operation>,
+    profile: Option<ProfileCorrection>,
     report: LensCorrectionReport,
 }
 
+#[derive(Debug, Clone)]
+struct ProfileCorrection {
+    lens: lensfun::Lens,
+    focal_length: f32,
+    crop_factor: f32,
+}
+
 impl LensCorrection {
+    /// Resolve the requested source without guessing. `ProfileExact` uses the
+    /// external database only when the file has no usable embedded warp.
+    pub fn resolve(path: &Path, mode: LensCorrectionMode) -> Option<Self> {
+        match mode {
+            LensCorrectionMode::Off => None,
+            LensCorrectionMode::Embedded => Self::read(path),
+            LensCorrectionMode::ProfileExact => {
+                if let Some(embedded) = Self::read(path)
+                    && embedded
+                        .operations
+                        .iter()
+                        .any(|operation| matches!(operation, Operation::Warp(_)))
+                {
+                    return Some(embedded);
+                }
+                Some(resolve_exact_profile(path))
+            }
+        }
+    }
+
     /// Read a DNG `OpcodeList3`. Returns `None` when the file carries no list.
     ///
     /// Malformed or unsupported required opcodes return a report-only value:
@@ -104,7 +171,30 @@ impl LensCorrection {
         height: usize,
         geometry: ImageGeometry,
     ) {
+        self.apply_three_with_confidence(pixels, None, width, height, geometry);
+    }
+
+    /// Apply lens geometry to pixels and, for an external profile, raw clip
+    /// evidence.
+    ///
+    /// Embedded DNG warps intentionally retain the historical confidence-map
+    /// behavior. Changing that behavior alters the default renderer and, on
+    /// the corpus, creates materially more hard clipping. Exact external
+    /// profiles are opt-in and resample both together because their
+    /// per-channel TCA coordinates would otherwise disagree.
+    pub fn apply_three_with_confidence(
+        &mut self,
+        pixels: &mut Vec<[f32; 3]>,
+        confidence: Option<&mut Vec<[f32; 3]>>,
+        width: usize,
+        height: usize,
+        geometry: ImageGeometry,
+    ) {
         if !self.can_apply() || pixels.len() != width.saturating_mul(height) {
+            return;
+        }
+        if let Some(profile) = &self.profile {
+            apply_profile(pixels, confidence, width, height, profile, &mut self.report);
             return;
         }
         for operation in &self.operations {
@@ -142,6 +232,12 @@ impl LensCorrection {
         if !self.can_apply() || pixels.len() != width.saturating_mul(height) {
             return;
         }
+        if self.profile.is_some() {
+            self.report.notes.push(
+                "exact profiles are implemented only for three-channel camera RGB; skipped".into(),
+            );
+            return;
+        }
         for operation in &self.operations {
             match operation {
                 Operation::Warp(warp)
@@ -176,6 +272,276 @@ impl LensCorrection {
     }
 }
 
+fn profile_report(status: &'static str, notes: Vec<String>) -> LensCorrectionReport {
+    LensCorrectionReport {
+        source: "lensfun_profile",
+        opcodes_declared: 0,
+        opcodes_applied: 0,
+        rectilinear_warps: 0,
+        radial_vignette_corrections: 0,
+        optional_opcodes_skipped: 0,
+        required_opcodes_unsupported: 0,
+        clipped_channels: 0,
+        max_displacement_pixels: 0.0,
+        max_gain: 1.0,
+        corrections_applied: 0,
+        database_version: Some("lensfun-0.7.0-bundled"),
+        matched_camera: None,
+        matched_lens: None,
+        match_status: Some(status),
+        distortion_corrections: 0,
+        transverse_chromatic_aberration_corrections: 0,
+        max_displacement_by_channel: None,
+        notes,
+    }
+}
+
+fn profile_database() -> Result<&'static lensfun::Database, &'static str> {
+    static DATABASE: OnceLock<Result<lensfun::Database, String>> = OnceLock::new();
+    match DATABASE.get_or_init(|| lensfun::Database::load_bundled().map_err(|e| e.to_string())) {
+        Ok(database) => Ok(database),
+        Err(_) => Err("the bundled Lensfun database could not be loaded"),
+    }
+}
+
+fn exact_key(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+fn rational_f32(value: rawler::formats::tiff::Rational) -> Option<f32> {
+    if value.d == 0 {
+        return None;
+    }
+    let value = value.n as f32 / value.d as f32;
+    value.is_finite().then_some(value)
+}
+
+fn resolve_exact_profile(path: &Path) -> LensCorrection {
+    let unresolved = |status, note: String| LensCorrection {
+        operations: Vec::new(),
+        profile: None,
+        report: profile_report(status, vec![note]),
+    };
+
+    let metadata = crate::metadata::lens_profile_metadata(path);
+    let database = match profile_database() {
+        Ok(database) => database,
+        Err(message) => return unresolved("database_unavailable", message.into()),
+    };
+
+    let camera_make = exact_key(&metadata.camera_make);
+    let camera_model = exact_key(&metadata.camera_model);
+    let cameras: Vec<&lensfun::camera::Camera> = database
+        .cameras
+        .iter()
+        .filter(|camera| {
+            exact_key(&camera.maker) == camera_make && exact_key(&camera.model) == camera_model
+        })
+        .collect();
+    if cameras.len() != 1 {
+        return unresolved(
+            if cameras.is_empty() {
+                "no_exact_camera"
+            } else {
+                "ambiguous_camera"
+            },
+            format!(
+                "exact camera match for '{} {}' produced {} candidates",
+                metadata.camera_make,
+                metadata.camera_model,
+                cameras.len()
+            ),
+        );
+    }
+    let camera = cameras[0];
+
+    let lens_model = metadata.lens_model.as_deref();
+    let Some(lens_model) = lens_model.filter(|value| !value.trim().is_empty()) else {
+        return unresolved(
+            "lens_metadata_missing",
+            "RAW has no resolved lens model".into(),
+        );
+    };
+    let lens_make = metadata
+        .lens_make
+        .as_deref()
+        .filter(|value| !value.trim().is_empty());
+    let model_key = exact_key(lens_model);
+    let make_key = lens_make.map(exact_key);
+    let lenses: Vec<&lensfun::Lens> = database
+        .lenses
+        .iter()
+        .filter(|lens| lens.mounts.iter().any(|mount| mount == &camera.mount))
+        .filter(|lens| exact_key(&lens.model) == model_key)
+        .filter(|lens| {
+            make_key
+                .as_ref()
+                .is_none_or(|maker| exact_key(&lens.maker) == *maker)
+        })
+        .collect();
+    if lenses.len() != 1 {
+        return unresolved(
+            if lenses.is_empty() {
+                "no_exact_lens"
+            } else {
+                "ambiguous_lens"
+            },
+            format!(
+                "exact lens match for '{}' on mount '{}' produced {} candidates",
+                lens_model,
+                camera.mount,
+                lenses.len()
+            ),
+        );
+    }
+    let focal_length = metadata
+        .focal_length
+        .and_then(rational_f32)
+        .filter(|value| *value > 0.0);
+    let Some(focal_length) = focal_length else {
+        return unresolved(
+            "focal_length_missing",
+            "RAW has no usable focal length for profile interpolation".into(),
+        );
+    };
+
+    let lens = lenses[0].clone();
+    let mut report = profile_report("exact_match", Vec::new());
+    report.matched_camera = Some(format!("{} {}", camera.maker, camera.model));
+    report.matched_lens = Some(format!("{} {}", lens.maker, lens.model));
+    LensCorrection {
+        operations: Vec::new(),
+        profile: Some(ProfileCorrection {
+            lens,
+            focal_length,
+            crop_factor: camera.crop_factor,
+        }),
+        report,
+    }
+}
+
+fn apply_profile(
+    pixels: &mut Vec<[f32; 3]>,
+    confidence: Option<&mut Vec<[f32; 3]>>,
+    width: usize,
+    height: usize,
+    profile: &ProfileCorrection,
+    report: &mut LensCorrectionReport,
+) {
+    let (Ok(image_width), Ok(image_height)) = (u32::try_from(width), u32::try_from(height)) else {
+        report
+            .notes
+            .push("image dimensions exceed Lensfun's coordinate range; skipped".into());
+        return;
+    };
+    let mut modifier = lensfun::Modifier::new(
+        &profile.lens,
+        profile.focal_length,
+        profile.crop_factor,
+        image_width,
+        image_height,
+        // The modifier returns source coordinates for each output pixel. To
+        // correct a distorted source, that inverse-sampling map uses Lensfun's
+        // forward (simulate-lens) coordinate direction; `reverse=true` is for
+        // writing a newly distorted image and sends edge samples out of bounds.
+        false,
+    );
+    let distortion = modifier.enable_distortion_correction(&profile.lens);
+    let tca = modifier.enable_tca_correction(&profile.lens);
+    if !distortion && !tca {
+        report.match_status = Some("matched_without_requested_calibration");
+        report.notes.push(format!(
+            "profile has no distortion or TCA calibration at {:.2} mm",
+            profile.focal_length
+        ));
+        return;
+    }
+
+    let max_by_channel = [
+        std::sync::atomic::AtomicU32::new(0),
+        std::sync::atomic::AtomicU32::new(0),
+        std::sync::atomic::AtomicU32::new(0),
+    ];
+    let source = pixels.as_slice();
+    let output: Vec<[f32; 3]> = (0..source.len())
+        .into_par_iter()
+        .map(|index| {
+            let x = (index % width) as f32;
+            let y = (index / width) as f32;
+            let coordinates = profile_coordinates(&modifier, x, y, distortion, tca);
+            let mut out = [0.0; 3];
+            for (channel, output_channel) in out.iter_mut().enumerate() {
+                let [source_x, source_y] = coordinates[channel];
+                let displacement = ((source_x - x).powi(2) + (source_y - y).powi(2)).sqrt();
+                atomic_max_f32(&max_by_channel[channel], displacement);
+                *output_channel =
+                    bilinear_channel(source, width, height, source_x, source_y, channel);
+            }
+            out
+        })
+        .collect();
+    *pixels = output;
+
+    if let Some(confidence) = confidence
+        && confidence.len() == pixels.len()
+    {
+        let source = confidence.as_slice();
+        let output: Vec<[f32; 3]> = (0..source.len())
+            .into_par_iter()
+            .map(|index| {
+                let x = (index % width) as f32;
+                let y = (index / width) as f32;
+                let coordinates = profile_coordinates(&modifier, x, y, distortion, tca);
+                let mut out = [0.0; 3];
+                for channel in 0..3 {
+                    let [source_x, source_y] = coordinates[channel];
+                    out[channel] =
+                        bilinear_channel(source, width, height, source_x, source_y, channel)
+                            .clamp(0.0, 1.0);
+                }
+                out
+            })
+            .collect();
+        *confidence = output;
+    }
+
+    let displacements = max_by_channel
+        .map(|value| f32::from_bits(value.load(std::sync::atomic::Ordering::Relaxed)));
+    report.max_displacement_pixels = displacements.into_iter().fold(0.0, f32::max);
+    report.max_displacement_by_channel = Some(displacements);
+    report.distortion_corrections = usize::from(distortion);
+    report.transverse_chromatic_aberration_corrections = usize::from(tca);
+    report.corrections_applied = usize::from(distortion) + usize::from(tca);
+}
+
+fn profile_coordinates(
+    modifier: &lensfun::Modifier,
+    x: f32,
+    y: f32,
+    distortion: bool,
+    tca: bool,
+) -> [[f32; 2]; 3] {
+    let mut base = [x, y];
+    if distortion {
+        modifier.apply_geometry_distortion(x, y, 1, 1, &mut base);
+    }
+    if tca {
+        let mut channels = [0.0; 6];
+        modifier.apply_subpixel_distortion(base[0], base[1], 1, 1, &mut channels);
+        [
+            [channels[0], channels[1]],
+            [channels[2], channels[3]],
+            [channels[4], channels[5]],
+        ]
+    } else {
+        [base; 3]
+    }
+}
+
 fn find_entry(tiff: &GenericTiffReader, tag: u16) -> Option<&Entry> {
     if let Some(entry) = tiff.get_entry(tag) {
         return Some(entry);
@@ -205,6 +571,14 @@ fn parse(bytes: &[u8]) -> LensCorrection {
         clipped_channels: 0,
         max_displacement_pixels: 0.0,
         max_gain: 1.0,
+        corrections_applied: 0,
+        database_version: None,
+        matched_camera: None,
+        matched_lens: None,
+        match_status: None,
+        distortion_corrections: 0,
+        transverse_chromatic_aberration_corrections: 0,
+        max_displacement_by_channel: None,
         notes: Vec::new(),
     };
     let mut cursor = Cursor::new(bytes);
@@ -215,6 +589,7 @@ fn parse(bytes: &[u8]) -> LensCorrection {
             .push("truncated opcode-list header".to_string());
         return LensCorrection {
             operations: Vec::new(),
+            profile: None,
             report,
         };
     };
@@ -288,7 +663,11 @@ fn parse(bytes: &[u8]) -> LensCorrection {
             .notes
             .push("entire lens correction skipped because a required opcode was unusable".into());
     }
-    LensCorrection { operations, report }
+    LensCorrection {
+        operations,
+        profile: None,
+        report,
+    }
 }
 
 fn malformed(report: &mut LensCorrectionReport, index: u32, message: &str) {
@@ -437,7 +816,9 @@ fn apply_warp<const C: usize>(
         .collect();
     *pixels = output;
     report.opcodes_applied += 1;
+    report.corrections_applied += 1;
     report.rectilinear_warps += 1;
+    report.distortion_corrections += 1;
     report.clipped_channels += clipped.load(std::sync::atomic::Ordering::Relaxed);
     report.max_displacement_pixels = report.max_displacement_pixels.max(f32::from_bits(
         max_displacement.load(std::sync::atomic::Ordering::Relaxed),
@@ -482,6 +863,7 @@ fn apply_vignette<const C: usize>(
             }
         });
     report.opcodes_applied += 1;
+    report.corrections_applied += 1;
     report.radial_vignette_corrections += 1;
     report.clipped_channels += clipped.load(std::sync::atomic::Ordering::Relaxed);
     report.max_gain = report.max_gain.max(f32::from_bits(
@@ -569,6 +951,28 @@ fn bicubic_channel<const C: usize>(
         *row = cubic(values, tx);
     }
     cubic(rows, ty)
+}
+
+fn bilinear_channel<const C: usize>(
+    pixels: &[[f32; C]],
+    width: usize,
+    height: usize,
+    x: f32,
+    y: f32,
+    channel: usize,
+) -> f32 {
+    let x = x.clamp(0.0, width.saturating_sub(1) as f32);
+    let y = y.clamp(0.0, height.saturating_sub(1) as f32);
+    let x0 = x.floor() as usize;
+    let y0 = y.floor() as usize;
+    let x1 = (x0 + 1).min(width - 1);
+    let y1 = (y0 + 1).min(height - 1);
+    let tx = x - x0 as f32;
+    let ty = y - y0 as f32;
+    let top = pixels[y0 * width + x0][channel] * (1.0 - tx) + pixels[y0 * width + x1][channel] * tx;
+    let bottom =
+        pixels[y1 * width + x0][channel] * (1.0 - tx) + pixels[y1 * width + x1][channel] * tx;
+    top * (1.0 - ty) + bottom * ty
 }
 
 #[inline]
@@ -671,6 +1075,15 @@ mod tests {
         opcode(OPCODE_WARP_RECTILINEAR, 0, &parameters)
     }
 
+    fn radial_warp(k3: f64) -> Vec<u8> {
+        let mut parameters = Vec::new();
+        push_u32(&mut parameters, 1);
+        for value in [1.0, k3, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5] {
+            push_f64(&mut parameters, value);
+        }
+        opcode(OPCODE_WARP_RECTILINEAR, 0, &parameters)
+    }
+
     #[test]
     fn parses_big_endian_identity_warp() {
         let correction = parse(&list(&[identity_warp()]));
@@ -717,6 +1130,39 @@ mod tests {
         );
         assert_eq!(pixels, original);
         assert_eq!(correction.report.rectilinear_warps, 1);
+    }
+
+    #[test]
+    fn embedded_warp_preserves_the_default_confidence_map_behavior() {
+        let mut correction = parse(&list(&[radial_warp(0.08)]));
+        let mut pixels: Vec<[f32; 3]> = (0..81)
+            .map(|index| {
+                let value = index as f32 / 100.0;
+                [value, value * 0.75, value * 0.5]
+            })
+            .collect();
+        let mut confidence = vec![[0.25, 0.5, 0.75]; pixels.len()];
+        let original_confidence = confidence.clone();
+        correction.apply_three_with_confidence(
+            &mut pixels,
+            Some(&mut confidence),
+            9,
+            9,
+            ImageGeometry {
+                full_width: 9,
+                full_height: 9,
+                origin_x: 0,
+                origin_y: 0,
+            },
+        );
+        assert_eq!(confidence, original_confidence);
+        assert_ne!(pixels, original_confidence);
+    }
+
+    #[test]
+    fn exact_keys_ignore_only_presentation_punctuation_and_case() {
+        assert_eq!(exact_key("FE 24mm F2.8 G"), exact_key("FE 24mm f/2.8 G"));
+        assert_ne!(exact_key("FE 24mm F2.8 G"), exact_key("FE 28mm F2 G"));
     }
 
     #[test]

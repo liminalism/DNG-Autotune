@@ -4,8 +4,11 @@
 //! known chromaticity and increasing intensity, used to catch regime-switch
 //! discontinuities without needing a corpus file.
 
-use crate::types::{CameraRgb, Image};
 use crate::oklab;
+use crate::types::{CameraRgb, Image, LinearImage, SceneLinear, ToneParams};
+use rawler::CFA;
+use rawler::cfa::CFAColor;
+use rawler::imgop::{Dim2, Point, Rect};
 
 /// A synthetic scene colour in camera RGB (before white balance) with a fixed
 /// chromaticity and variable intensity.
@@ -20,7 +23,11 @@ pub struct Chromaticity {
 impl Chromaticity {
     /// Neutral gray in camera space: white-balanced neutral (1/wb normalized).
     pub fn neutral(wb: [f32; 3]) -> Self {
-        let inv = [1.0 / wb[0].max(1e-6), 1.0 / wb[1].max(1e-6), 1.0 / wb[2].max(1e-6)];
+        let inv = [
+            1.0 / wb[0].max(1e-6),
+            1.0 / wb[1].max(1e-6),
+            1.0 / wb[2].max(1e-6),
+        ];
         let m = inv[0].max(inv[1]).max(inv[2]);
         Self {
             base: [inv[0] / m, inv[1] / m, inv[2] / m],
@@ -68,11 +75,7 @@ impl Chromaticity {
     /// Hue of the white-balanced colour in OKLab, or None if near neutral.
     pub fn hue_at(&self, intensity: f32) -> Option<f32> {
         let px = self.pixel_at(intensity);
-        let wb_px = [
-            px[0] * self.wb[0],
-            px[1] * self.wb[1],
-            px[2] * self.wb[2],
-        ];
+        let wb_px = [px[0] * self.wb[0], px[1] * self.wb[1], px[2] * self.wb[2]];
         // Treat white-balanced linear as linear sRGB for hue measurement;
         // hue is invariant under uniform scale, so the choice of matrix
         // does not affect the discontinuity test.
@@ -125,21 +128,29 @@ pub fn hue_sequence(image: &Image<CameraRgb>, wb: [f32; 3]) -> Vec<Option<f32>> 
         .collect()
 }
 
-/// Largest wrapped hue step between adjacent chromatic pixels in a sequence.
-pub fn max_hue_step(hues: &[Option<f32>]) -> f32 {
-    let mut max = 0.0f32;
-    for w in hues.windows(2) {
-        if let (Some(a), Some(b)) = (w[0], w[1]) {
-            let mut d = (a - b).abs();
-            if d > std::f32::consts::PI {
-                d = std::f32::consts::TAU - d;
-            }
-            if d > max {
-                max = d;
-            }
-        }
-    }
-    max
+/// Largest colour step between adjacent pixels, as Euclidean distance in the
+/// OKLab `(a, b)` plane.
+///
+/// Not a hue step. Hue is an angle about the achromatic axis and is
+/// ill-conditioned near it: a reconstruction that walks a sky *through* neutral
+/// — which is exactly what a correct one does as the second channel clips —
+/// swings the angle by radians while moving the colour by almost nothing. On the
+/// `broad_sweep` fixture the largest hue step lands at chroma 0.012, six times
+/// the `oklab::CHROMA_FLOOR`, and reports 0.42 rad for a step the eye cannot
+/// see. The Cartesian distance is defined through neutral and is what a contour
+/// in a smooth gradient actually looks like.
+pub fn max_chroma_step(image: &Image<CameraRgb>, wb: [f32; 3]) -> f32 {
+    let ab: Vec<(f32, f32)> = image
+        .pixels
+        .iter()
+        .map(|px| {
+            let lab = oklab::from_linear_srgb([px[0] * wb[0], px[1] * wb[1], px[2] * wb[2]]);
+            (lab.a, lab.b)
+        })
+        .collect();
+    ab.windows(2)
+        .map(|w| (w[1].0 - w[0].0).hypot(w[1].1 - w[0].1))
+        .fold(0.0_f32, f32::max)
 }
 
 /// Count pixels by clipped-channel count using the same threshold as
@@ -153,11 +164,495 @@ pub fn clip_histogram(image: &Image<CameraRgb>) -> [usize; 4] {
     hist
 }
 
+/// Synthetic scene families used by the raw-to-render truth bench.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FixtureKind {
+    NeutralRamp,
+    BlueRamp,
+    BlueToNeutralSky,
+    CorrelatedDetail,
+    IndependentChannels,
+    OccludedSky,
+    ColoredHighlights,
+    FullyClippedCore,
+    SensorKnee,
+}
+
+impl FixtureKind {
+    pub const ALL: [Self; 9] = [
+        Self::NeutralRamp,
+        Self::BlueRamp,
+        Self::BlueToNeutralSky,
+        Self::CorrelatedDetail,
+        Self::IndependentChannels,
+        Self::OccludedSky,
+        Self::ColoredHighlights,
+        Self::FullyClippedCore,
+        Self::SensorKnee,
+    ];
+}
+
+/// Absolute, truth-referenced measures from one complete synthetic render.
+#[derive(Debug, Clone, Copy)]
+pub struct BenchMetrics {
+    pub normalized_linear_rmse: f32,
+    pub normalized_luminance_rmse: f32,
+    pub final_oklab_rmse: f32,
+    pub boundary_p99_ab_error: f32,
+    pub boundary_p90_hue_error_degrees: f32,
+    pub tone_boundary_p99_step: f32,
+    pub post_reconstruction_boundary_p99_step: f32,
+    pub luminance_reversals: usize,
+    pub false_color_fraction: f32,
+    pub edge_energy_ratio: f32,
+    pub peak_luminance_ratio: f32,
+}
+
+const BENCH_WB: [f32; 3] = [2.219, 1.0, 1.773];
+const CAMERA_TO_SCENE: crate::color::Matrix3 = [
+    [1.08, -0.04, -0.04],
+    [-0.03, 1.06, -0.03],
+    [-0.02, -0.06, 1.08],
+];
+
+#[derive(Clone)]
+struct RawFixture {
+    width: usize,
+    height: usize,
+    scene: Vec<[f32; 3]>,
+    knee: bool,
+}
+
+#[inline]
+fn matrix_vector(matrix: &crate::color::Matrix3, value: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|row| {
+        matrix[row][0] * value[0] + matrix[row][1] * value[1] + matrix[row][2] * value[2]
+    })
+}
+
+fn fixture(kind: FixtureKind, width: usize, height: usize) -> RawFixture {
+    let mut scene = Vec::with_capacity(width * height);
+    let center_x = (width - 1) as f32 * 0.5;
+    let center_y = (height - 1) as f32 * 0.45;
+    for y in 0..height {
+        for x in 0..width {
+            let tx = x as f32 / (width - 1).max(1) as f32;
+            let ty = y as f32 / (height - 1).max(1) as f32;
+            let ramp = 0.42 + 2.55 * tx;
+            let blue = [0.42, 0.72, 1.0];
+            let pixel = match kind {
+                FixtureKind::NeutralRamp => [ramp; 3],
+                FixtureKind::BlueRamp => blue.map(|c| c * ramp),
+                FixtureKind::BlueToNeutralSky => {
+                    let neutral = ((tx - 0.55) / 0.35).clamp(0.0, 1.0);
+                    std::array::from_fn(|c| (blue[c] + (1.0 - blue[c]) * neutral) * ramp)
+                }
+                FixtureKind::CorrelatedDetail => {
+                    let detail = 1.0
+                        + 0.035 * (x as f32 * 0.31).sin()
+                        + 0.018 * (y as f32 * 0.77).cos()
+                        + 0.012 * ((x + y) as f32 * 1.9).sin();
+                    blue.map(|c| c * ramp * detail)
+                }
+                FixtureKind::IndependentChannels => [
+                    ramp * (0.55 + 0.10 * (x as f32 * 0.73).sin()),
+                    ramp * (0.78 + 0.09 * (y as f32 * 0.91).cos()),
+                    ramp * (0.94 + 0.08 * ((x + 2 * y) as f32 * 0.63).sin()),
+                ],
+                FixtureKind::OccludedSky if ty > 0.70 + 0.04 * (x as f32 * 0.2).sin() => {
+                    let foliage = 0.11 + 0.05 * ((x * 17 + y * 31) % 13) as f32 / 12.0;
+                    [foliage * 0.55, foliage, foliage * 0.38]
+                }
+                FixtureKind::OccludedSky => blue.map(|c| c * ramp),
+                FixtureKind::ColoredHighlights => {
+                    let stripe = (x / 16) % 3;
+                    let color = match stripe {
+                        0 => [1.0, 0.24, 0.18],
+                        1 => [0.20, 1.0, 0.30],
+                        _ => [0.22, 0.34, 1.0],
+                    };
+                    color.map(|c| c * (0.5 + 2.2 * tx))
+                }
+                FixtureKind::FullyClippedCore => {
+                    let dx = (x as f32 - center_x) / (width as f32 * 0.28);
+                    let dy = (y as f32 - center_y) / (height as f32 * 0.42);
+                    let dome = 0.62 + 2.9 * (-(dx * dx + dy * dy)).exp();
+                    [dome * 0.92, dome, dome * 0.96]
+                }
+                FixtureKind::SensorKnee => blue.map(|c| c * ramp),
+            };
+            scene.push(pixel);
+        }
+    }
+    RawFixture {
+        width,
+        height,
+        scene,
+        knee: kind == FixtureKind::SensorKnee,
+    }
+}
+
+fn scene_to_camera(scene: [f32; 3]) -> [f32; 3] {
+    let inverse = crate::color::invert3(CAMERA_TO_SCENE).expect("bench matrix is invertible");
+    let neutral = matrix_vector(&inverse, scene);
+    std::array::from_fn(|c| neutral[c] / BENCH_WB[c])
+}
+
+fn camera_to_scene(camera: [f32; 3]) -> [f32; 3] {
+    let neutral = std::array::from_fn(|c| camera[c] * BENCH_WB[c]);
+    matrix_vector(&CAMERA_TO_SCENE, neutral)
+}
+
+fn sensor_knee(value: f32) -> f32 {
+    if value <= 0.80 {
+        value
+    } else {
+        // Analytic monotone shoulder with a known inverse. This fixture keeps
+        // the roll-off distinct from the hard clip so the two controls can be
+        // judged independently.
+        0.80 + 0.65 * (value - 0.80)
+    }
+    .min(1.0)
+}
+
+fn sample_rggb(fixture: &RawFixture) -> (Vec<f32>, Vec<f32>, CFA) {
+    let cfa = CFA::new("RGGB");
+    let mut truth = Vec::with_capacity(fixture.scene.len());
+    let mut captured = Vec::with_capacity(fixture.scene.len());
+    for y in 0..fixture.height {
+        for x in 0..fixture.width {
+            let camera = scene_to_camera(fixture.scene[y * fixture.width + x]);
+            let c = match cfa.cfa_color_at(y, x) {
+                CFAColor::RED => 0,
+                CFAColor::GREEN => 1,
+                CFAColor::BLUE => 2,
+                _ => unreachable!("RGB Bayer fixture"),
+            };
+            truth.push(camera[c]);
+            captured.push(if fixture.knee {
+                sensor_knee(camera[c])
+            } else {
+                camera[c].min(1.0)
+            });
+        }
+    }
+    (truth, captured, cfa)
+}
+
+fn full_roi(width: usize, height: usize) -> Rect {
+    Rect::new(Point::zero(), Dim2::new(width, height))
+}
+
+fn demosaic_scene(samples: &[f32], width: usize, height: usize, cfa: &CFA) -> LinearImage {
+    let camera = crate::demosaic::demosaic_bayer(
+        samples,
+        width,
+        height,
+        cfa,
+        full_roi(width, height),
+        crate::demosaic::DemosaicMethod::Rcd,
+    );
+    let scene = camera.into_iter().map(camera_to_scene).collect();
+    Image::<SceneLinear>::new(width, height, scene).expect("fixture dimensions are valid")
+}
+
+fn bench_tone_parameters() -> ToneParams {
+    ToneParams {
+        exposure_ev: -0.35,
+        black_input_ev: -8.0,
+        white_input_ev: 4.0,
+        black_output_linear: 0.001,
+        white_output_linear: 0.99,
+        black_output_ev: (0.001 / crate::types::MID_GRAY).log2(),
+        white_output_ev: (0.99 / crate::types::MID_GRAY).log2(),
+        contrast: 1.08,
+        shadow_power: 8.0 / (-(0.001 / crate::types::MID_GRAY).log2()),
+        highlight_power: 4.0 / (0.99 / crate::types::MID_GRAY).log2(),
+        saturation: 1.22,
+        vibrance: 0.08,
+        highlight_desaturation: 0.16,
+        highlight_color_ratio_exponent: 1.0,
+        highlight_norm: 1.0,
+        noise_floor_ev: None,
+    }
+}
+
+#[inline]
+fn luminance(pixel: [f32; 3]) -> f32 {
+    pixel[0] * 0.2126 + pixel[1] * 0.7152 + pixel[2] * 0.0722
+}
+
+fn percentile(mut values: Vec<f32>, p: f32) -> f32 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    values.sort_by(f32::total_cmp);
+    let index = ((values.len() - 1) as f32 * p).round() as usize;
+    values[index]
+}
+
+fn ab_distance(a: [f32; 3], b: [f32; 3]) -> f32 {
+    let a = oklab::from_linear_srgb(a);
+    let b = oklab::from_linear_srgb(b);
+    (a.a - b.a).hypot(a.b - b.b)
+}
+
+fn boundary_pairs(width: usize, height: usize, state: &[u8]) -> Vec<(usize, usize)> {
+    let mut pairs = Vec::new();
+    for y in 0..height {
+        for x in 0..width {
+            let i = y * width + x;
+            if x + 1 < width && state[i] != state[i + 1] {
+                pairs.push((i, i + 1));
+            }
+            if y + 1 < height && state[i] != state[i + width] {
+                pairs.push((i, i + width));
+            }
+        }
+    }
+    pairs
+}
+
+/// Run one first-principles fixture from analytical scene values through CFA
+/// sampling, clipping, production demosaic/colour conversion, reconstruction,
+/// and the renderer-exact tone checkpoints.
+pub fn evaluate_raw_to_render(
+    kind: FixtureKind,
+    method: crate::raw_highlight::HighlightMethod,
+) -> BenchMetrics {
+    let fixture = fixture(kind, 128, 64);
+    let (truth_raw, mut captured, cfa) = sample_rggb(&fixture);
+    let confidence: Vec<f32> = captured
+        .iter()
+        .map(|value| crate::highlight::clip_confidence(*value))
+        .collect();
+    let propagated = crate::color::propagate_mosaic_confidence(
+        &confidence,
+        fixture.width,
+        fixture.height,
+        &cfa,
+        full_roi(fixture.width, fixture.height),
+        fixture.width,
+        fixture.height,
+    );
+    let state: Vec<u8> = propagated
+        .iter()
+        .map(|c| c.iter().filter(|value| **value >= 0.5).count() as u8)
+        .collect();
+
+    let reference = demosaic_scene(&truth_raw, fixture.width, fixture.height, &cfa);
+    let (candidate, uncertainty) = match method {
+        crate::raw_highlight::HighlightMethod::Current => {
+            let mut camera = crate::demosaic::demosaic_bayer(
+                &captured,
+                fixture.width,
+                fixture.height,
+                &cfa,
+                full_roi(fixture.width, fixture.height),
+                crate::demosaic::DemosaicMethod::Rcd,
+            );
+            let mut camera_image =
+                Image::<CameraRgb>::new(fixture.width, fixture.height, camera).unwrap();
+            let (_, uncertainty) = crate::highlight::reconstruct_with_confidence_and_uncertainty(
+                &mut camera_image,
+                BENCH_WB,
+                1.0,
+                Some(&propagated),
+            );
+            camera = camera_image.pixels;
+            let scene = camera.into_iter().map(camera_to_scene).collect();
+            (
+                Image::<SceneLinear>::new(fixture.width, fixture.height, scene).unwrap(),
+                uncertainty,
+            )
+        }
+        spatial => {
+            crate::raw_highlight::reconstruct_cfa(
+                &mut captured,
+                fixture.width,
+                fixture.height,
+                &cfa,
+                Some(&confidence),
+                spatial,
+            )
+            .expect("synthetic CFA is valid");
+            let candidate = demosaic_scene(&captured, fixture.width, fixture.height, &cfa);
+            let uncertainty = propagated
+                .iter()
+                .map(|c| (c[0] + c[1] + c[2]) / 3.0)
+                .collect();
+            (candidate, uncertainty)
+        }
+    };
+
+    let params = bench_tone_parameters();
+    let reference_stages = crate::tone::render_checkpoints(&reference, &params, None, None);
+    let candidate_stages =
+        crate::tone::render_checkpoints(&candidate, &params, Some(&uncertainty), None);
+    let pairs = boundary_pairs(fixture.width, fixture.height, &state);
+
+    let normalized_linear_rmse = {
+        let mse = candidate
+            .pixels
+            .iter()
+            .zip(&reference.pixels)
+            .flat_map(|(candidate, reference)| {
+                (0..3).map(move |c| f64::from(candidate[c] - reference[c]).powi(2))
+            })
+            .sum::<f64>()
+            / (candidate.pixels.len() * 3) as f64;
+        mse.sqrt() as f32
+            / reference
+                .pixels
+                .iter()
+                .flatten()
+                .copied()
+                .fold(1.0, f32::max)
+    };
+    let final_oklab_rmse = {
+        let mse = candidate_stages
+            .iter()
+            .zip(&reference_stages)
+            .map(|(candidate, reference)| {
+                let a = oklab::from_linear_srgb(candidate.gamut_post);
+                let b = oklab::from_linear_srgb(reference.gamut_post);
+                f64::from((a.l - b.l).powi(2) + (a.a - b.a).powi(2) + (a.b - b.b).powi(2))
+            })
+            .sum::<f64>()
+            / candidate_stages.len() as f64;
+        mse.sqrt() as f32
+    };
+    let normalized_luminance_rmse = {
+        let mse = candidate
+            .pixels
+            .iter()
+            .zip(&reference.pixels)
+            .map(|(candidate, reference)| {
+                f64::from(luminance(*candidate) - luminance(*reference)).powi(2)
+            })
+            .sum::<f64>()
+            / candidate.pixels.len() as f64;
+        let scale = reference
+            .pixels
+            .iter()
+            .map(|pixel| luminance(*pixel))
+            .fold(1.0_f32, f32::max);
+        mse.sqrt() as f32 / scale
+    };
+    let boundary_p99_ab_error = percentile(
+        pairs
+            .iter()
+            .map(|&(a, b)| {
+                let candidate_step = ab_distance(
+                    candidate_stages[a].gamut_post,
+                    candidate_stages[b].gamut_post,
+                );
+                let reference_step = ab_distance(
+                    reference_stages[a].gamut_post,
+                    reference_stages[b].gamut_post,
+                );
+                (candidate_step - reference_step).abs()
+            })
+            .collect(),
+        0.99,
+    );
+    let boundary_p90_hue_error_degrees = percentile(
+        pairs
+            .iter()
+            .flat_map(|&(a, b)| [a, b])
+            .filter_map(|i| {
+                let candidate = oklab::from_linear_srgb(candidate_stages[i].gamut_post);
+                let reference = oklab::from_linear_srgb(reference_stages[i].gamut_post);
+                (reference.chroma() >= 0.02)
+                    .then(|| oklab::hue_difference(candidate, reference))
+                    .flatten()
+                    .map(f32::to_degrees)
+            })
+            .collect(),
+        0.90,
+    );
+    let post_reconstruction_boundary_p99_step = percentile(
+        pairs
+            .iter()
+            .map(|&(a, b)| ab_distance(candidate.pixels[a], candidate.pixels[b]))
+            .collect(),
+        0.99,
+    );
+    let tone_boundary_p99_step = percentile(
+        pairs
+            .iter()
+            .map(|&(a, b)| {
+                ab_distance(
+                    candidate_stages[a].after_curve,
+                    candidate_stages[b].after_curve,
+                )
+            })
+            .collect(),
+        0.99,
+    );
+    let luminance_reversals = candidate_stages
+        .chunks(fixture.width)
+        .map(|row| {
+            row.windows(2)
+                .filter(|window| {
+                    luminance(window[1].gamut_post) + 1.0e-4 < luminance(window[0].gamut_post)
+                })
+                .count()
+        })
+        .sum();
+    let false_color_fraction = candidate_stages
+        .iter()
+        .zip(&reference_stages)
+        .filter(|(candidate, reference)| {
+            ab_distance(candidate.gamut_post, reference.gamut_post) > 0.02
+        })
+        .count() as f32
+        / candidate_stages.len() as f32;
+    let edge_energy = |stages: &[crate::tone::RenderPixelStages]| -> f64 {
+        stages
+            .chunks(fixture.width)
+            .flat_map(|row| row.windows(2))
+            .map(|window| f64::from(ab_distance(window[0].gamut_post, window[1].gamut_post)))
+            .sum()
+    };
+    let edge_energy_ratio =
+        (edge_energy(&candidate_stages) / edge_energy(&reference_stages).max(1.0e-8)) as f32;
+    let peak_luminance = |image: &LinearImage| {
+        image
+            .pixels
+            .iter()
+            .map(|pixel| luminance(*pixel))
+            .fold(0.0_f32, f32::max)
+    };
+    let peak_luminance_ratio = peak_luminance(&candidate) / peak_luminance(&reference).max(1.0e-8);
+
+    BenchMetrics {
+        normalized_linear_rmse,
+        normalized_luminance_rmse,
+        final_oklab_rmse,
+        boundary_p99_ab_error,
+        boundary_p90_hue_error_degrees,
+        tone_boundary_p99_step,
+        post_reconstruction_boundary_p99_step,
+        luminance_reversals,
+        false_color_fraction,
+        edge_energy_ratio,
+        peak_luminance_ratio,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     const WB: [f32; 3] = [2.219, 1.0, 1.773];
 
+    /// A smooth intensity ramp must reconstruct to a smooth colour ramp: no
+    /// contour where the clipped-channel count changes.
+    ///
+    /// The threshold has room on both sides. Reconstruction driven by
+    /// `near_whiteness` measures 0.005 on `blue_sky` and 0.007 on `broad_sweep`;
+    /// the counted rule it replaced measured 0.032 and 0.089 on the same two
+    /// fixtures, so this fails by a factor of two even on the milder of them.
     fn assert_continuous_ramp(chroma: Chromaticity, label: &str) {
         let ramp = ramp_image(chroma, 256, 0.85, 1.45);
         let hist = clip_histogram(&ramp);
@@ -167,34 +662,11 @@ mod tests {
             chroma.base
         );
         let recon = reconstructed_copy(&ramp, WB, 0.75);
-        let hues = hue_sequence(&recon, WB);
-        let max_step = max_hue_step(&hues);
-        // Apparatus phase: prove the bug exists before the fix.
-        // Current regime-switch produces ~0.58 rad on blue-sky and ~1.55 rad
-        // on broad_sweep at the 1→2 boundary; after the continuous
-        // reconstruction lands this must be tightened to max_step < 0.06.
+        let max_step = max_chroma_step(&recon, WB);
         assert!(
-            max_step > 0.15,
-            "{label}: expected discontinuity from regime switch, got max_step {max_step:.4} rad (bug already fixed?); hist {hist:?}"
-        );
-    }
-
-    /// After the fix, a smooth sky must not show an abrupt hue jump.
-    /// Kept separate so the suite can flip from bug-proving to fix-proving.
-    fn assert_continuous_ramp_fixed(chroma: Chromaticity, label: &str) {
-        let ramp = ramp_image(chroma, 256, 0.85, 1.45);
-        let hist = clip_histogram(&ramp);
-        assert!(
-            hist[1] > 0 && hist[2] > 0,
-            "{label}: ramp must contain 1- and 2-clipped pixels, got {hist:?} base {:?}",
-            chroma.base
-        );
-        let recon = reconstructed_copy(&ramp, WB, 0.75);
-        let hues = hue_sequence(&recon, WB);
-        let max_step = max_hue_step(&hues);
-        assert!(
-            max_step < 0.12,
-            "{label}: max adjacent hue step {max_step:.4} rad exceeds continuity threshold; hist {hist:?}"
+            max_step < 0.015,
+            "{label}: max adjacent colour step {max_step:.4} in OKLab (a, b) exceeds \
+             the continuity threshold; hist {hist:?}"
         );
     }
 
@@ -206,7 +678,10 @@ mod tests {
         let c = Chromaticity::neutral(WB);
         let ramp = ramp_image(c, 256, 0.85, 1.45);
         let hist = clip_histogram(&ramp);
-        assert!(hist[0] > 0 && (hist[1]+hist[2]+hist[3]) > 0, "neutral must span unclipped→clipped, got {hist:?}");
+        assert!(
+            hist[0] > 0 && (hist[1] + hist[2] + hist[3]) > 0,
+            "neutral must span unclipped→clipped, got {hist:?}"
+        );
         let recon = reconstructed_copy(&ramp, WB, 0.75);
         for (i, px) in recon.pixels.iter().enumerate() {
             let wb_px = [px[0] * WB[0], px[1] * WB[1], px[2] * WB[2]];
@@ -222,7 +697,10 @@ mod tests {
         let mut prev = f32::NEG_INFINITY;
         for px in &recon.pixels {
             let lum = (px[0] * WB[0]).max(px[1] * WB[1]).max(px[2] * WB[2]);
-            assert!(lum + 1e-6 >= prev, "neutral luminance regressed {lum} < {prev}");
+            assert!(
+                lum + 1e-6 >= prev,
+                "neutral luminance regressed {lum} < {prev}"
+            );
             prev = lum;
         }
     }
@@ -230,12 +708,11 @@ mod tests {
     #[test]
     fn blue_sky_constant_chromaticity_ramp_is_continuous() {
         let c = Chromaticity::blue_sky(WB);
-        assert_continuous_ramp_fixed(c, "blue_sky");
+        assert_continuous_ramp(c, "blue_sky");
     }
 
     #[test]
     fn broad_gradient_crossing_all_clip_states_is_continuous() {
-
         // Camera base with G and B close to 1.0 so the sweep hits 1→2→3
         // clipped states within 0.85→1.45. R is lower, surviving through the
         // 2-clipped regime — the classic A7C sky defect geometry.
@@ -243,7 +720,7 @@ mod tests {
             base: [0.70, 1.0, 0.98],
             wb: WB,
         };
-        assert_continuous_ramp_fixed(c, "broad_sweep");
+        assert_continuous_ramp(c, "broad_sweep");
     }
 
     #[test]
@@ -270,7 +747,11 @@ mod tests {
             pixels.push(sky.pixel_at(intensity));
         }
         for _ in 0..steps {
-            pixels.push([foliage_cam[0] * 0.25, foliage_cam[1] * 0.25, foliage_cam[2] * 0.25]);
+            pixels.push([
+                foliage_cam[0] * 0.25,
+                foliage_cam[1] * 0.25,
+                foliage_cam[2] * 0.25,
+            ]);
         }
         let mut img = Image::new(steps, 2, pixels).unwrap();
         crate::highlight::reconstruct(&mut img, WB, 0.75);
@@ -295,6 +776,108 @@ mod tests {
                     d > 0.30,
                     "sky pixel {idx} hue bled toward foliage: sky {h:.3} foliage {foliage_hue:.3} diff {d:.3}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn raw_to_render_bench_covers_every_first_principles_fixture() {
+        for kind in FixtureKind::ALL {
+            let metrics =
+                evaluate_raw_to_render(kind, crate::raw_highlight::HighlightMethod::Current);
+            assert!(metrics.normalized_linear_rmse.is_finite(), "{kind:?}");
+            assert!(metrics.final_oklab_rmse.is_finite(), "{kind:?}");
+            assert!(metrics.boundary_p99_ab_error.is_finite(), "{kind:?}");
+            assert!(metrics.edge_energy_ratio.is_finite(), "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn spatial_methods_are_measured_after_the_production_tone_shoulder() {
+        for method in [
+            crate::raw_highlight::HighlightMethod::RawPyramid,
+            crate::raw_highlight::HighlightMethod::Harmonic,
+        ] {
+            for kind in [FixtureKind::BlueRamp, FixtureKind::BlueToNeutralSky] {
+                let metrics = evaluate_raw_to_render(kind, method);
+                eprintln!("{method:?} {kind:?}: {metrics:?}");
+                if method == crate::raw_highlight::HighlightMethod::RawPyramid
+                    || kind == FixtureKind::BlueRamp
+                {
+                    assert!(metrics.normalized_linear_rmse < 0.25, "{method:?} {kind:?}");
+                }
+                assert!(metrics.final_oklab_rmse < 0.12, "{method:?} {kind:?}");
+                let boundary_limit = match method {
+                    crate::raw_highlight::HighlightMethod::RawPyramid => 0.015,
+                    crate::raw_highlight::HighlightMethod::Harmonic => 0.01,
+                    crate::raw_highlight::HighlightMethod::Current => unreachable!(),
+                };
+                assert!(
+                    metrics.boundary_p99_ab_error <= boundary_limit,
+                    "{method:?} {kind:?}: {metrics:?}"
+                );
+                if method == crate::raw_highlight::HighlightMethod::Harmonic {
+                    assert!(
+                        metrics.boundary_p90_hue_error_degrees <= 5.0,
+                        "{method:?} {kind:?}: {metrics:?}"
+                    );
+                }
+                assert!(
+                    metrics.tone_boundary_p99_step
+                        <= (1.5 * metrics.post_reconstruction_boundary_p99_step).max(0.03),
+                    "tone shoulder amplified {method:?} {kind:?}: {metrics:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn harmonic_bench_exposes_absolute_quality_across_fixture_families() {
+        for kind in FixtureKind::ALL {
+            let metrics =
+                evaluate_raw_to_render(kind, crate::raw_highlight::HighlightMethod::Harmonic);
+            assert!(metrics.normalized_linear_rmse.is_finite());
+            assert!(metrics.final_oklab_rmse.is_finite());
+            assert!(metrics.boundary_p99_ab_error.is_finite());
+            assert!(metrics.boundary_p90_hue_error_degrees.is_finite());
+            match kind {
+                FixtureKind::NeutralRamp
+                | FixtureKind::BlueRamp
+                | FixtureKind::CorrelatedDetail => {
+                    assert!(
+                        metrics.normalized_linear_rmse <= 0.03,
+                        "linear truth gate failed for {kind:?}: {metrics:?}"
+                    );
+                    assert!(
+                        metrics.final_oklab_rmse <= 0.02,
+                        "rendered truth gate failed for {kind:?}: {metrics:?}"
+                    );
+                }
+                FixtureKind::BlueToNeutralSky => {
+                    assert!(metrics.boundary_p99_ab_error <= 0.01, "{metrics:?}");
+                    assert!(metrics.boundary_p90_hue_error_degrees <= 5.0, "{metrics:?}");
+                }
+                FixtureKind::IndependentChannels => {
+                    assert!(metrics.edge_energy_ratio <= 1.10, "{metrics:?}");
+                    assert!(metrics.peak_luminance_ratio <= 1.10, "{metrics:?}");
+                }
+                FixtureKind::OccludedSky => {
+                    assert!(metrics.edge_energy_ratio <= 1.10, "{metrics:?}");
+                }
+                FixtureKind::ColoredHighlights => {
+                    assert!(metrics.peak_luminance_ratio <= 1.0, "{metrics:?}");
+                }
+                FixtureKind::FullyClippedCore => {
+                    assert!(metrics.normalized_luminance_rmse <= 0.05, "{metrics:?}");
+                    assert!(
+                        (0.8..=1.2).contains(&metrics.peak_luminance_ratio),
+                        "{metrics:?}"
+                    );
+                    assert!(metrics.boundary_p99_ab_error <= 0.01, "{metrics:?}");
+                }
+                FixtureKind::SensorKnee => {
+                    assert!(metrics.final_oklab_rmse <= 0.02, "{metrics:?}");
+                }
             }
         }
     }

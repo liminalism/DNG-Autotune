@@ -29,6 +29,15 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
   state what was observed; they never state what they verify.
 - Unsure what a kind requires? `akr explain <kind>` prints its schema.
 
+**After any code change that satisfies, changes, or retires a `work` record's intent**
+- In the same working-tree change as the code, `akr revise` the work record (`proposed`→`active`→`completed`/`abandoned` as appropriate). Don't defer the ledger to "later" — code without a record is invisible to `docs/generated/` and to review.
+- Add `akr evidence add` for what you observed (command + artifact + summary, `result pass` only when the observed output actually matches). Then, if the record has acceptance checks, `akr complete --check <id>=@evidence/n`.
+- Run `akr build` and `akr check` (equivalently `knowledge.validate`) before handoff. If the build reports `akr.lock is now stale`, rebuilding is mandatory — `akr.lock` and `docs/generated/` are build output, never hand-edited.
+
+**Git ↔ AKR lockstep**
+- One logical change = one scope: `src/*` + `.akr/records/*` + regenerated `docs/generated/` + `akr.lock` travel together. Never commit code that implements a slice without its `akr revise`/`evidence` in the same commit, and never mark a record `completed` without the code present in the same tree. CI's `akr check` + `akr build --check` will reject either half.
+- Treat `git status` and `akr check` as paired gates before handoff or commit: if the code is dirty, the ledger must be dirty in the same direction, and vice-versa. If a commit is made (or should be), the ledger entry is part of that commit — not a follow-up.
+
 **Papercuts**
 - When you hit a small friction while working — a tool call that missed and had to be
   retried, a confusing or undocumented setup step, a flaky command, a stale cache, a
@@ -43,6 +52,7 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
 - Never edit `docs/generated/` — it is regenerated and CI checks it.
 - Never read `.akr/cache/` — it is a private cache.
 - Never delete a record. Move it to a terminal state instead.
+- Never hand-edit `.akr/akr.lock`.
 
 **Before handing back**
-- `knowledge.validate`. If it reports diagnostics, fix them or say so explicitly.
+- `akr build` then `akr check` (or `knowledge.validate`). If it reports diagnostics or `akr.lock is now stale`, fix them or say so explicitly. Include both `git status` and `akr check` output in the handoff.

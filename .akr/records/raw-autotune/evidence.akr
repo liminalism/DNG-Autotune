@@ -1,0 +1,227 @@
+akr 0.1
+project raw-autotune
+
+record raw-autotune.evidence.blown-sky-renders-white-again/1 : evidence {
+    title "Blown skies render white and the clip-count contours are gone"
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "raw-autotune raw/raw_3rd_batch --output final --format jpeg --jobs 6 --sidecar"
+    summary """
+        Fully-clipped sky renders 253/253/253 instead of 184/175/181; rendered brightness is monotone in clip count across the 58-frame batch
+        """
+}
+
+record raw-autotune.evidence.compression-ratio-batch-gate/1 : evidence {
+    title "The ratio test preserved luminance and exact midtones. On _DSC1289 profile plus exponent 0.6 reduced sky green deficit to 7.6%, but the 58-frame gate rejected promotion because maximum hard clipping rose 0.204% to 3.178% and maximum near-white share rose 2.0% to 28.0%."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test tone::tests::color_ratio_exponent_reduces_only_compressed_chroma_and_preserves_luminance --lib; compare 58 decoded JPEGs against output2/raw_3rd_batch"
+    artifact "CHANGELOG.md"
+    summary """
+        The ratio test preserved luminance and exact midtones. On _DSC1289 profile plus exponent 0.6 reduced sky green deficit to 7.6%, but the 58-frame gate rejected promotion because maximum hard clipping rose 0.204% to 3.178% and maximum near-white share rose 2.0% to 28.0%.
+        """
+}
+
+record raw-autotune.evidence.exact-lens-profile-gate/1 : evidence {
+    title "Three integration tests passed: the Sony ILCE-7C / FE 24mm F2.8 G resolves exactly, off is inert, and external-profile RGB and clip-confidence planes receive identical resampling."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test --test profile_lens"
+    artifact "tests/profile_lens.rs"
+    summary """
+        Three integration tests passed: the Sony ILCE-7C / FE 24mm F2.8 G resolves exactly, off is inert, and external-profile RGB and clip-confidence planes receive identical resampling.
+        """
+}
+
+record raw-autotune.evidence.first-principles-highlight-suite-20260809/1 : evidence {
+    title "All targets passed: 299 library tests plus 10 integration tests. The end-to-end raw-to-render bench covers analytical Bayer fixtures through production demosaic, colour, reconstruction, tone, chroma, white-mix, and gamut checkpoints."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test --all-targets"
+    artifact "src/synthetic.rs"
+    summary """
+        All targets passed: 299 library tests plus 10 integration tests. The end-to-end raw-to-render bench covers analytical Bayer fixtures through production demosaic, colour, reconstruction, tone, chroma, white-mix, and gamut checkpoints.
+        """
+}
+
+record raw-autotune.evidence.highlight-fringe-origin-controls/1 : evidence {
+    title "Reconstruction-off, PPG, RCD, AMaZE, and Rawler controls retained the lavender/purple source colour; only about 0.7% of _DSC1289 purple-mask pixels had nonzero reconstruction uncertainty, while a spatial neutralisation prototype produced visible white halos."
+    state verified
+    result pass
+    method observation
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    summary """
+        Reconstruction-off, PPG, RCD, AMaZE, and Rawler controls retained the lavender/purple source colour; only about 0.7% of _DSC1289 purple-mask pixels had nonzero reconstruction uncertainty, while a spatial neutralisation prototype produced visible white halos.
+        """
+}
+
+record raw-autotune.evidence.highlight-method-bench-20260809/1 : evidence {
+    title "Seven synthetic tests passed. Harmonic BlueRamp measured normalized-linear RMSE 0.00286, final OKLab RMSE 0.00727, p99 boundary a/b 0.00382, p90 hue 1.12 degrees, and zero false-colour fraction. The harder blue-to-neutral fixture remained weak (linear RMSE 0.334, OKLab 0.0462, peak ratio 1.63), and raw-pyramid remained only a baseline; neither experiment is promoted."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test synthetic::tests:: -- --nocapture"
+    artifact "src/synthetic.rs"
+    summary """
+        Seven synthetic tests passed. Harmonic BlueRamp measured normalized-linear RMSE 0.00286, final OKLab RMSE 0.00727, p99 boundary a/b 0.00382, p90 hue 1.12 degrees, and zero false-colour fraction. The harder blue-to-neutral fixture remained weak (linear RMSE 0.334, OKLab 0.0462, peak ratio 1.63), and raw-pyramid remained only a baseline; neither experiment is promoted.
+        """
+}
+
+record raw-autotune.evidence.highlight-real-frame-gate-unavailable-20260809/1 : evidence {
+    title "A filesystem search under /mnt/Samsung980_1TB found none of _DSC1283.ARW, _DSC1289.ARW, or _DSC1290.ARW. Real-frame boundary, colour, determinism, and measured 24 MP RSS promotion gates could not be run in this workspace state."
+    state verified
+    result inconclusive
+    method observation
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    artifact "docs/PURPLE_SKY_PROBLEM_SCOPE.md"
+    summary """
+        A filesystem search under /mnt/Samsung980_1TB found none of _DSC1283.ARW, _DSC1289.ARW, or _DSC1290.ARW. Real-frame boundary, colour, determinism, and measured 24 MP RSS promotion gates could not be run in this workspace state.
+        """
+}
+
+record raw-autotune.evidence.highlight-white-path-regression-gate/1 : evidence {
+    title "cargo test passed 285 library tests and all integration/doc tests; cargo fmt --check and cargo clippy --lib --bins --tests -- -D warnings also passed. The existing uncertainty test confirmed u=0 is byte-identical to no map, and the 58-frame batch retained maximum clipped_fraction 0.000284."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test"
+    summary """
+        cargo test passed 285 library tests and all integration/doc tests; cargo fmt --check and cargo clippy --lib --bins --tests -- -D warnings also passed. The existing uncertainty test confirmed u=0 is byte-identical to no map, and the 58-frame batch retained maximum clipped_fraction 0.000284.
+        """
+}
+
+record raw-autotune.evidence.highlight-white-path-target-grade/1 : evidence {
+    title "_DSC1289 sky moved -0.43 to -0.36 EV and green deficit 16.0% to 14.0%; _DSC1283 moved -0.20 to -0.18 EV and 2.7% to 2.5%, with ground shifts at most 0.01 EV and no taupe inversion."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "python3 tools/grade_sky.py /tmp/raw-autotune-fringe-current /tmp/raw-autotune-whitepath-gated.LhnD4n/raw_3rd_batch --reference raw/jpeg --per-frame"
+    summary """
+        _DSC1289 sky moved -0.43 to -0.36 EV and green deficit 16.0% to 14.0%; _DSC1283 moved -0.20 to -0.18 EV and 2.7% to 2.5%, with ground shifts at most 0.01 EV and no taupe inversion.
+        """
+}
+
+record raw-autotune.evidence.profile-experiment-regression-gate/1 : evidence {
+    title "Formatting and clippy completed cleanly. All 289 library tests and every integration/example target passed, including corpus dimension probing and three exact-profile tests."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo fmt --all -- --check; cargo clippy --lib --bins --tests -- -D warnings; cargo test --all-targets"
+    artifact "src/lens.rs"
+    summary """
+        Formatting and clippy completed cleanly. All 289 library tests and every integration/example target passed, including corpus dimension probing and three exact-profile tests.
+        """
+}
+
+record raw-autotune.evidence.profile-memory-safety-gate/1 : evidence {
+    title "With 4.82 GiB MemAvailable, the planner capped an explicit request for eight concurrent images to one before decode. Unit tests also prove a zero-fit budget returns zero so plan refuses the run."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "target/release/raw-autotune raw/raw_3rd_batch/20260729_114901.dng raw/raw_3rd_batch/_DSC1289.ARW --output .agent/scratch/default-identity --format jpeg --jobs 8"
+    artifact "src/memory.rs"
+    summary """
+        With 4.82 GiB MemAvailable, the planner capped an explicit request for eight concurrent images to one before decode. Unit tests also prove a zero-fit budget returns zero so plan refuses the run.
+        """
+}
+
+record raw-autotune.evidence.raw-highlight-invariants-20260809/1 : evidence {
+    title "Five focused tests passed: no-clipping bit exactness, trusted-CFA-site and floor invariants, deterministic harmonic reconstruction, analytical sensor-knee inversion without modifying hard-clipped sites, and occlusion containment beyond demosaic support."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test raw_highlight::tests:: -- --nocapture"
+    artifact "src/raw_highlight.rs"
+    summary """
+        Five focused tests passed: no-clipping bit exactness, trusted-CFA-site and floor invariants, deterministic harmonic reconstruction, analytical sensor-knee inversion without modifying hard-clipped sites, and occlusion containment beyond demosaic support.
+        """
+}
+
+record raw-autotune.evidence.residual-purple-sky-scope-review/1 : evidence {
+    title "Reviewed the external brief end to end. It states the defect is unresolved, separates measured facts from inference and proprietary unknowns, grounds Darktable in pinned source and Sony/Samsung in primary vendor documentation, records failed gates and metric limitations, and supplies phased memory-safe experiments and ten reviewer questions."
+    state verified
+    result pass
+    method manual
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    artifact "docs/PURPLE_SKY_PROBLEM_SCOPE.md"
+    summary """
+        Reviewed the external brief end to end. It states the defect is unresolved, separates measured facts from inference and proprietary unknowns, grounds Darktable in pinned source and Sony/Samsung in primary vendor documentation, records failed gates and metric limitations, and supplies phased memory-safe experiments and ten reviewer questions.
+        """
+}
+
+record raw-autotune.evidence.sky-stage-attribution-20260809/1 : evidence {
+    title "36 tone tests passed. The pre-change and renderer-exact diagnostic renders had identical SHA-256 386a90ebbc5c8032a0f84f0f614277e0b367f0fbc880d6fb5fd50df40db1d7e0. In the fixed upper-sky crop, p90 clip-boundary a/b step was 0.00423 after reconstruction, 0.01922 after the tone curve, 0.01930 after chroma, 0.01605 before and after gamut, and 0.01612 final; reconstruction-off final was 0.00313, local-tone 0.35 was 0.01618, and HDR 0.5 was 0.01663. Current classification counted 344861 pixels with at least two clipped channels and zero with three."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test --lib tone::; render _DSC1289.ARW with renderer-exact stage dumps and reconstruction/local-tone/HDR ablations; analyze bright-sky adjacent OKLab a/b steps; compare final PNG SHA-256"
+    artifact "src/tone.rs"
+    summary """
+        36 tone tests passed. The pre-change and renderer-exact diagnostic renders had identical SHA-256 386a90ebbc5c8032a0f84f0f614277e0b367f0fbc880d6fb5fd50df40db1d7e0. In the fixed upper-sky crop, p90 clip-boundary a/b step was 0.00423 after reconstruction, 0.01922 after the tone curve, 0.01930 after chroma, 0.01605 before and after gamut, and 0.01612 final; reconstruction-off final was 0.00313, local-tone 0.35 was 0.01618, and HDR 0.5 was 0.01663. Current classification counted 344861 pixels with at least two clipped channels and zero with three.
+        """
+}
+
+record raw-autotune.evidence.slice-1-diagnostic-dumps-verify/1 : evidence {
+    title "Diagnostic dumps verified: highlight-pre/post, clipmap (black/red/magenta/white), delta-luma/oklab, gamut-pre/post written under --dump-stages /tmp/verify_dump, 10 PNGs, clipmap counts match HighlightReport 144877/107143."
+    state verified
+    result pass
+    method observation
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    artifact "/tmp/verify_dump/_DSC1287-highlight-clipmap.png"
+    summary """
+        Diagnostic dumps verified: highlight-pre/post, clipmap (black/red/magenta/white), delta-luma/oklab, gamut-pre/post written under --dump-stages /tmp/verify_dump, 10 PNGs, clipmap counts match HighlightReport 144877/107143.
+        """
+}
+
+record raw-autotune.evidence.slice-4-confidence-plumbing-verify/1 : evidence {
+    title "Per-CFA c_i=smoothstep(T0,T1) preserved through hotpixels, demosaiced via propagate_mosaic_confidence, exposed to highlight::reconstruct_with_confidence_and_uncertainty; determinism under --jobs 8 preserved, normalize_does_not_mutate_the_raw_image passes."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test --release rescale hotpixels && src/color.rs propagate_mosaic_confidence via demosaic alongside samples"
+    artifact "src/color.rs"
+    summary """
+        Per-CFA c_i=smoothstep(T0,T1) preserved through hotpixels, demosaiced via propagate_mosaic_confidence, exposed to highlight::reconstruct_with_confidence_and_uncertainty; determinism under --jobs 8 preserved, normalize_does_not_mutate_the_raw_image passes.
+        """
+}
+
+record raw-autotune.evidence.slice-6-uncertainty-gated-chroma-verify/1 : evidence {
+    title "Combined proxy_u (0.92-0.985) + reconstruction_uncertainty*0.85: proxy crop 15.0% strong-magenta med +10 -> combined 2.0% med -1.0; 1-clip med +32->+12, 2/3-clip +59->+9, bright&gd>10 20.4%->8.5%. cargo test 274 passed."
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test --release reconstruction_uncertainty_neutralises_synthesised_highlight_chroma && ./target/release/raw-autotune raw/raw_3rd_batch/_DSC1287.ARW --highlight-reconstruction 0 --output /tmp/verify_proxy && ./target/release/raw-autotune raw/raw_3rd_batch/_DSC1287.ARW --output /tmp/verify_combined && python3 PIL bright/strong-magenta/med g-deficit"
+    artifact "/tmp/verify_gap_compare.jpg"
+    summary """
+        Combined proxy_u (0.92-0.985) + reconstruction_uncertainty*0.85: proxy crop 15.0% strong-magenta med +10 -> combined 2.0% med -1.0; 1-clip med +32->+12, 2/3-clip +59->+9, bright&gd>10 20.4%->8.5%. cargo test 274 passed.
+        """
+}
+
+record raw-autotune.evidence.uncertainty-gate-consolidation/1 : evidence {
+    title "Local-tone/HDR gates rewired onto the raw-domain uncertainty map"
+    state verified
+    result pass
+    method command
+    observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
+    command "cargo test --release && raw-autotune raw/raw_3rd_batch --dry-run --summary before|after.json --jobs 8 && raw-autotune <sky cohort> --dry-run --hdr 0.5 --summary hdr_before|after.json"
+    summary """
+        localtone::build and build_hdr now consume highlight's per-pixel reconstruction-uncertainty map instead of re-deriving a developed-pixel proxy; default output byte-identical over raw/raw_3rd_batch (58 frames), --hdr 0.5 highlight compression rises 18.5->19.0 / 16.1->18.3 / 20.9->25.8 / 26.8->29.1 / 19.0->18.3 % on _DSC1282/1283/1288/1289/1290 with EV caps and shadow-lift fraction unchanged; 277 lib tests pass.
+        """
+}

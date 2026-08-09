@@ -11,8 +11,10 @@ publish = false
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
+faer = { version = "0.24.4", default-features = false, features = ["std", "sparse-linalg"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 jpeg-encoder = "0.7"
+lensfun = "=0.7.0"
 linear-srgb = "0.6"
 rawler = "=0.7.2"
 rayon = "1.10"

@@ -46,6 +46,9 @@ pub struct RenderOptions {
     pub max_samples: usize,
     pub local_white_balance: f32,
     pub local_tone: f32,
+    /// HDR-like edge-aware single-frame local tone, 0 to 1. 0 is off and
+    /// byte-identical. Mutually exclusive with `local_tone`.
+    pub hdr: f32,
     /// `None` selects the automatic embedded-preview policy; `Some(0.0)`
     /// disables preview guidance.
     pub preview_exposure: Option<f32>,
@@ -56,13 +59,14 @@ pub struct RenderOptions {
     /// Multiplier on the tone curve's highlight exponent alone; 1.0 is the
     /// preset as tuned. See `analyze::derive_params`.
     pub highlight_contrast: f32,
+    pub highlight_color_ratio_exponent: f32,
     pub chroma_denoise: f32,
     pub sharpen: f32,
     pub demosaic: DemosaicMethod,
     pub hot_pixels: f32,
     pub highlight_reconstruction: f32,
     pub full_dng_color: bool,
-    pub lens_correction: bool,
+    pub lens_correction: crate::lens::LensCorrectionMode,
 }
 
 impl Default for RenderOptions {
@@ -87,12 +91,14 @@ impl RenderOptions {
             max_samples: options.max_samples,
             local_white_balance: options.local_white_balance,
             local_tone: options.local_tone,
+            hdr: options.hdr,
             preview_exposure: options.preview_exposure,
             raw_color_path: options.raw_color_path,
             working_space: options.working_space,
             sub_black: options.sub_black,
             saturation_scale: options.saturation_scale,
             highlight_contrast: options.highlight_contrast,
+            highlight_color_ratio_exponent: options.highlight_color_ratio_exponent,
             chroma_denoise: options.chroma_denoise,
             sharpen: options.sharpen,
             demosaic: options.demosaic,
@@ -121,6 +127,14 @@ impl RenderOptions {
             "local_tone must be between 0 and 1"
         );
         ensure!(
+            self.hdr.is_finite() && (0.0..=1.0).contains(&self.hdr),
+            "hdr must be between 0 and 1"
+        );
+        ensure!(
+            !(self.hdr > 0.0 && self.local_tone > 0.0),
+            "hdr and local_tone are two local-tone operators; set only one"
+        );
+        ensure!(
             self.preview_exposure
                 .is_none_or(|value| value.is_finite() && (0.0..=1.0).contains(&value)),
             "preview_exposure must be between 0 and 1"
@@ -132,6 +146,11 @@ impl RenderOptions {
         ensure!(
             self.highlight_contrast.is_finite() && (0.25..=4.0).contains(&self.highlight_contrast),
             "highlight_contrast must be between 0.25 and 4"
+        );
+        ensure!(
+            self.highlight_color_ratio_exponent.is_finite()
+                && (0.0..=1.0).contains(&self.highlight_color_ratio_exponent),
+            "highlight_color_ratio_exponent must be between 0 and 1"
         );
         ensure!(
             self.chroma_denoise.is_finite() && (0.0..=2.0).contains(&self.chroma_denoise),
@@ -167,6 +186,7 @@ pub struct RenderReport {
     pub preview: Option<crate::preview::PreviewOracle>,
     pub local_white_balance: Option<crate::whitebalance::LocalWhiteBalance>,
     pub local_tone: Option<crate::localtone::LocalToneReport>,
+    pub hdr: Option<crate::localtone::HdrReport>,
     pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
     pub sharpen: Option<crate::sharpen::SharpenReport>,
     pub color: ColorReport,
@@ -265,7 +285,7 @@ pub fn render_file_rgb16(
     let noise_floor = crate::noiseprofile::frame_floor(noise.as_ref());
     let shot = crate::shotinfo::read(path);
 
-    let (mut linear, color) = match options.raw_color_path {
+    let (mut linear, color, mut highlight_uncertainty) = match options.raw_color_path {
         RawColorPath::Owned => crate::color::develop(
             &raw,
             path,
@@ -274,6 +294,7 @@ pub fn render_file_rgb16(
                 sub_black: options.sub_black,
                 hot_pixels: options.hot_pixels,
                 highlight_reconstruction: options.highlight_reconstruction,
+                highlight_method: crate::raw_highlight::HighlightMethod::Current,
                 demosaic: options.demosaic,
                 snr10_ev: noise_floor.as_ref().map(|floor| floor.snr10_ev),
                 full_dng_color: options.full_dng_color,
@@ -281,7 +302,7 @@ pub fn render_file_rgb16(
                 dump_stages: None,
             },
         )?,
-        RawColorPath::Rawler => (develop_rawler(&raw)?, ColorReport::rawler(&raw)),
+        RawColorPath::Rawler => (develop_rawler(&raw)?, ColorReport::rawler(&raw), None),
     };
     drop(raw);
 
@@ -292,7 +313,17 @@ pub fn render_file_rgb16(
             .iter_mut()
             .for_each(|pixel| pixel.iter_mut().for_each(|channel| *channel *= gain));
     }
+    let pre_orient_dims = (linear.width, linear.height);
     let mut linear = crate::orientation::apply_orientation(linear, source_orientation);
+    if let Some(map) = highlight_uncertainty.take() {
+        let (_, _, oriented) = crate::orientation::orient_data(
+            pre_orient_dims.0,
+            pre_orient_dims.1,
+            map,
+            source_orientation,
+        );
+        highlight_uncertainty = Some(oriented);
+    }
     let chroma_denoise = crate::chroma::apply(
         &mut linear,
         noise_floor.as_ref().map(|floor| floor.snr10_ev),
@@ -315,6 +346,7 @@ pub fn render_file_rgb16(
         },
     )?;
     parameters.saturation *= options.saturation_scale;
+    parameters.highlight_color_ratio_exponent = options.highlight_color_ratio_exponent;
     let guidance_mode = if preview.is_some() && preview_strength > 0.0 {
         GuidanceMode::PreviewGuided
     } else {
@@ -326,11 +358,29 @@ pub fn render_file_rgb16(
             &linear,
             options.local_tone,
             noise_floor.as_ref().map(|floor| floor.snr1_ev),
+            highlight_uncertainty.as_deref(),
         )?)
     } else {
         None
     };
     let local_tone_report = local_tone.as_ref().map(|map| map.report().clone());
+    let hdr = if options.hdr > 0.0 {
+        Some(crate::localtone::build_hdr(
+            &linear,
+            options.hdr,
+            noise_floor.as_ref().map(|floor| floor.snr1_ev),
+            highlight_uncertainty.as_deref(),
+        )?)
+    } else {
+        None
+    };
+    let hdr_report = hdr.as_ref().map(|map| map.report().clone());
+    let correction_field: Option<&dyn crate::localtone::CorrectionField> = match (&hdr, &local_tone)
+    {
+        (Some(map), _) => Some(map),
+        (None, Some(map)) => Some(map),
+        (None, None) => None,
+    };
     let working_to_display = options
         .working_space
         .to_display()
@@ -338,7 +388,8 @@ pub fn render_file_rgb16(
     let mut rendered = crate::tone::render(
         &linear,
         &parameters,
-        local_tone.as_ref(),
+        correction_field,
+        highlight_uncertainty.as_deref(),
         working_to_display.as_ref(),
     );
     let sharpen = crate::sharpen::apply(
@@ -368,6 +419,7 @@ pub fn render_file_rgb16(
             preview,
             local_white_balance,
             local_tone: local_tone_report,
+            hdr: hdr_report,
             chroma_denoise,
             sharpen,
             color,

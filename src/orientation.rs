@@ -1,46 +1,52 @@
 use crate::types::LinearImage;
 use rawler::Orientation;
 
-pub fn apply_orientation(mut image: LinearImage, orientation: Orientation) -> LinearImage {
+/// Apply a camera orientation to a flat row-major buffer of any `Copy` element,
+/// returning the new `(width, height, data)`. Shared by the image itself and by
+/// any companion per-pixel buffer (e.g. the highlight uncertainty map) so the two
+/// cannot drift out of alignment.
+pub fn orient_data<T: Copy>(
+    width: usize,
+    height: usize,
+    mut data: Vec<T>,
+    orientation: Orientation,
+) -> (usize, usize, Vec<T>) {
     let (transpose, horizontal, vertical) = orientation.to_flips();
 
     if horizontal {
-        for row in image.pixels.chunks_exact_mut(image.width) {
+        for row in data.chunks_exact_mut(width) {
             row.reverse();
         }
     }
 
     if vertical {
-        let half = image.height / 2;
+        let half = height / 2;
         for y in 0..half {
-            let opposite = image.height - 1 - y;
-            let row_a = y * image.width;
-            let row_b = opposite * image.width;
-            for x in 0..image.width {
-                image.pixels.swap(row_a + x, row_b + x);
+            let opposite = height - 1 - y;
+            let row_a = y * width;
+            let row_b = opposite * width;
+            for x in 0..width {
+                data.swap(row_a + x, row_b + x);
             }
         }
     }
 
     if transpose {
-        let old_width = image.width;
-        let old_height = image.height;
-        let mut transposed = vec![[0.0_f32; 3]; image.pixels.len()];
-
-        for y in 0..old_height {
-            for x in 0..old_width {
-                let source = y * old_width + x;
-                let destination = x * old_height + y;
-                transposed[destination] = image.pixels[source];
+        let mut transposed = data.clone();
+        for y in 0..height {
+            for x in 0..width {
+                transposed[x * height + y] = data[y * width + x];
             }
         }
-
-        image.width = old_height;
-        image.height = old_width;
-        image.pixels = transposed;
+        (height, width, transposed)
+    } else {
+        (width, height, data)
     }
+}
 
-    image
+pub fn apply_orientation(image: LinearImage, orientation: Orientation) -> LinearImage {
+    let (width, height, pixels) = orient_data(image.width, image.height, image.pixels, orientation);
+    LinearImage::new(width, height, pixels).expect("orientation preserves the pixel count")
 }
 
 #[cfg(test)]

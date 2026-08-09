@@ -43,6 +43,29 @@ implementations:
 
 > This product includes DNG technology under license by Adobe.
 
+## Lensfun
+
+- Project: `vdavid/lensfun-rs`, crate `lensfun`
+- Version selected here: 0.7.0 (pinned exactly)
+- Code license declared by the crate: LGPL-3.0-or-later
+- Bundled Lensfun XML calibration database: CC-BY-SA 3.0
+
+Lensfun supplies the opt-in exact camera/lens profile matcher and the distortion
+and transverse-chromatic-aberration coordinate transforms. The calibration
+database is the work of the upstream Lensfun community. Redistributors must
+retain its attribution and ShareAlike terms; see the crate's `NOTICE` and
+`data/db/README.md` in the Cargo source package.
+
+## faer
+
+- Project: `sarah-ek/faer-rs`, crate `faer`
+- Version selected here: 0.24.4
+- License declared by the crate: MIT
+
+faer supplies the pure-Rust sparse Cholesky factorization used by the opt-in
+harmonic highlight experiment for bounded fully clipped regions. Default
+features are disabled; only `std` and `sparse-linalg` are enabled.
+
 ## Other Rust dependencies
 
 The direct dependencies are listed in `Cargo.toml`. Their transitive dependency

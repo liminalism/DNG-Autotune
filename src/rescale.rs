@@ -170,8 +170,12 @@ pub enum ClipConfidence {
 fn smoothstep_clip(x: f32) -> f32 {
     const T0: f32 = 0.92;
     const T1: f32 = 0.985;
-    if x <= T0 { return 0.0; }
-    if x >= T1 { return 1.0; }
+    if x <= T0 {
+        return 0.0;
+    }
+    if x >= T1 {
+        return 1.0;
+    }
     let t = ((x - T0) / (T1 - T0)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
 }
@@ -394,7 +398,13 @@ pub fn normalize(raw: &RawImage, policy: SubBlack) -> Result<Normalized> {
         }
         NormalizedSamples::Linear3(data) => ClipConfidence::Linear3(
             data.iter()
-                .map(|px| [smoothstep_clip(px[0]), smoothstep_clip(px[1]), smoothstep_clip(px[2])])
+                .map(|px| {
+                    [
+                        smoothstep_clip(px[0]),
+                        smoothstep_clip(px[1]),
+                        smoothstep_clip(px[2]),
+                    ]
+                })
                 .collect(),
         ),
         NormalizedSamples::Linear4(data) => ClipConfidence::Linear4(

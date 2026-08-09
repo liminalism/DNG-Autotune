@@ -1,6 +1,8 @@
 use crate::color::{RawColorPath, WorkingSpace};
 use crate::demosaic::DemosaicMethod;
+use crate::lens::LensCorrectionMode;
 use crate::memory::JobCount;
+use crate::raw_highlight::HighlightMethod;
 use crate::reference::ReferenceSource;
 use crate::rescale::SubBlack;
 use crate::types::{JpegSettings, JpegSubsampling, OutputFormat, Preset, RunOptions};
@@ -38,6 +40,7 @@ pub struct Cli {
 
     /// Number of RAW files held and processed concurrently, or `auto` to choose
     /// from the memory the machine has free and the size of the largest input.
+    /// A numeric request is still capped by the memory-safety ceiling.
     /// Per-image stages use all CPU cores whatever this is set to, and the
     /// rendered output never depends on it.
     #[arg(short = 'j', long, value_name = "N|auto", default_value_t = JobCount::Auto)]
@@ -107,6 +110,18 @@ pub struct Cli {
         allow_hyphen_values = true
     )]
     pub local_tone: f32,
+
+    /// HDR-like single-frame local tone, 0 to 1. Off by default. Edge-aware
+    /// base/detail split in log luminance: compresses the broad sky/ground range
+    /// while keeping local contrast, one scalar gain per pixel. Not wired into
+    /// the automatic profile yet; mutually exclusive with --local-tone.
+    #[arg(
+        long,
+        value_name = "STRENGTH",
+        default_value_t = 0.0,
+        allow_hyphen_values = true
+    )]
+    pub hdr: f32,
 
     /// Take the exposure target from the camera's own embedded preview, 0 to 1.
     /// Automatic when omitted: full strength on files carrying a real preview,
@@ -251,6 +266,12 @@ pub struct Cli {
     #[arg(long, value_name = "FACTOR", default_value_t = 1.0)]
     pub highlight_contrast: f32,
 
+    /// Compression-aware highlight color/luminance ratio exponent, 0 to 1.
+    /// 1 preserves the existing rendering. Values below 1 are experimental;
+    /// the display-adaptive paper used 0.6.
+    #[arg(long, value_name = "EXPONENT", default_value_t = 1.0)]
+    pub highlight_color_ratio_exponent: f32,
+
     /// Suppress hot and dead pixels on the CFA mosaic before demosaic, 0 to 1.
     /// Defaults to a conservative automatic strength. A single stuck
     /// photosite becomes a coloured speck the
@@ -266,6 +287,11 @@ pub struct Cli {
     #[arg(long, value_name = "STRENGTH", default_value_t = 0.75)]
     pub highlight_reconstruction: f32,
 
+    /// Highlight estimator. Spatial methods are first-principles, pre-demosaic
+    /// experiments and require `--highlight-reconstruction 1`.
+    #[arg(long, value_enum, default_value = "current")]
+    pub highlight_method: HighlightMethod,
+
     /// Compatibility spelling: the DNG matrix-profile path is already automatic.
     #[arg(long, conflicts_with = "no_dng_color", hide = true)]
     pub dng_color: bool,
@@ -274,10 +300,14 @@ pub struct Cli {
     #[arg(long, conflicts_with = "dng_color")]
     pub no_dng_color: bool,
 
-    /// Disable standardized DNG OpcodeList3 distortion, lateral chromatic
-    /// aberration, and vignetting correction. Files without usable lens
-    /// opcodes are always left unchanged.
-    #[arg(long)]
+    /// Post-demosaic lens correction. `embedded` preserves the unattended
+    /// DNG-only policy; `profile-exact` opts into the pinned Lensfun database
+    /// when no embedded warp exists; `off` disables correction.
+    #[arg(long, value_enum, default_value = "embedded")]
+    pub lens_correction: LensCorrectionMode,
+
+    /// Compatibility alias for `--lens-correction off`.
+    #[arg(long, conflicts_with = "lens_correction")]
     pub no_lens_correction: bool,
 
     /// Do not write the automatic batch summary. `--summary FILE` still
@@ -287,7 +317,20 @@ pub struct Cli {
 }
 
 impl Cli {
+    /// Existing library-facing conversion. Spatial estimators intentionally
+    /// remain available only through the binary batch pipeline.
     pub fn into_options(self) -> Result<(Vec<PathBuf>, RunOptions)> {
+        let (inputs, options, method) = self.into_pipeline_options()?;
+        ensure!(
+            method == HighlightMethod::Current,
+            "--highlight-method is a CLI batch experiment and cannot be converted to RunOptions"
+        );
+        Ok((inputs, options))
+    }
+
+    /// Convert CLI arguments, retaining the internal estimator selector used
+    /// by the binary's batch entry point.
+    pub fn into_pipeline_options(self) -> Result<(Vec<PathBuf>, RunOptions, HighlightMethod)> {
         ensure!(
             (1..=100).contains(&self.jpeg_quality),
             "--jpeg-quality must be between 1 and 100"
@@ -309,6 +352,14 @@ impl Cli {
             "--local-tone must be between 0 and 1"
         );
         ensure!(
+            self.hdr.is_finite() && (0.0..=1.0).contains(&self.hdr),
+            "--hdr must be between 0 and 1"
+        );
+        ensure!(
+            !(self.hdr > 0.0 && self.local_tone > 0.0),
+            "--hdr and --local-tone are two local-tone operators; pass only one"
+        );
+        ensure!(
             self.preview_exposure
                 .is_none_or(|value| value.is_finite() && (0.0..=1.0).contains(&value)),
             "--preview-exposure must be between 0 and 1"
@@ -324,6 +375,11 @@ impl Cli {
         ensure!(
             self.highlight_contrast.is_finite() && (0.25..=4.0).contains(&self.highlight_contrast),
             "--highlight-contrast must be between 0.25 and 4"
+        );
+        ensure!(
+            self.highlight_color_ratio_exponent.is_finite()
+                && (0.0..=1.0).contains(&self.highlight_color_ratio_exponent),
+            "--highlight-color-ratio-exponent must be between 0 and 1"
         );
         ensure!(
             self.chroma_denoise.is_finite() && (0.0..=2.0).contains(&self.chroma_denoise),
@@ -342,6 +398,18 @@ impl Cli {
                 && (0.0..=1.0).contains(&self.highlight_reconstruction),
             "--highlight-reconstruction must be between 0 and 1"
         );
+        if self.highlight_method.is_spatial() {
+            ensure!(
+                self.raw_color_path == RawColorPath::Owned,
+                "--highlight-method {} requires --raw-color-path owned",
+                self.highlight_method.as_str()
+            );
+            ensure!(
+                self.highlight_reconstruction == 1.0,
+                "--highlight-method {} requires --highlight-reconstruction 1",
+                self.highlight_method.as_str()
+            );
+        }
         if self.raw_color_path == RawColorPath::Rawler
             && (self.hot_pixels > 0.0 || self.highlight_reconstruction > 0.0 || self.dng_color)
         {
@@ -406,6 +474,7 @@ impl Cli {
         options.dry_run = self.dry_run;
         options.local_white_balance = self.local_white_balance;
         options.local_tone = self.local_tone;
+        options.hdr = self.hdr;
         // `--no-preview` is the same decision as `--preview-exposure 0`;
         // clap rejects passing both, so this cannot silently override a
         // strength the user asked for.
@@ -426,15 +495,20 @@ impl Cli {
         options.reference = reference;
         options.saturation_scale = self.saturation_scale;
         options.highlight_contrast = self.highlight_contrast;
+        options.highlight_color_ratio_exponent = self.highlight_color_ratio_exponent;
         options.chroma_denoise = self.chroma_denoise;
         options.sharpen = self.sharpen;
         options.demosaic = self.demosaic;
         options.hot_pixels = self.hot_pixels;
         options.highlight_reconstruction = self.highlight_reconstruction;
         options.full_dng_color = !self.no_dng_color;
-        options.lens_correction = !self.no_lens_correction;
+        options.lens_correction = if self.no_lens_correction {
+            LensCorrectionMode::Off
+        } else {
+            self.lens_correction
+        };
 
-        Ok((inputs, options))
+        Ok((inputs, options, self.highlight_method))
     }
 }
 
@@ -540,6 +614,43 @@ mod tests {
             .into_options()
             .unwrap()
             .1;
-        assert!(!options.lens_correction);
+        assert_eq!(options.lens_correction, LensCorrectionMode::Off);
+    }
+
+    #[test]
+    fn exact_profile_lens_correction_is_explicitly_opt_in() {
+        let options =
+            Cli::try_parse_from(["raw-autotune", ".", "--lens-correction", "profile-exact"])
+                .unwrap()
+                .into_options()
+                .unwrap()
+                .1;
+        assert_eq!(options.lens_correction, LensCorrectionMode::ProfileExact);
+    }
+
+    #[test]
+    fn spatial_highlight_methods_require_full_strength() {
+        for method in ["raw-pyramid", "harmonic"] {
+            let rejected = Cli::try_parse_from(["raw-autotune", ".", "--highlight-method", method])
+                .unwrap()
+                .into_pipeline_options();
+            assert!(
+                rejected.is_err(),
+                "{method} accepted the automatic 0.75 strength"
+            );
+
+            let (_, _, selected) = Cli::try_parse_from([
+                "raw-autotune",
+                ".",
+                "--highlight-method",
+                method,
+                "--highlight-reconstruction",
+                "1",
+            ])
+            .unwrap()
+            .into_pipeline_options()
+            .unwrap();
+            assert!(selected.is_spatial());
+        }
     }
 }

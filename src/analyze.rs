@@ -166,6 +166,7 @@ fn derive_params(
         saturation,
         vibrance,
         highlight_desaturation,
+        highlight_color_ratio_exponent: 1.0,
         highlight_norm,
         noise_floor_ev,
     }
@@ -337,7 +338,9 @@ pub fn analyze(
             // Per-channel clipped counts using the same threshold as highlight reconstruction
             // (0.98 in camera space, here applied to scene-linear for metrics).
             const CLIP_THR: f32 = 0.98;
-            let clipped = (rgb[0] >= CLIP_THR) as usize + (rgb[1] >= CLIP_THR) as usize + (rgb[2] >= CLIP_THR) as usize;
+            let clipped = (rgb[0] >= CLIP_THR) as usize
+                + (rgb[1] >= CLIP_THR) as usize
+                + (rgb[2] >= CLIP_THR) as usize;
             match clipped {
                 1 => clipped_1 += 1,
                 2 => clipped_2 += 1,
@@ -724,7 +727,10 @@ mod tests {
         // Middle grey is the curve's anchor and must not move at all; every
         // sampled highlight must render at or above where it did, and nothing
         // at or below grey may move.
-        assert_eq!(crate::tone::map_ev(0.0, &raised), crate::tone::map_ev(0.0, &base));
+        assert_eq!(
+            crate::tone::map_ev(0.0, &raised),
+            crate::tone::map_ev(0.0, &base)
+        );
         for step in 1..=32 {
             let ev = base.white_input_ev * (step as f32 / 32.0);
             assert!(

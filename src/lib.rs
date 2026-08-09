@@ -8,7 +8,6 @@
 
 pub mod analyze;
 pub mod api;
-pub mod synthetic;
 pub mod chroma;
 pub mod cli;
 pub mod color;
@@ -31,11 +30,13 @@ pub mod orientation;
 pub mod output;
 pub mod pipeline;
 pub mod preview;
+pub mod raw_highlight;
 pub mod redecode;
 pub mod reference;
 pub mod rescale;
 pub mod sharpen;
 pub mod shotinfo;
+pub mod synthetic;
 pub mod tone;
 pub mod types;
 pub mod whitebalance;

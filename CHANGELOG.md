@@ -2,6 +2,279 @@
 
 ## Unreleased — a standalone front-end
 
+### First-principles highlight reconstruction experiments
+
+The CLI now has opt-in `raw-pyramid` and `harmonic` highlight methods. Both run
+on the normalized RGB Bayer mosaic before production demosaic, retain measured
+sites exactly, treat clipped readings as lower bounds, and preserve the original
+raw confidence map for renderer uncertainty. The existing post-demosaic method
+and every public in-memory render remain unchanged by default. Spatial methods
+require `--highlight-reconstruction 1` and reserve method-specific memory in
+the batch planner.
+
+The raw-pyramid baseline uses clipping-aware, renormalized five-tap Gaussian
+levels and reconstructs missing channels from coarse colour scaled by surviving
+high-resolution channels. The harmonic experiment adds eight-connected region
+handling, local one/two-guide affine colour fits with R² and slope gates,
+anisotropic obstacle-constrained transport, sensor-knee inference, a separate
+fully clipped luminance dome, and bounded f64 sparse Cholesky solves through
+the MIT-licensed pure-Rust `faer` crate with a deterministic iterative fallback.
+
+`synthetic.rs` now carries an analytical scene-to-camera-to-RGGB bench instead
+of judging reconstruction in camera RGB alone. It renders unclipped truth and
+clipped candidates through the production demosaic, colour matrix, exact tone
+shoulder, chroma and gamut checkpoints, then measures linear/OKLab RMSE,
+clip-boundary colour and hue errors, edge energy, false colour, luminance
+reversals and fully clipped peak recovery. Fixtures include neutral and blue
+ramps, an intensity-dependent sky, correlated and independent detail, a
+foliage/ridge occluder, coloured highlights, a radial clipped core and an
+analytic sensor knee.
+
+### Exact lens profiles and compression-aware highlight color are opt-in
+
+Sony ARW files do not carry DNG `OpcodeList3`, so the previous lens stage did
+nothing on the ILCE-7C frames even though production converters correct the
+recorded lens. `--lens-correction` is now `embedded` (the unchanged default),
+`profile-exact`, or `off`; the old `--no-lens-correction` spelling remains an
+alias for `off`. The opt-in arm uses the exactly pinned Lensfun 0.7.0 database,
+requires one canonical camera/lens match, and applies distortion plus transverse
+chromatic-aberration coordinates without vignetting or fuzzy selection. In this
+opt-in external-profile path, RGB and the per-channel raw clip-confidence planes
+follow the same geometry. Embedded DNG confidence behavior stays unchanged so
+the default renderer remains stable.
+
+On `_DSC1289`, the Sony FE 24mm F2.8 G profile reduces the edge-localized purple
+mask from 0.59% to 0.34%, but the broad sky green deficit moves only 13.8% to
+13.6%. This confirms that optical fringing was real but not the whole cast.
+`--highlight-color-ratio-exponent` therefore exposes the Mantiuk-style second
+experiment: it raises color/luminance ratios to an exponent only where the tone
+curve is actually compressing, then renormalizes to preserve mapped luminance.
+The default `1.0` is an exact no-op; with the paper's `0.6`, the same profiled
+frame reaches a 7.6% sky green deficit while ground exposure is unchanged and
+sky exposure moves by -0.02 EV.
+
+The experiment is not promoted. Across all 58 third-batch frames, decoded-JPEG
+hard clipping rose from a 0.204% maximum to 3.178%, and the maximum near-white
+share rose from 2.0% to 28.0%. The ratio exponent therefore remains `1.0` by
+default and exact profiles remain explicitly opt-in. The result separates two
+effects rather than hiding either: the optical profile helps edge-localized
+purple, while compression-aware ratios help the broad cast, but this particular
+distortion/TCA plus `0.6` configuration fails the batch highlight gate.
+
+Lens-profile resampling also prompted a memory-safety gate. It reserves another
+16 bytes per pixel in the job planner, the planner now uses only half of
+`MemAvailable`, and even an explicit numeric `--jobs` request is capped to the
+safe concurrency instead of being allowed to invoke the OOM killer. One
+full-resolution profiled `_DSC1289` measured 1,066,236 KiB peak RSS; the planner
+budgets 1.69 GiB for that 24.3 MP frame.
+If half of current `MemAvailable` cannot cover even one conservatively budgeted
+frame, processing now stops before decode with the required and available
+amounts instead of deliberately risking the OOM killer.
+
+### Blown skies rendered as dark taupe blobs with posterized edges
+
+A batch over `raw/raw_3rd_batch` came back with the white-blowout defect not
+fixed but inverted: on `_DSC1283` the fully blown sky between the leaves came out
+a flat dark taupe, ringed along every branch and leaf edge by a filigree of near
+white, with hard contours between them. The most-clipped pixels in the frame were
+rendering as the *darkest* ones.
+
+Three separate faults, all introduced by `ff74d3b`, compounded into that.
+
+**The near-white anchor was gone.** `da23c5f` had replaced the survivor anchor
+with one taken over *all* channels once two or more clipped, which is what put a
+blown pixel on a single white-balanced level and removed the lavender cast
+(measured green deficit 37.5% → 0.0% on this frame). `ff74d3b` replaced that rule
+with a local chromaticity prior `q` and a least-squares intensity solve, and the
+solve has no defined answer where it is needed most. Inside a large blown region
+there is no unclipped neighbour within the search radius, so `q` falls back to
+the mean log-chromaticity of the whole frame — vegetation, on a landscape. The
+fully-clipped arm was worse still: with no trusted channel it divided by
+`white_balance[0]`, red's coefficient, whichever channel was actually the
+brightest, then throttled the blend to 0.35. Measured on the decoded raw, a
+fully-clipped `_DSC1283` sky pixel came out of reconstruction at camera
+`[255, 227, 255]` — green a third of a stop low, which is the original cast at
+about half amplitude.
+
+**The renderer then hid that cast by darkening the pixel.** `tone.rs` multiplied
+`chroma_scale` by `1 − u·0.85`, and since `u` is the mean of three per-channel
+confidences whose ramp (0.92→0.985) is narrower than the noise at clip, `u` is in
+practice quantized to {0, ⅓, ⅔, 1}. The multiplier therefore took four values —
+1.0, 0.72, 0.43, 0.15 — with nothing in between, and the chroma operation
+interpolates each channel toward `mapped_luminance`. At 0.15 a pixel collapses
+onto its own tone-mapped luminance. For the magenta pixel above that luminance is
+0.46 linear, because the curve is driven by the brightest channel and green is
+crushed: sRGB 184, the taupe. Its 2-clipped neighbours kept enough channel
+excursion to clip to white. That is the whole of the posterized ringing — three
+chroma regimes side by side wherever the demosaic mixed clip states, which is
+every foliage edge.
+
+**And the diagnostics could not have caught it**, because `--dump-stages`
+carried its own hand-copied transcription of the render maths, `synthetic.rs`
+measured continuity as a *hue* step (an angle about the achromatic axis, which
+swings by radians for an invisible move when a sky passes through neutral — the
+0.42 rad it flagged sits at chroma 0.012), and the unit tests that pinned
+`da23c5f` had kept their names and docstrings while their bodies were relaxed to
+"spread should not grow much".
+
+The fix restores the anchor rule and makes it continuous properly, rather than
+replacing it:
+
+* `highlight::near_whiteness` is the **second-largest** of the three clip
+  confidences — the continuous form of "two or more channels are at the clip
+  point". It drives the anchor (each channel contributes its white-balanced value
+  at weight `1 − c·(1 − n)`, so a survivor always counts in full and a clipped
+  channel's own value counts only as far as the pixel is near-white), the
+  strength (`strength + (1 − strength)·n`), and each channel's share of the lift
+  (`× c`). At `n = 0` and `n = 1` this is exactly `da23c5f`, which is why every
+  one of that commit's original assertions is back verbatim and passing, including
+  the two exact-equality ones the rewrite had weakened.
+* The `q`/`s*` solve and its sequential `O(W·H·r²)` neighbourhood scan are gone.
+* `tone.rs` withholds the saturation *boost* on reconstructed pixels —
+  interpolating `chroma_scale` back to `unboosted_scale`, the same floor the
+  headroom cap already uses — instead of scaling it toward zero. Withholding an
+  opinion cannot darken a pixel; imposing the opposite one can, and did. The
+  display-brightness proxy `ff74d3b` had added alongside it is removed: it fired
+  on every bright pixel in the frame, reconstructed or not, and the raw-domain map
+  is the signal that was wanted.
+* `dump_gamut_diagnostics` now calls the renderer (`render_pixel_stages` returns
+  the pair either side of `compress_gamut`) rather than reimplementing it, and
+  `synthetic.rs` measures the largest adjacent step as Euclidean distance in the
+  OKLab `(a, b)` plane, which is defined through neutral.
+
+Measured on `_DSC1283`, over the 1200×800 crop at `+300+50` that shows the
+defect, by clipped-channel count:
+
+| cohort      | share | after reconstruction | before      | after       |
+|-------------|-------|----------------------|-------------|-------------|
+| 0 clipped   | 66.8% | (untouched)          | 157/175/179 | 156/175/179 |
+| 1 clipped   |  9.0% | `[232, 255, 255]`    | 206/210/227 | 197/226/243 |
+| 2 clipped   | 14.6% | `[246, 256, 256]`    | 205/203/214 | 219/252/249 |
+| 3 clipped   |  9.6% | `[255, 255, 255]`    | 184/175/181 | 253/253/253 |
+
+The fully-clipped cohort is neutral in the raw domain again and renders as white
+rather than as the darkest thing in the frame, and rendered brightness is now
+monotone in clip count instead of inverted, which is what removes the contours.
+Across the 58-frame batch the output's own `near_white_fraction` goes from a
+median of 0.05% and a maximum of 1.0% to 1.28% and 24.8% — a frame with 16% of
+its pixels at the sensor's clip point had been rendering with 0.03% of its output
+anywhere near white. No frame hard-clips: the largest output `clipped_fraction`
+over the batch is 0.00028. `colourfulness` rises from a median of 35.9 to 37.1,
+which is the chroma the collapse was removing; `exposure_ev`, `luminance_entropy`
+and `average_gradient` are unmoved, so the tone curve and the exposure decision
+did not shift.
+
+Regression gate: 284 lib tests plus the integration suites pass, clippy is clean
+(`--lib --bins --tests`), `cargo fmt` is clean, and the batch is byte-identical
+between `--jobs 6` and `--jobs 8`. With `--highlight-reconstruction 0` the render
+matches the `da23c5f` baseline to a mean absolute difference of 0.0000 and a
+maximum of 30 counts on 0.02% of pixels of the worst frame; that residual is
+`ff74d3b`'s Oklab perceptual gamut mapping, which is a separate and deliberate
+change to `compress_gamut` and is kept. Against the *pre-fix* working tree the
+same path moves by 2.06% of pixels, which is the display-brightness proxy being
+removed. Reconstruction also stopped dominating the run: `_DSC1283` renders in
+2.3 s rather than 27 s, and the whole 58-frame batch in 42 s.
+
+What is left on these frames is not this module's: on `_DSC1289`, 1.15% of the
+sky is still faintly lavender, and 99.2% of those pixels are *unclipped* — real
+recorded colour, not a reconstruction. The purple band along the ridge silhouette
+in `_DSC1283` is the same, 95% unclipped: fringing at a high-contrast edge, which
+the taupe was previously covering up.
+
+That residual is now handled by the existing highlight-desaturation shoulder,
+without pretending it is another reconstruction problem. Controlled renders
+with reconstruction disabled and with PPG, RCD, AMaZE and Rawler demosaicing all
+retain the same magenta/blue source colour; on `_DSC1289`, only 0.7% of the
+purple-mask pixels have any reconstruction uncertainty. A spatial
+neutralisation experiment produced visible white halos and was rejected.
+
+Highlight desaturation therefore now follows a peak-preserving path to white:
+the lower display-linear channels rise continuously toward the brightest one,
+while that brightest channel never falls. Previously it only contracted chroma
+around rendered luminance, which could darken the peak and leave a coloured
+contour beside reconstructed white. The existing headroom calculation remains
+the clipping guard, and gamut compression is re-anchored after the white mix.
+On the exact pre-change/current-source comparison, `_DSC1289` sky exposure moves
+from -0.43 to -0.36 EV and its green deficit from 16.0% to 14.0%; `_DSC1283`
+moves from -0.20 to -0.18 EV and 2.7% to 2.46%, while ground exposure changes by
+at most 0.01 EV. The contour is reduced rather than erased, consistent with its
+measured origin. Across the 58-frame batch the maximum hard-clipped fraction is
+unchanged at 0.000284.
+
+### One reconstruction-uncertainty signal, not three approximations of it
+
+`highlight::reconstruct_with_confidence_and_uncertainty` emits a per-pixel
+reconstruction-uncertainty map in the *raw* domain — the only place where "was
+this channel at the sensor's clip point?" is a measurement rather than a guess.
+`tone::render` consumed it for the chroma path. The two local-tone operators did
+not: `localtone::build` and `localtone::build_hdr` each re-derived their own
+approximation of the same quantity by running the `0.92→0.985` clip ramp over
+the *developed* pixel, and `tone.rs` kept a third copy for the vibrance and
+highlight-desaturation terms. Three transcriptions of one formula, and the
+changelog's own argument for replacing the proxy in the chroma path — that a
+reconstructed pixel which tone-maps dim is invisible to a brightness proxy —
+applied just as well to the two gates that never got it.
+
+They now share one implementation. `highlight::clip_confidence`,
+`synthesis_gate_from_confidence` and `synthesis_gate` own the ramp constants and
+the `r * (0.75 + 0.25 * mean_c)` blend; `build`/`build_hdr` take the real map as
+a parameter, and the pipeline and library API hand them the same buffer the
+renderer already gets. The developed-pixel derivation survives only as an
+explicit fallback for callers with no map (`--highlight-reconstruction 0`, the
+Rawler colour path, unit tests). A mismatched map length is an error, not an
+out-of-bounds read.
+
+This is a behaviour fix, not just a tidy-up: the developed pixel is post-white-
+balance, so on an A7C the proxy fired on blue-sky pixels the sensor never
+clipped (blue is multiplied ~1.8x) while missing reconstructed pixels the tone
+curve lands below the ramp. On the blown-sky cohort at `--hdr 0.5` the
+compression that the proxy was wrongly withholding comes back: highlight
+compression covers 18.5→19.0% (`_DSC1282`), 16.1→18.3% (`_DSC1283`),
+20.9→25.8% (`_DSC1288`), 26.8→29.1% (`_DSC1289`) and 19.0→18.3% (`_DSC1290`) of
+the frame, with the EV caps and the shadow-lift fraction unmoved; `--local-tone
+0.35` moves the same way (23.0→27.5% on `_DSC1288`). Default output is
+unaffected — verified byte-identical field-by-field over `raw/raw_3rd_batch`
+(58 frames, ignoring `elapsed_ms`), since neither operator runs unless asked
+for. `hdr_gate_follows_the_reconstruction_map_on_dim_pixels` and
+`local_tone_gate_follows_the_reconstruction_map_on_dim_pixels` pin the fix on a
+fixture that stays entirely below the clip ramp, where only a real map can gate
+anything.
+
+### `--hdr`: edge-aware single-frame local tone, off by default
+
+Slice 8 of the white-blowout plan, and the first HDR work: not an HDR *output*
+container (`docs/HDR_EVALUATION.md` measured under 1 EV of unclipped headroom on
+the blown-sky cohort, so a wider container has nothing to hold) but the
+single-frame local tone mapping `docs/white-blowout-advice.md` §"Where HDR
+belongs" actually asks for. An edge-aware base/detail split in log2 luminance —
+`B = guided_filter(L)`, `D = L - B`, `dEV = B_compressed + kD - L` — compresses
+the broad sky-versus-ground range while keeping local contrast, and hands
+`tone::render` one scalar EV gain per pixel through the same path as
+`--local-tone` (never an independent per-channel curve).
+
+The base is a self-guided (He et al.) filter, so the compression does not bleed a
+halo across a hard edge; that is pinned by `hdr_hard_edge_does_not_bleed_a_halo`.
+Compression is toward the base median, which keeps the *median* correction at
+zero so exposure does not drift — 1.8e-6 EV measured on `_DSC1289.ARW`, and
+bounded by `hdr_median_correction_stays_near_zero`. Shadow lift is capped at
+`+0.6 EV` and highlight compression at `-0.9 EV` (advice's ranges); lift is
+withheld below the frame's noise floor and wherever highlight reconstruction
+synthesised colour, reusing the Slice 6 uncertainty gate so HDR never
+re-exposes an invented sky.
+
+Measured on the blown-sky frame `_DSC1289.ARW` at `--hdr 0.5`: the low-frequency
+base span narrows from 5.80 to 4.35 EV, corrections span -0.45..+0.30 EV, 30.4%
+of the frame lifted and 26.8% compressed. It is **not** wired into the automatic
+profile: the advice's default-on gate is a halo pass on real leaf/branch/ridge
+crops, which needs eyes, so this ships as an opt-in lever only.
+
+`--hdr 0` is byte-identical to omitting it (verified on `raw/raw_3rd_batch`,
+58 frames, field-by-field against the pre-change summary, ignoring only
+`schema_version` and `elapsed_ms`) and deterministic under `--jobs 8`. `--hdr`
+and `--local-tone` are two local-tone operators and the CLI rejects passing
+both. `REPORT_SCHEMA_VERSION` 15 → 16, adding the `hdr` sidecar block, which is
+omitted entirely when the operator is off.
+
 ### Blown skies rendered lavender-magenta: the near-white anchor rule
 
 `52881d2` fixed the *fully* clipped case — a sun glint with all three channels

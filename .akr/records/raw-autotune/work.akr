@@ -16,6 +16,74 @@ record raw-autotune.work.goal/1 : work {
     }
 }
 
+record raw-autotune.work.harmonic-highlight-experiment/1 : work {
+    title "Harmonic pre-demosaic highlight experiment"
+    state active
+    scope [
+        path "Cargo.lock",
+        path "Cargo.toml",
+        path "THIRD_PARTY.md",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/memory.rs",
+        path "src/pipeline.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Add and validate an opt-in CLI-only clean-room harmonic highlight
+        experiment on the normalized Bayer mosaic. Use connected clipped
+        regions, local one/two-guide affine colour fits with quality gates,
+        clipping-aware pyramid initialization, anisotropic obstacle-constrained
+        transport, verified sensor-knee inversion, and a separate fully clipped
+        luminance dome. Use pure-Rust faer f64 sparse Cholesky for bounded
+        systems and deterministic projected relaxation for larger or failed
+        systems. Keep measured sites and floors invariant and keep `current` as
+        the unattended default. The work remains active pending real-frame
+        corpus gates, measured 24 MP RSS, and further coloured-highlight
+        abstention work.
+        """
+    depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
+}
+
+record raw-autotune.work.highlight-boundary-fringe-diagnosis/1 : work {
+    title "Diagnose and remove the residual highlight-boundary colour fringe"
+    state completed
+    scope [
+        path "src/color.rs",
+        path "src/highlight.rs",
+        path "src/synthetic.rs",
+        path "src/tone.rs",
+        path "tools/"
+    ]
+    intent """
+        Determine whether the lavender/purple contour remaining on `_DSC1283` and `_DSC1289` is recorded lens/demosaic colour or the low-confidence edge of highlight reconstruction. Add only the diagnostics needed to identify it, then implement a continuous correction if the evidence supports one. Preserve the exact `--highlight-reconstruction 0` contract and avoid semantic sky detection or global bright-pixel desaturation.
+        """
+    acceptance {
+        check origin-is-measured {
+            statement """
+                The visible fringe is localized against raw-domain reconstruction confidence and compared across reconstruction-off and multiple demosaic controls.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.highlight-fringe-origin-controls/1 ]
+        }
+        check regression-gate {
+            statement """
+                Formatting, library/tests lint, and the project test suite pass; reconstruction strength zero remains the compatibility path.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.highlight-white-path-regression-gate/1 ]
+        }
+        check target-frames-improve {
+            statement """
+                A repeatable image-space measurement shows the boundary fringe decreases on `_DSC1283` and `_DSC1289` without restoring the dark taupe inversion.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.highlight-white-path-target-grade/1 ]
+        }
+    }
+}
+
 record raw-autotune.work.open-questions/1 : work {
     title "Open Questions"
     state proposed
@@ -33,6 +101,83 @@ record raw-autotune.work.open-questions/1 : work {
     }
 }
 
+record raw-autotune.work.profiled-purple-sky-experiment/1 : work {
+    title "Profiled purple-sky and compression-ratio experiment"
+    state completed
+    scope [
+        path "CHANGELOG.md",
+        path "Cargo.toml",
+        path "README.md",
+        path "THIRD_PARTY.md",
+        path "src/cli.rs",
+        path "src/lens.rs",
+        path "src/main.rs",
+        path "src/memory.rs",
+        path "src/metadata.rs",
+        path "src/pipeline.rs",
+        path "src/tone.rs",
+        path "src/types.rs",
+        path "tests/profile_lens.rs"
+    ]
+    intent """
+        Use the supplied research to separate residual lavender/purple skies into optical edge fringing and broad tone-compression colour drift. Add an explicitly selected, exact-only Lensfun distortion/TCA experiment and a compression-aware colour-ratio experiment without changing their defaults. Evaluate both on target frames and the full third batch, promote neither when the clipping gate fails, and make the added full-resolution resampling incapable of bypassing conservative batch-memory limits even when --jobs is numeric.
+        """
+    acceptance {
+        check exact-profile-is-bounded {
+            statement """
+                The external lens path requires one canonical camera/lens match, applies distortion and TCA without fuzzy selection or vignetting, aligns external-profile RGB and raw clip-confidence coordinates, and remains opt-in.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.exact-lens-profile-gate/1 ]
+        }
+        check memory-fails-safe {
+            statement """
+                Exact-profile memory is included in planning, numeric --jobs is only an upper bound, and a batch is refused before decode when the reserved share of available memory cannot fit one frame.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.profile-memory-safety-gate/1 ]
+        }
+        check regression-gate {
+            statement """
+                Formatting, tests, lint, exact-profile integration, and AKR validation pass, while the embedded default retains its historical confidence-map behavior.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.profile-experiment-regression-gate/1 ]
+        }
+        check research-experiment-is-gated {
+            statement """
+                Compression-aware colour ratios preserve mapped luminance and the default is an exact no-op; target and full-batch measurements decide whether the experiment is promoted.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.compression-ratio-batch-gate/1 ]
+        }
+    }
+}
+
+record raw-autotune.work.raw-pyramid-highlight-baseline/1 : work {
+    title "Raw-pyramid pre-demosaic highlight baseline"
+    state active
+    scope [
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/memory.rs",
+        path "src/pipeline.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Add and validate an opt-in CLI-only clipping-aware raw-pyramid baseline
+        before demosaic. Preserve trusted CFA sites exactly, treat clipped
+        samples as floors, retain the original clip-confidence map for
+        downstream uncertainty, reject partial-strength estimator blending,
+        reserve transient memory, and judge the result through the
+        first-principles raw-to-render bench. Keep `current` as the unattended
+        and public-API default. The work remains active until real-frame
+        diagnostics and measured 24 MP peak RSS are recorded.
+        """
+    depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
+}
+
 record raw-autotune.work.recommended-approach/1 : work {
     title "Recommended Approach"
     state proposed
@@ -45,6 +190,38 @@ record raw-autotune.work.recommended-approach/1 : work {
         excerpt """
             Phase A — apparatus (no production rendering change) — is the whole point of this plan; phase B uses it to land the fix; phase C closes gamut + HDR comparison.
             """
+    }
+}
+
+record raw-autotune.work.residual-purple-sky-external-scope/1 : work {
+    title "Scope residual purple-sky problem for external review"
+    state completed
+    scope [ path "docs/PURPLE_SKY_PROBLEM_SCOPE.md" ]
+    intent """
+        Produce a shareable external-review brief that states the residual lavender/purple-sky problem remains unresolved; separates optical, raw/demosaic, calibration, highlight, tone, and product-rendering hypotheses; examines Darktable's profile, raw-domain, RGB residual-CA, and highlight mechanisms; distinguishes documented Sony and Samsung production capabilities from proprietary unknowns; records the project's evidence and failed promotion gate; and proposes memory-safe falsification experiments and questions for external experts.
+        """
+    acceptance {
+        check external-systems-are-grounded {
+            statement """
+                Darktable mechanisms are grounded in pinned source and official documentation, while Sony and Samsung descriptions cite primary vendor documentation and label proprietary algorithm details unknown.
+                """
+            method manual
+            verified_by [ @raw-autotune.evidence.residual-purple-sky-scope-review/1 ]
+        }
+        check next-research-is-actionable {
+            statement """
+                The brief supplies staged experiments, external-review questions, reproduction materials, acceptance gates, and explicit OOM/memory constraints.
+                """
+            method manual
+            verified_by [ @raw-autotune.evidence.residual-purple-sky-scope-review/1 ]
+        }
+        check unresolved-scope-is-honest {
+            statement """
+                The document does not describe the issue as solved and distinguishes observations, inferences, unknowns, measurement limitations, and rejected experiments.
+                """
+            method manual
+            verified_by [ @raw-autotune.evidence.residual-purple-sky-scope-review/1 ]
+        }
     }
 }
 
@@ -73,7 +250,7 @@ record raw-autotune.work.risks-rollback/1 : work {
 
 record raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 : work {
     title "Slice 1 — Diagnostic dumps and clip-state map (Phase A.1)"
-    state proposed
+    state completed
     intent """
         - **Owns:** `src/color.rs` (owned develop path, highlight call site), `src/rescale.rs` + `src/hotpixels.rs` (confidence source), `src/tone.rs` (pre/post gamut hooks), `src/pipeline.rs` + `src/cli.rs` (dump wiring), `src/highlight.rs` (minor: expose clip-state classifier).
         - **Does:** define `ClipConfidence` / `ClipMap` type; compute pre-reconstruction camera-RGB buffer; classify 0/1/2/3 clipped with both current threshold and (behind flag) smoothstep confidence; emit PNGs: `*-highlight-pre.png`, `*-highlight-clipmap.png` (black/red/magenta/white, `docs/white-blowout-advice.md:72`), `*-highlight-post.png`, `*-highlight-delta-luma.png`, `*-highlight-delta-oklab.png`, `*-gamut-pre.png`, `*-gamut-post.png` plus a JSON sidecar with per-channel clipped counts matching `docs/HDR_EVALUATION.md:24` table. Implement frozen-`ToneParams` render for the ablation comparison (reuse `ToneLut::new` path).
@@ -93,27 +270,39 @@ record raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 : work {
 }
 
 record raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 : work {
-    title "Slice 2 — Synthetic ramp suite and ablation harness (Phase A.2 + A.3 harness)"
-    state proposed
+    title "Slice 2 — First-principles raw-to-render ground-truth bench"
+    state completed
+    scope [
+        path "src/highlight.rs",
+        path "src/oklab.rs",
+        path "src/synthetic.rs",
+        path "src/tone.rs",
+        path "tools/**"
+    ]
     intent """
-        - **Owns:** new `src/synthetic.rs` (or `tests/synthetic_ramps.rs`), `src/highlight.rs` tests, `src/oklab.rs` helpers, `tools/ablation.py` (or `tools/grade_sky.py` restoration — advice notes it is missing; `CHANGELOG.md` references it, `docs/white-blowout-advice.md:325` says neither `HDR_EVALUATION.md` nor `grade_sky.py` were on master at review time; now `HDR_EVALUATION.md` exists but the script still does not).
-        - **Does:** fixtures: neutral, constant blue-sky, blue→neutral, sky|foliage, 0→1→2→3 sweep. Each constructs `Image<CameraRgb>` with calibrated `white_balance` (e.g. A7C ~[2.219,1,1.773] per `src/highlight.rs:358`) and known chromaticity; runs `highlight::reconstruct` at `{0,0.25,0.75,1.0}`; asserts luminance monotonicity, OKLab hue continuity, no discontinuity at clip thresholds (finite-difference of hue across the 1→2 boundary < epsilon), constant-hue preservation until evidence gone, 3-clipped smoothness. Harness script runs `cargo run --release -- <raw> --dump-highlight-stages /tmp/dumps` plus the CLI ablation table (advice table, p.84) over a single `_DSC1289.ARW` and diffs the frozen-params pair.
-        - **Depends on:** Slice 1's `ClipMap` type only; can start with a stub classifier.
+        Replace the reconstruction-only ramp gate with an end-to-end, truth-referenced raw-to-render bench. Generate known scene-linear spectra or RGB fields, map them through an explicit camera matrix and white balance to a Bayer mosaic, apply hard clipping and separately parameterised near-saturation roll-off, then run the same demosaic, reconstruction, colour transform, tone curve, chroma, white-mix, and gamut stages used by production.
+
+        Cover neutral and constant-blue ramps; blue-to-neutral intensity-dependent sky colour; correlated and deliberately non-correlated channel ramps; smooth 0-to-1-to-2-to-3-channel saturation sweeps; foliage/ridge occlusion; a fully clipped core; and sensor-knee cases. Preserve the existing reconstruction-strength ablation and real-frame diagnostics, but make correctness depend on absolute ground truth rather than a vendor JPEG or another raw processor.
+
+        At every production checkpoint measure luminance monotonicity, OKLab error to truth, p90/p99 adjacent a/b steps across clip-state boundaries versus same-state pairs, edge energy, and false-colour area. A test must render through `tone::render` (or the shared renderer-exact stage function): stopping after `highlight::reconstruct` misses the current failure because the real frame's post-reconstruction boundary step passes the old threshold and is then amplified by the tone shoulder. Keep estimator comparisons as ablations, not as truth.
+        """
+    note """
+        The existing synthetic tests exercise `highlight::reconstruct` but stop before the max-channel-weighted tone curve. On `_DSC1289.ARW`, post-reconstruction p90 boundary a/b step was 0.00423, while the immediately post-curve value was 0.01922; this is the test gap the revised bench must close before another reconstruction formula is promoted.
         """
     source {
         kind legacy
         path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
         excerpt """
-            - **Owns:** new `src/synthetic.rs` (or `tests/synthetic_ramps.rs`), `src/highlight.rs` tests, `src/oklab.rs` helpers, `tools/ablation.py` (or `tools/grade_sky.py` restoration — advice notes it is missing; `CHANGELOG.md` references it, `docs/white-blowout-advice.md:325` says neither `HDR_EVALUATION.md` nor `grade_sky.py` were on master at review time; now `HDR_EVALUATION.md` exists but the script still does not).
-            - **Does:** fixtures: neutral, constant blue-sky, blue→neutral, sky|foliage, 0→1→2→3 sweep. Each constructs `Image<CameraRgb>` with calibrated `white_balance` (e.g. A7C ~[2.219,1,1.773] per `src/highlight.rs:358`) and known chromaticity; runs `highlight::reconstruct` at `{0,0.25,0.75,1.0}`; asserts luminance monotonicity, OKLab hue continuity, no discontinuity at clip thresholds (finite-difference of hue across the 1→2 boundary < epsilon), constant-hue preservation until evidence gone, 3-clipped smoothness. Harness script runs `cargo run --release -- <raw> --dump-highlight-stages /tmp/dumps` plus the CLI ablation table (advice table, p.84) over a single `_DSC1289.ARW` and diffs the frozen-params pair.
-            - **Depends on:** Slice 1's `ClipMap` type only; can start with a stub classifier.
+            - **Owns:** new `src/synthetic.rs` (or `tests/synthetic_ramps.rs`), `src/highlight.rs` tests, `src/oklab.rs` helpers, `tools/ablation.py`.
+            - **Does:** fixtures: neutral, constant blue-sky, blue→neutral, sky|foliage, 0→1→2→3 sweep. Each constructs calibrated camera RGB with known chromaticity; runs highlight reconstruction at several strengths; asserts luminance monotonicity, OKLab hue continuity, no discontinuity at clip thresholds, constant-hue preservation until evidence is gone, and fully clipped smoothness.
+            - **Depends on:** Slice 1's clip map.
             """
     }
 }
 
 record raw-autotune.work.slice-4-raw-domain-confidence-plumbing-phase-b-4/1 : work {
     title "Slice 4 — Raw-domain confidence plumbing (Phase B.4)"
-    state proposed
+    state completed
     intent """
         - **Owns:** `src/rescale.rs:131` `NormalizedSamples::Mosaic` + `Levels`, `src/hotpixels.rs`, `src/demosaic.rs:222` green estimators, `src/color.rs:329` `ColorTransform`.
         - **Does:** build per-CFA-site `c_i = smoothstep(t0,t1,x_i)` from `NormalizedSamples` (raw code space near `white_level`, per-channel), preserve through `hotpixels` suppression, demosaic/propagate companion mask (not via `CFAColor`-averaged demosaic that collapses saturated sites), expose to `highlight::reconstruct` as `&[f32]` alongside `Image<CameraRgb>`. Keep `CLIP_THRESHOLD` as deprecated fallback when confidence not yet plumbed; tests assert mask determinism under `--jobs 8` and `normalize_does_not_mutate_the_raw_image` still holds.
@@ -132,7 +321,7 @@ record raw-autotune.work.slice-4-raw-domain-confidence-plumbing-phase-b-4/1 : wo
 
 record raw-autotune.work.slice-6-uncertainty-gated-chroma-limiting-phase/1 : work {
     title "Slice 6 — Uncertainty-gated chroma limiting (Phase B.6)"
-    state proposed
+    state completed
     intent """
         - **Owns:** `src/tone.rs:348` chroma/vibrance block, `src/types.rs:169` `ToneParams`, `src/highlight.rs` uncertainty image.
         - **Does:** propagate per-pixel `u` into `render_pixel_linear` (new `Option<&UncertaintyMap>` param akin to `LocalToneMap`), apply `C_gain = C_normal * (1 - u * d_uncertain)` with the 4-tier interpolation described in advice (reliable → retain, 1-clip weak → mild cap, 2-clip → stronger, 3-clip → strong). Do not raise global `highlight_desaturation`.
@@ -151,12 +340,53 @@ record raw-autotune.work.slice-6-uncertainty-gated-chroma-limiting-phase/1 : wor
 
 record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/1 : work {
     title "Slice 8 — Local-tone sky/ground HDR evaluation (Phase C.8, no code or gated experiment)"
-    state proposed
+    state superseded
     intent """
         - **Owns:** `src/localtone.rs`, `src/tone.rs` exposure-gain path, `tools/` evaluation.
         - **Does:** sweep existing Gaussian-surround operator at `--local-tone 0.35` (advice) with the new uncertainty gating; measure sky-band vs ground-band EV separation, halo around foliage/ridge, `HIGHLIGHT_NORM` interaction, and `docs/HDR_EVALUATION.md` unclipped-headroom figure. If warranted, implement the guided-filter log-luminance `B=guided(L), D=L-B, ΔEV = B_compressed + kD - L` design from advice §"Where HDR belongs" with median-correction≈0, shadow +0.4-0.6 EV, highlight −0.6-0.9 EV, single scalar RGB gain. Gate: do not ship default-on until halo test passes on leaf/branch/ridge crops.
         - **Depends on:** Slice 7.
         """
+    source {
+        kind legacy
+        path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
+        excerpt """
+            - **Owns:** `src/localtone.rs`, `src/tone.rs` exposure-gain path, `tools/` evaluation.
+            - **Does:** sweep existing Gaussian-surround operator at `--local-tone 0.35` (advice) with the new uncertainty gating; measure sky-band vs ground-band EV separation, halo around foliage/ridge, `HIGHLIGHT_NORM` interaction, and `docs/HDR_EVALUATION.md` unclipped-headroom figure. If warranted, implement the guided-filter log-luminance `B=guided(L), D=L-B, ΔEV = B_compressed + kD - L` design from advice §"Where HDR belongs" with median-correction≈0, shadow +0.4-0.6 EV, highlight −0.6-0.9 EV, single scalar RGB gain. Gate: do not ship default-on until halo test passes on leaf/branch/ridge crops.
+            - **Depends on:** Slice 7.
+            """
+    }
+}
+
+record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 : work {
+    title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
+    state active
+    scope [ path "src/localtone.rs", path "src/tone.rs", path "tools/**" ]
+    intent """
+        Attribute the visible sky failure to an exact pipeline boundary before changing the default render. Keep the existing local-tone and HDR evaluations for scene-luminance compression, but do not use either operator to conceal a colour-estimation discontinuity.
+
+        Add renderer-exact, lossless diagnostic checkpoints after the tone curve, chroma scale, highlight white mix, and gamut compression. The normal render and the final diagnostic checkpoint must share one implementation and remain byte-identical. On `_DSC1289.ARW`, compare the default against reconstruction disabled, `--local-tone 0.35`, and `--hdr 0.5`; measure adjacent OKLab chroma steps across raw clip-state boundaries and within the same clip state.
+
+        The current attribution found that reconstruction introduces clip-cohort plateaus and that the max-channel-weighted tone shoulder is the main discontinuity amplifier. Local tone and HDR do not repair the colour estimate, gamut compression is effectively inactive in the measured sky, and the peak-preserving path toward white reduces rather than creates the boundary. Continue evaluating local tone/HDR only after the reconstruction estimator and its end-to-end ground-truth bench can distinguish recovered detail from invented colour.
+        """
+    note """
+        On the bright upper-sky crop of `_DSC1289.ARW`, the p90 adjacent OKLab a/b step at a clip-state boundary was 0.00423 after highlight reconstruction and 0.01922 immediately after the tone curve (4.5x). It was 0.01612 in the final default render, versus 0.00313 with reconstruction disabled. `--local-tone 0.35` measured 0.01618 and `--hdr 0.5` measured 0.01663. Gamut pre/post p90 was unchanged. The frame contained 344,861 two-or-more-channel clipped pixels and no three-channel-clipped pixels under the current classifier, so its small white patch is estimator neutralisation plus tone mapping rather than a region with all three raw channels classified clipped.
+        """
+    acceptance {
+        check local-tone-hdr-remain-colour-neutral {
+            statement """
+                Local-tone or HDR promotion is decided on luminance separation and halo behaviour only after highlight colour continuity passes the ground-truth reconstruction gate.
+                """
+            method command
+        }
+        check renderer-exact-stage-attribution {
+            statement """
+                Lossless checkpoints use the production renderer's exact arithmetic, leave the normal output byte-identical, and isolate the first stage that materially amplifies clip-boundary colour steps.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.sky-stage-attribution-20260809/1 ]
+        }
+    }
+    supersedes [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/1 ]
     source {
         kind legacy
         path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"

@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use raw_autotune::cli::Cli;
 use raw_autotune::noiseprofile::{NoiseProfile, NoiseSample};
+use raw_autotune::raw_highlight::HighlightMethod;
 use raw_autotune::{files, memory, output, pipeline, types};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -112,9 +113,15 @@ fn process_all(
     options: &types::RunOptions,
     workers: usize,
     profile: Option<&NoiseProfile>,
+    highlight_method: HighlightMethod,
 ) -> Vec<anyhow::Result<types::ProcessReport>> {
     run_over_jobs(jobs, workers, |index| {
-        pipeline::process_job(&jobs[index], options, profile)
+        pipeline::process_job_with_highlight_method(
+            &jobs[index],
+            options,
+            profile,
+            highlight_method,
+        )
     })
 }
 
@@ -122,20 +129,24 @@ fn run() -> Result<i32> {
     // The bare executable, with no arguments, launches the interactive wizard.
     // Any argument at all routes through the flag-based CLI, so every documented
     // batch invocation keeps working unchanged.
-    let (input_paths, options) = if std::env::args().len() <= 1 {
+    let (input_paths, options, highlight_method) = if std::env::args().len() <= 1 {
         match interactive::run()? {
-            Some(pair) => pair,
+            Some((inputs, options)) => (inputs, options, HighlightMethod::Current),
             None => return Ok(0),
         }
     } else {
         let cli = Cli::parse();
-        cli.into_options()?
+        cli.into_pipeline_options()?
     };
 
-    run_pipeline(input_paths, options)
+    run_pipeline(input_paths, options, highlight_method)
 }
 
-fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result<i32> {
+fn run_pipeline(
+    input_paths: Vec<PathBuf>,
+    options: types::RunOptions,
+    highlight_method: HighlightMethod,
+) -> Result<i32> {
     let jobs = files::discover_inputs(&input_paths, options.recursive)?;
 
     if !options.dry_run {
@@ -145,7 +156,13 @@ fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result
     // Decided once, before anything is decoded, from the size of every input
     // and the memory the machine reports free. It changes only how many files
     // are in flight, never how any of them is rendered.
-    let plan = memory::plan(options.jobs, &jobs);
+    let plan = memory::plan_with_highlight_method(
+        options.jobs,
+        &jobs,
+        options.lens_correction,
+        highlight_method,
+    )
+    .map_err(anyhow::Error::msg)?;
 
     println!(
         "raw-autotune v{} | {} file(s) | profile={} | preset={} | concurrent images={}{}{}",
@@ -198,7 +215,13 @@ fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result
         None => None,
     };
 
-    let results = process_all(&jobs, &options, plan.workers, profile.as_ref());
+    let results = process_all(
+        &jobs,
+        &options,
+        plan.workers,
+        profile.as_ref(),
+        highlight_method,
+    );
 
     let mut completed = 0_usize;
     let mut skipped = 0_usize;
@@ -259,6 +282,7 @@ fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result
                     shot: report.shot,
                     preview: report.preview,
                     local_tone: report.local_tone,
+                    hdr: report.hdr,
                     chroma_denoise: report.chroma_denoise,
                     sharpen: report.sharpen,
                     reference: report.reference,
@@ -385,6 +409,7 @@ fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result
                     shot: report.shot,
                     preview: report.preview,
                     local_tone: report.local_tone,
+                    hdr: report.hdr,
                     chroma_denoise: report.chroma_denoise,
                     sharpen: report.sharpen,
                     reference: report.reference,
@@ -411,6 +436,7 @@ fn run_pipeline(input_paths: Vec<PathBuf>, options: types::RunOptions) -> Result
                     shot: None,
                     preview: None,
                     local_tone: None,
+                    hdr: None,
                     chroma_denoise: None,
                     sharpen: None,
                     reference: None,
