@@ -477,7 +477,14 @@ pub fn evaluate_raw_to_render(
                 spatial,
             )
             .expect("synthetic CFA is valid");
-            let candidate = demosaic_scene(&captured, fixture.width, fixture.height, &cfa);
+            let mut candidate = demosaic_scene(&captured, fixture.width, fixture.height, &cfa);
+            if matches!(spatial, crate::raw_highlight::HighlightMethod::Harmonic) {
+                let _ = crate::highlight::transport_spatial_chromaticity(
+                    &mut candidate,
+                    Some(&propagated),
+                    crate::color::WorkingSpace::Srgb.to_xyz_d65(),
+                );
+            }
             let uncertainty = propagated
                 .iter()
                 .map(|c| (c[0] + c[1] + c[2]) / 3.0)

@@ -149,6 +149,45 @@ record raw-autotune.evidence.harmonic-real-frame-rss-20260809/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.harmonic-spatial-chroma-corpus-render/1 : evidence {
+    title "All three Sony ILCE-7C frames rendered. The first two remained visually stable; the broad right-side magenta fill in _DSC1290 was substantially reduced while thin pink occluder contours remain. Peak RSS was 1,027,868 kB."
+    state verified
+    result pass
+    method observation
+    observed_at git:c6cb8cf451e805c3bfda165df545b9293787ed32
+    command "target/release/raw-autotune _DSC1283.ARW _DSC1289.ARW _DSC1290.ARW --highlight-method harmonic --highlight-reconstruction 1"
+    artifact "output-tests/20260809-191941-p0800/harmonic-spatial-chroma"
+    summary """
+        All three Sony ILCE-7C frames rendered. The first two remained visually stable; the broad right-side magenta fill in _DSC1290 was substantially reduced while thin pink occluder contours remain. Peak RSS was 1,027,868 kB.
+        """
+}
+
+record raw-autotune.evidence.harmonic-spatial-chroma-full-suite/1 : evidence {
+    title "Formatting passed; 306 library tests, API, metadata, real-RAW probe, exact lens-profile, and documentation tests all passed."
+    state verified
+    result pass
+    method command
+    observed_at git:c6cb8cf451e805c3bfda165df545b9293787ed32
+    command "cargo fmt --check; cargo test"
+    artifact "src/highlight.rs"
+    summary """
+        Formatting passed; 306 library tests, API, metadata, real-RAW probe, exact lens-profile, and documentation tests all passed.
+        """
+}
+
+record raw-autotune.evidence.harmonic-spatial-chroma-synthetic-gate/1 : evidence {
+    title "All absolute harmonic fixture gates passed. Constant-blue and coloured-highlight post-transport output stayed unchanged; the occluded-sky hue error improved to 14.60 degrees while its tone-boundary regression remains recorded in the active work."
+    state verified
+    result pass
+    method command
+    observed_at git:c6cb8cf451e805c3bfda165df545b9293787ed32
+    command "cargo test synthetic::tests::harmonic_bench_exposes_absolute_quality_across_fixture_families -- --nocapture"
+    artifact "src/synthetic.rs"
+    summary """
+        All absolute harmonic fixture gates passed. Constant-blue and coloured-highlight post-transport output stayed unchanged; the occluded-sky hue error improved to 14.60 degrees while its tone-boundary regression remains recorded in the active work.
+        """
+}
+
 record raw-autotune.evidence.highlight-fringe-origin-controls/1 : evidence {
     title "Reconstruction-off, PPG, RCD, AMaZE, and Rawler controls retained the lavender/purple source colour; only about 0.7% of _DSC1289 purple-mask pixels had nonzero reconstruction uncertainty, while a spatial neutralisation prototype produced visible white halos."
     state superseded

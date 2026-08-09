@@ -1368,7 +1368,7 @@ pub fn develop(
         }
     }
 
-    let image: Image<SceneLinear> = match camera {
+    let mut image: Image<SceneLinear> = match camera {
         // In place: the camera-RGB buffer becomes the scene-linear one rather
         // than being collected into a second allocation of the same size. See
         // `Image::map_into`.
@@ -1403,6 +1403,31 @@ pub fn develop(
             Image::<SceneLinear>::new(width, height, converted)?
         }
     };
+
+    // Harmonic reconstruction preserves spatial luminance well, but where two
+    // channels clipped its chromaticity is still underdetermined. Extend
+    // measured chromaticity there with an edge-aware harmonic field in CIE
+    // u'v', while preserving reconstructed CIE Y exactly. The current and
+    // raw-pyramid paths retain their established output.
+    if options.highlight_reconstruction > 0.0
+        && matches!(
+            options.highlight_method,
+            crate::raw_highlight::HighlightMethod::Harmonic
+        )
+    {
+        let transport = crate::highlight::transport_spatial_chromaticity(
+            &mut image,
+            demosaiced_confidence.as_deref(),
+            transform.working_space.to_xyz_d65(),
+        );
+        eprintln!(
+            "HCHROMA {}: {} pixel(s) transported across {} region(s), max u'v' shift {:.5}",
+            path.display(),
+            transport.changed_pixels,
+            transport.connected_regions,
+            transport.max_uv_shift,
+        );
+    }
 
     let clip_cost = measure_clip_cost(&image.pixels);
 

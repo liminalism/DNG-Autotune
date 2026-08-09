@@ -125,9 +125,11 @@
 //! preserving, so a colour cast left in by this module survives it unchanged.
 //! That is why the cast has to die here and cannot be cleaned up downstream.
 
-use crate::types::{CameraRgb, Image};
+use crate::color::Matrix3;
+use crate::types::{CameraRgb, Image, LinearImage};
 use rayon::prelude::*;
 use serde::Serialize;
+use std::collections::VecDeque;
 
 pub(crate) const CLIP_THRESHOLD: f32 = 0.98;
 
@@ -467,6 +469,373 @@ pub(crate) fn spatial_report_and_uncertainty(
     (report, uncertainty)
 }
 
+const SPATIAL_CHROMA_MASK_LOW: f32 = 0.05;
+const SPATIAL_CHROMA_FULL_WEIGHT: f32 = 0.75;
+const SPATIAL_CHROMA_TOLERANCE: f32 = 0.010;
+const SPATIAL_CHROMA_MAX_SHIFT: f32 = 0.040;
+const SPATIAL_CHROMA_AREA_RADIUS: isize = 2;
+const SPATIAL_CHROMA_SWEEPS: usize = 240;
+const SPATIAL_CHROMA_RELAXATION: f32 = 1.0;
+const SPATIAL_CHROMA_GUIDE_K: f32 = 0.15;
+const SPATIAL_CHROMA_WEIGHT_FLOOR: f32 = 1.0e-4;
+const SPATIAL_CHROMA_DATA_WEIGHT: f32 = 8.0;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub(crate) struct SpatialChromaReport {
+    pub changed_pixels: usize,
+    pub connected_regions: usize,
+    pub max_uv_shift: f32,
+}
+
+#[derive(Clone, Copy, Default)]
+struct SpatialChromaCell {
+    uv_sum: [f64; 2],
+    luminance_sum: f64,
+    measured_uv_sum: [f64; 2],
+    valid_pixels: u32,
+    measured_pixels: u32,
+    supported_pixels: u32,
+}
+
+#[inline]
+fn matrix_vector(matrix: &Matrix3, value: [f32; 3]) -> [f32; 3] {
+    std::array::from_fn(|row| {
+        matrix[row][0] * value[0] + matrix[row][1] * value[1] + matrix[row][2] * value[2]
+    })
+}
+
+fn cie_uv(pixel: [f32; 3], working_to_xyz: &Matrix3) -> Option<([f32; 2], f32)> {
+    let [x, y, z] = matrix_vector(working_to_xyz, pixel);
+    let denominator = x + 15.0 * y + 3.0 * z;
+    if !x.is_finite()
+        || !y.is_finite()
+        || !z.is_finite()
+        || x < 0.0
+        || y <= 1.0e-8
+        || z < 0.0
+        || denominator <= 1.0e-8
+    {
+        return None;
+    }
+    Some(([4.0 * x / denominator, 9.0 * y / denominator], y))
+}
+
+fn working_from_cie_uv(uv: [f32; 2], luminance: f32, xyz_to_working: &Matrix3) -> Option<[f32; 3]> {
+    let [u, v] = uv;
+    if !u.is_finite() || !v.is_finite() || !luminance.is_finite() || v <= 1.0e-8 {
+        return None;
+    }
+    let xyz = [
+        9.0 * u * luminance / (4.0 * v),
+        luminance,
+        (12.0 - 3.0 * u - 20.0 * v) * luminance / (4.0 * v),
+    ];
+    let candidate = matrix_vector(xyz_to_working, xyz);
+    candidate
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(candidate)
+}
+
+#[inline]
+fn spatial_chroma_weight(confidence: [f32; 3]) -> f32 {
+    near_whiteness(confidence.map(|value| value.clamp(0.0, 1.0)))
+}
+
+#[inline]
+fn spatial_chroma_support(confidence: [f32; 3]) -> f32 {
+    confidence
+        .into_iter()
+        .map(|value| value.clamp(0.0, 1.0))
+        .fold(0.0_f32, f32::max)
+}
+
+fn spatial_chroma_has_area_support(
+    confidence: &[[f32; 3]],
+    width: usize,
+    height: usize,
+    index: usize,
+) -> bool {
+    if width.min(height) <= 16 {
+        return true;
+    }
+    let x = index % width;
+    let y = index / width;
+    let mut core = 0_usize;
+    let mut valid = 0_usize;
+    for dy in -SPATIAL_CHROMA_AREA_RADIUS..=SPATIAL_CHROMA_AREA_RADIUS {
+        for dx in -SPATIAL_CHROMA_AREA_RADIUS..=SPATIAL_CHROMA_AREA_RADIUS {
+            let nx = x as isize + dx;
+            let ny = y as isize + dy;
+            if nx < 0 || ny < 0 || nx >= width as isize || ny >= height as isize {
+                continue;
+            }
+            valid += 1;
+            let n = ny as usize * width + nx as usize;
+            if spatial_chroma_weight(confidence[n]) > SPATIAL_CHROMA_MASK_LOW {
+                core += 1;
+            }
+        }
+    }
+    core * 4 >= valid * 3
+}
+
+fn sample_spatial_chroma_grid(
+    field: &[[f32; 2]],
+    grid_width: usize,
+    grid_height: usize,
+    block: usize,
+    x: usize,
+    y: usize,
+) -> [f32; 2] {
+    let gx = (x as f32 + 0.5) / block as f32 - 0.5;
+    let gy = (y as f32 + 0.5) / block as f32 - 0.5;
+    let x0 = gx.floor().clamp(0.0, (grid_width - 1) as f32) as usize;
+    let y0 = gy.floor().clamp(0.0, (grid_height - 1) as f32) as usize;
+    let x1 = (x0 + 1).min(grid_width - 1);
+    let y1 = (y0 + 1).min(grid_height - 1);
+    let tx = (gx - x0 as f32).clamp(0.0, 1.0);
+    let ty = (gy - y0 as f32).clamp(0.0, 1.0);
+    let blend = |a: [f32; 2], b: [f32; 2], weight: f32| {
+        [
+            a[0] * (1.0 - weight) + b[0] * weight,
+            a[1] * (1.0 - weight) + b[1] * weight,
+        ]
+    };
+    let top = blend(field[y0 * grid_width + x0], field[y0 * grid_width + x1], tx);
+    let bottom = blend(field[y1 * grid_width + x0], field[y1 * grid_width + x1], tx);
+    blend(top, bottom, ty)
+}
+
+/// Transport measured boundary chromaticity through the pixels whose hue is
+/// underdetermined by two or more clipped channels. The harmonic estimator has
+/// already supplied the luminance/detail field; this stage changes CIE u'v'
+/// only, preserves CIE Y exactly, and fades continuously to zero as the second
+/// channel leaves the raw clip-confidence ramp.
+pub(crate) fn transport_spatial_chromaticity(
+    image: &mut LinearImage,
+    confidence: Option<&[[f32; 3]]>,
+    working_to_xyz: Matrix3,
+) -> SpatialChromaReport {
+    let Some(confidence) = confidence.filter(|map| map.len() == image.pixels.len()) else {
+        return SpatialChromaReport::default();
+    };
+    let Some(xyz_to_working) = crate::color::invert3(working_to_xyz) else {
+        return SpatialChromaReport::default();
+    };
+    if image.width == 0 || image.height == 0 {
+        return SpatialChromaReport::default();
+    }
+
+    let mut report = SpatialChromaReport::default();
+
+    // Count the truly underdetermined full-resolution regions for diagnostics.
+    // The solve below also carries a one-channel-clipped fringe, but that fringe
+    // never gains output weight and is therefore not a reconstructed region.
+    let mut seen = vec![false; image.pixels.len()];
+    let mut queue = VecDeque::new();
+    for seed in 0..image.pixels.len() {
+        if seen[seed] || spatial_chroma_weight(confidence[seed]) <= SPATIAL_CHROMA_MASK_LOW {
+            continue;
+        }
+        report.connected_regions += 1;
+        seen[seed] = true;
+        queue.push_back(seed);
+        while let Some(i) = queue.pop_front() {
+            let x = i % image.width;
+            let y = i / image.width;
+            for (dx, dy) in [
+                (-1_isize, -1_isize),
+                (0, -1),
+                (1, -1),
+                (-1, 0),
+                (1, 0),
+                (-1, 1),
+                (0, 1),
+                (1, 1),
+            ] {
+                let nx = x as isize + dx;
+                let ny = y as isize + dy;
+                if nx < 0 || ny < 0 || nx >= image.width as isize || ny >= image.height as isize {
+                    continue;
+                }
+                let n = ny as usize * image.width + nx as usize;
+                if !seen[n] && spatial_chroma_weight(confidence[n]) > SPATIAL_CHROMA_MASK_LOW {
+                    seen[n] = true;
+                    queue.push_back(n);
+                }
+            }
+        }
+    }
+    if report.connected_regions == 0 {
+        return report;
+    }
+
+    // Solve on a bounded coarse grid. At corpus resolution an 8x8 cell keeps
+    // the solve small enough for a fixed-cost red/black relaxation. Small
+    // analytical fixtures still retain at least a 32-cell short axis, which is
+    // enough to expose boundary errors while matching the solver's real reach.
+    let block = (image.width.min(image.height) / 32).clamp(1, 8);
+    let grid_width = image.width.div_ceil(block);
+    let grid_height = image.height.div_ceil(block);
+    let mut cells = vec![SpatialChromaCell::default(); grid_width * grid_height];
+    for (i, pixel) in image.pixels.iter().copied().enumerate() {
+        let Some((uv, luminance)) = cie_uv(pixel, &working_to_xyz) else {
+            continue;
+        };
+        let x = i % image.width;
+        let y = i / image.width;
+        let cell = &mut cells[(y / block) * grid_width + x / block];
+        cell.uv_sum[0] += f64::from(uv[0]);
+        cell.uv_sum[1] += f64::from(uv[1]);
+        cell.luminance_sum += f64::from(luminance);
+        cell.valid_pixels += 1;
+        if spatial_chroma_support(confidence[i]) > SPATIAL_CHROMA_MASK_LOW {
+            cell.supported_pixels += 1;
+        } else {
+            cell.measured_uv_sum[0] += f64::from(uv[0]);
+            cell.measured_uv_sum[1] += f64::from(uv[1]);
+            cell.measured_pixels += 1;
+        }
+    }
+
+    let mut field = vec![[0.0_f32; 2]; cells.len()];
+    let mut measured = vec![[0.0_f32; 2]; cells.len()];
+    let mut guide = vec![0.0_f32; cells.len()];
+    for (i, cell) in cells.iter().enumerate() {
+        if cell.valid_pixels == 0 {
+            continue;
+        }
+        field[i] = [
+            (cell.uv_sum[0] / f64::from(cell.valid_pixels)) as f32,
+            (cell.uv_sum[1] / f64::from(cell.valid_pixels)) as f32,
+        ];
+        guide[i] = (cell.luminance_sum / f64::from(cell.valid_pixels)) as f32;
+        if cell.measured_pixels > 0 {
+            measured[i] = [
+                (cell.measured_uv_sum[0] / f64::from(cell.measured_pixels)) as f32,
+                (cell.measured_uv_sum[1] / f64::from(cell.measured_pixels)) as f32,
+            ];
+        }
+    }
+
+    // Weighted Laplace solve in u'v'. Luminance is a measured/reconstructed
+    // guide only, so dark occluders have negligible coupling to bright sky.
+    // Fully measured cells are fixed Dirichlet data; mixed cells contribute a
+    // data term proportional to their measured area.
+    for _ in 0..SPATIAL_CHROMA_SWEEPS {
+        let mut largest_delta = 0.0_f32;
+        for parity in 0..2 {
+            for y in 0..grid_height {
+                for x in 0..grid_width {
+                    if (x + y) & 1 != parity {
+                        continue;
+                    }
+                    let i = y * grid_width + x;
+                    let cell = cells[i];
+                    if cell.valid_pixels == 0 || cell.supported_pixels == 0 {
+                        continue;
+                    }
+                    let data_weight = SPATIAL_CHROMA_DATA_WEIGHT * cell.measured_pixels as f32
+                        / cell.valid_pixels as f32;
+                    let mut numerator =
+                        [measured[i][0] * data_weight, measured[i][1] * data_weight];
+                    let mut denominator = data_weight;
+                    for (dx, dy) in [(-1_isize, 0_isize), (1, 0), (0, -1), (0, 1)] {
+                        let nx = x as isize + dx;
+                        let ny = y as isize + dy;
+                        if nx < 0
+                            || ny < 0
+                            || nx >= grid_width as isize
+                            || ny >= grid_height as isize
+                        {
+                            continue;
+                        }
+                        let n = ny as usize * grid_width + nx as usize;
+                        if cells[n].valid_pixels == 0 {
+                            continue;
+                        }
+                        let scale = guide[i].abs().max(guide[n].abs()).max(0.05);
+                        let delta = (guide[i] - guide[n]).abs();
+                        let edge_weight = (-(delta / (SPATIAL_CHROMA_GUIDE_K * scale)).powi(2))
+                            .exp()
+                            .max(SPATIAL_CHROMA_WEIGHT_FLOOR);
+                        numerator[0] += field[n][0] * edge_weight;
+                        numerator[1] += field[n][1] * edge_weight;
+                        denominator += edge_weight;
+                    }
+                    if denominator <= 1.0e-8 {
+                        continue;
+                    }
+                    let proposed = [numerator[0] / denominator, numerator[1] / denominator];
+                    let corrected = [
+                        field[i][0] + SPATIAL_CHROMA_RELAXATION * (proposed[0] - field[i][0]),
+                        field[i][1] + SPATIAL_CHROMA_RELAXATION * (proposed[1] - field[i][1]),
+                    ];
+                    let delta = (corrected[0] - field[i][0]).hypot(corrected[1] - field[i][1]);
+                    if corrected.iter().all(|value| value.is_finite()) {
+                        field[i] = corrected;
+                        largest_delta = largest_delta.max(delta);
+                    }
+                }
+            }
+        }
+        if largest_delta < 1.0e-6 {
+            break;
+        }
+    }
+
+    for i in 0..image.pixels.len() {
+        let confidence_weight = spatial_chroma_weight(confidence[i]);
+        if confidence_weight <= SPATIAL_CHROMA_MASK_LOW {
+            continue;
+        }
+        if !spatial_chroma_has_area_support(confidence, image.width, image.height, i) {
+            continue;
+        }
+        let Some((uv, luminance)) = cie_uv(image.pixels[i], &working_to_xyz) else {
+            continue;
+        };
+        let x = i % image.width;
+        let y = i / image.width;
+        let target = sample_spatial_chroma_grid(&field, grid_width, grid_height, block, x, y);
+        let delta = [uv[0] - target[0], uv[1] - target[1]];
+        let distance = delta[0].hypot(delta[1]);
+        if distance <= SPATIAL_CHROMA_TOLERANCE {
+            continue;
+        }
+        let keep = SPATIAL_CHROMA_TOLERANCE / distance;
+        let limited = [target[0] + keep * delta[0], target[1] + keep * delta[1]];
+        let weight = ramp(
+            confidence_weight,
+            SPATIAL_CHROMA_MASK_LOW,
+            SPATIAL_CHROMA_FULL_WEIGHT,
+        );
+        let mut corrected = [
+            uv[0] + weight * (limited[0] - uv[0]),
+            uv[1] + weight * (limited[1] - uv[1]),
+        ];
+        let mut shift = (corrected[0] - uv[0]).hypot(corrected[1] - uv[1]);
+        if shift > SPATIAL_CHROMA_MAX_SHIFT {
+            let scale = SPATIAL_CHROMA_MAX_SHIFT / shift;
+            corrected = [
+                uv[0] + (corrected[0] - uv[0]) * scale,
+                uv[1] + (corrected[1] - uv[1]) * scale,
+            ];
+            shift = SPATIAL_CHROMA_MAX_SHIFT;
+        }
+        if shift <= 1.0e-8 {
+            continue;
+        }
+        if let Some(candidate) = working_from_cie_uv(corrected, luminance, &xyz_to_working) {
+            image.pixels[i] = candidate;
+            report.changed_pixels += 1;
+            report.max_uv_shift = report.max_uv_shift.max(shift);
+        }
+    }
+    report
+}
+
 /// One pixel of the rule. Returns the lift applied, in white-balanced units, or
 /// `None` if nothing moved.
 ///
@@ -606,10 +975,15 @@ fn reconstruct_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::color::WorkingSpace;
 
     fn image(pixels: Vec<[f32; 3]>) -> Image<CameraRgb> {
         let len = pixels.len();
         Image::new(len, 1, pixels).expect("valid image")
+    }
+
+    fn linear_image(width: usize, height: usize, pixels: Vec<[f32; 3]>) -> LinearImage {
+        LinearImage::new(width, height, pixels).expect("valid linear image")
     }
 
     /// The A7C daylight coefficients that produced the lavender skies. Red and
@@ -961,6 +1335,119 @@ mod tests {
             "a fully clipped pixel should read 1, got {}",
             uncertainty[2]
         );
+    }
+
+    /// Once two channels have clipped, their rendered hue is underdetermined.
+    /// The nearest measured boundary is admissible evidence for chromaticity,
+    /// while luminance is still supplied by the harmonic reconstruction itself.
+    #[test]
+    fn spatial_transport_uses_measured_boundary_hue_and_preserves_luminance() {
+        let boundary = [0.22, 0.48, 1.10];
+        let invented_magenta = [1.10, 0.52, 1.12];
+        let mut pixels = vec![boundary; 15];
+        for x in 1..=3 {
+            pixels[5 + x] = invented_magenta;
+        }
+        let mut img = linear_image(5, 3, pixels);
+        let before = img.pixels.clone();
+        let mut confidence = vec![[0.0; 3]; 15];
+        for x in 1..=3 {
+            confidence[5 + x] = [1.0, 1.0, 0.0];
+        }
+        let to_xyz = WorkingSpace::Srgb.to_xyz_d65();
+        let boundary_uv = cie_uv(boundary, &to_xyz).expect("valid boundary").0;
+        let original = cie_uv(invented_magenta, &to_xyz).expect("valid interior");
+        let original_distance =
+            (original.0[0] - boundary_uv[0]).hypot(original.0[1] - boundary_uv[1]);
+
+        let report = transport_spatial_chromaticity(&mut img, Some(&confidence), to_xyz);
+
+        assert_eq!(report.connected_regions, 1);
+        assert_eq!(report.changed_pixels, 3);
+        for x in 1..=3 {
+            let (corrected_uv, corrected_y) =
+                cie_uv(img.pixels[5 + x], &to_xyz).expect("valid corrected pixel");
+            let distance =
+                (corrected_uv[0] - boundary_uv[0]).hypot(corrected_uv[1] - boundary_uv[1]);
+            assert!(
+                distance + 0.02 < original_distance,
+                "transport only reduced u'v' distance from {original_distance} to {distance}"
+            );
+            assert!(
+                (corrected_y - original.1).abs() < 1.0e-5,
+                "transport changed CIE Y from {} to {corrected_y}",
+                original.1
+            );
+        }
+        assert!(report.max_uv_shift <= SPATIAL_CHROMA_MAX_SHIFT + 1.0e-6);
+        for i in [0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14] {
+            assert_eq!(
+                img.pixels[i], before[i],
+                "measured boundary pixel {i} moved"
+            );
+        }
+    }
+
+    /// The first pixels outside a two-channel-clipped core can themselves have
+    /// one clipped channel. They are a path to evidence, not evidence: transport
+    /// must cross that fringe to a pixel whose complete chromaticity was measured.
+    #[test]
+    fn spatial_transport_crosses_a_one_channel_clipped_fringe() {
+        let measured_blue = [0.20, 0.45, 1.05];
+        let one_channel_fringe = [0.96, 0.50, 1.04];
+        let invented_magenta = [1.08, 0.50, 1.10];
+        let pixels = vec![
+            measured_blue,
+            one_channel_fringe,
+            invented_magenta,
+            one_channel_fringe,
+            measured_blue,
+        ];
+        let mut img = linear_image(5, 1, pixels.clone());
+        let confidence = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ];
+        let to_xyz = WorkingSpace::Srgb.to_xyz_d65();
+        let measured_uv = cie_uv(measured_blue, &to_xyz).expect("valid boundary").0;
+        let invented_uv = cie_uv(invented_magenta, &to_xyz).expect("valid interior").0;
+        let original_distance =
+            (invented_uv[0] - measured_uv[0]).hypot(invented_uv[1] - measured_uv[1]);
+
+        let report = transport_spatial_chromaticity(&mut img, Some(&confidence), to_xyz);
+
+        assert_eq!(report.connected_regions, 1);
+        assert_eq!(report.changed_pixels, 1);
+        assert_eq!(img.pixels[1], pixels[1], "left one-channel fringe moved");
+        assert_eq!(img.pixels[3], pixels[3], "right one-channel fringe moved");
+        let corrected_uv = cie_uv(img.pixels[2], &to_xyz).expect("valid correction").0;
+        let distance = (corrected_uv[0] - measured_uv[0]).hypot(corrected_uv[1] - measured_uv[1]);
+        assert!(
+            distance + 0.02 < original_distance,
+            "harmonic transport only reduced u'v' distance from {original_distance} to {distance}"
+        );
+        assert!(report.max_uv_shift <= SPATIAL_CHROMA_MAX_SHIFT + 1.0e-6);
+    }
+
+    /// A single clipped channel still leaves two measured channels and therefore
+    /// a measured colour. Spatial inference has no authority to change it.
+    #[test]
+    fn spatial_transport_leaves_coloured_highlights_bit_exact() {
+        let pixels = vec![[0.15, 0.25, 0.85], [1.10, 0.22, 0.12], [0.18, 0.30, 0.92]];
+        let mut img = linear_image(3, 1, pixels.clone());
+        let confidence = vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0]];
+
+        let report = transport_spatial_chromaticity(
+            &mut img,
+            Some(&confidence),
+            WorkingSpace::Srgb.to_xyz_d65(),
+        );
+
+        assert_eq!(report, SpatialChromaReport::default());
+        assert_eq!(img.pixels, pixels);
     }
 
     /// Strength 0 is the caller's "off" switch and must not touch a pixel, while

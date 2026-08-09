@@ -5,8 +5,7 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.2"
-    commit git:24cfb8a332b5830f539c71baa1470724dfe5dc87
-    source_graph "sha256:d5f802571047065ca04d29a9a35a4e4248da13e828f20fd8d2c886ac1d0ab1d9"
+    source_graph "sha256:356b83f8b82feef3c59c80d37edc4d25982428186e76beb52c13660e986a1770"
 }
 
 source ".akr/project.akr" {
@@ -25,13 +24,13 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:68db04b43d9db0b9b9675a8950825e6fe5e4bdf4b01a815d5214ed72e1c2ebb2"
-    records 31
+    hash "sha256:f97a122c860fa461915fe0b8ceb9660e00064c94fb94cfe829a0c1c9a28eef59"
+    records 34
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
-    hash "sha256:eab99195c5520e67e2a9e502be9b435672c2e34fa0d7fa4691f84594b1c79938"
-    records 26
+    hash "sha256:e1ed7c4be1fbf36d8af85c8aa0b1de11927705b6ce6be393745f5398815c8014"
+    records 27
 }
 
 source ".akr/records/raw-autotune/policies.akr" {
@@ -45,8 +44,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:0a78628843a97a27e5d3a9b1e17e153e81c42d147bf7cccda7c788cfc5badd2f"
-    records 21
+    hash "sha256:782bd879a42eb992ff69c9cc78e8b4a3ffc6f02397fb76794d609dc9a277ea54"
+    records 22
 }
 
 seal @raw-autotune.assessment.sky-blowout-estimator-handoff/1 {
@@ -107,6 +106,21 @@ seal @raw-autotune.evidence.harmonic-magenta-stage-diagnosis-20260809/1 {
 seal @raw-autotune.evidence.harmonic-real-frame-rss-20260809/1 {
     state verified
     hash "sha256:3cc42bc5af8261f508e005aabb74ba1635cc9c7f43cb6a4b8f4c28a4faad4810"
+}
+
+seal @raw-autotune.evidence.harmonic-spatial-chroma-corpus-render/1 {
+    state verified
+    hash "sha256:140d207502fb1011fd4cd416c45c5c366d56e791eda753937ec3dab3f978eed8"
+}
+
+seal @raw-autotune.evidence.harmonic-spatial-chroma-full-suite/1 {
+    state verified
+    hash "sha256:4a22738b30aeef18a27100d221f6066558d8e0cd41947f7605df8c23a11e3123"
+}
+
+seal @raw-autotune.evidence.harmonic-spatial-chroma-synthetic-gate/1 {
+    state verified
+    hash "sha256:e6f1a720d5166a162b9af0ff2aeed5ce374636f8f0671a847984afde20313cdb"
 }
 
 seal @raw-autotune.evidence.highlight-fringe-origin-controls/1 {
@@ -227,6 +241,11 @@ seal @raw-autotune.papercut.a-two-frame-lens-correction-profile-exact/1 {
 seal @raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 {
     state verified
     hash "sha256:4e7b3c9fc456edf86912d5dc7e99258b4ca4dd040206197656234f322503633e"
+}
+
+seal @raw-autotune.papercut.akr-get-shows-a-record-key-and-revision-but-not/1 {
+    state verified
+    hash "sha256:72563e459ac79372f973d673c037de5a316dd1bf82fe0da9893bfbbfa2e9c416"
 }
 
 seal @raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does/1 {
@@ -350,8 +369,8 @@ seal @raw-autotune.work.harmonic-highlight-experiment/2 {
 }
 
 seal @raw-autotune.work.harmonic-highlight-experiment/3 {
-    state active
-    hash "sha256:683285f74fe02495bbdbac16f3abf224b3be4524bca6ebaf26cccf2591f14dc8"
+    state superseded
+    hash "sha256:e7126792ed1c5499b277a53a97ff108de68a044180058709f3cfa8ae4c3e31b2"
 }
 
 seal @raw-autotune.work.highlight-boundary-fringe-diagnosis/1 {

@@ -47,6 +47,17 @@ record raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 :
     created_at 2026-08-09
 }
 
+record raw-autotune.papercut.akr-get-shows-a-record-key-and-revision-but-not/1 : papercut {
+    title "AKR get shows a record key and revision but not its source path or an…"
+    state verified
+    statement """
+        AKR get shows a record key and revision but not its source path or an exportable replacement body; locating the sealed head for akr revise --from required an extra filesystem layout check.
+        """
+    observed_at git:c6cb8cf451e805c3bfda165df545b9293787ed32
+    author "codex"
+    created_at 2026-08-09
+}
+
 record raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does/1 : papercut {
     title "akr propose --from rejected a prose body as 'does not parse as a…"
     state verified

@@ -88,7 +88,7 @@ record raw-autotune.work.harmonic-highlight-experiment/2 : work {
 
 record raw-autotune.work.harmonic-highlight-experiment/3 : work {
     title "Harmonic pre-demosaic highlight experiment"
-    state active
+    state superseded
     scope [
         path "Cargo.lock",
         path "Cargo.toml",
@@ -148,6 +148,79 @@ record raw-autotune.work.harmonic-highlight-experiment/3 : work {
         """
     depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
     supersedes [ @raw-autotune.work.harmonic-highlight-experiment/2 ]
+}
+
+record raw-autotune.work.harmonic-highlight-experiment/4 : work {
+    title "Harmonic pre-demosaic highlight experiment"
+    state proposed
+    scope [
+        path "Cargo.lock",
+        path "Cargo.toml",
+        path "THIRD_PARTY.md",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/highlight.rs",
+        path "src/memory.rs",
+        path "src/pipeline.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Add and validate an opt-in CLI-only clean-room harmonic highlight
+        experiment on the normalized Bayer mosaic. Use connected clipped
+        regions, local one/two-guide affine colour fits with quality gates,
+        clipping-aware pyramid initialization, anisotropic obstacle-constrained
+        transport, verified sensor-knee inversion, and a separate fully clipped
+        luminance dome. Use pure-Rust faer f64 sparse Cholesky for bounded
+        systems and deterministic projected relaxation for larger or failed
+        systems. Keep measured sites and floors invariant and keep `current` as
+        the unattended default.
+
+        Coloured-highlight abstention rejects non-identifiable collinear
+        two-guide fits and applies a monotone soft leverage bound when a
+        high-gain one-guide colour relation is extrapolated beyond three
+        measured guide spans at a partially clipped site. A white-balance-
+        normalized convex envelope of chromaticities measured around each
+        connected clipped region limits unsupported partial-cell colour without
+        changing measured channels, sensor lower bounds, supported constant-
+        colour relationships, or fully clipped cores.
+
+        The remaining broad magenta patch in `_DSC1290` is now addressed after
+        demosaic, where the harmonic luminance field already exists. Harmonic
+        alone builds a scale-bounded, edge-aware weighted-Laplacian field in CIE
+        1976 u'v' from fully measured pixels through the one-channel-clipped
+        fringe, and applies it only where two-channel clip confidence is locally
+        area-filling. CIE Y is preserved exactly, single-channel coloured
+        highlights and measured pixels remain bit-exact, invalid XYZ is excluded,
+        and each chroma move is bounded to 0.04 u'v'. `current` and `raw-pyramid`
+        retain their established output.
+
+        The analytical constant-blue, neutral, correlated-detail, fully clipped,
+        and sensor-knee fixtures remain unchanged at reported precision. The
+        coloured-highlight fixture is exactly unchanged by post-demosaic
+        transport. Independent-channel false colour is 0.43799 versus the prior
+        0.43884. The occluded-sky hue error improves from 16.62 to 14.60 degrees,
+        while false colour is effectively flat at 0.27051 versus 0.27014 and its
+        hardest tone-boundary statistic remains a known regression to address.
+        All 306 library tests and every API, metadata, real-RAW probe, lens-profile,
+        and documentation test pass.
+
+        Three Sony ILCE-7C 24 MP frames rendered successfully at harmonic full
+        strength with one concurrent image in
+        `output-tests/20260809-191941-p0800/harmonic-spatial-chroma/`. `_DSC1283`
+        and `_DSC1289` remain visually stable. `_DSC1290` transports 387,688
+        pixels and substantially reduces the broad right-side magenta fill to a
+        pale blue/neutral highlight while preserving the harmonic luminance
+        structure; thin pink contours remain around some occluder edges. The
+        three-frame run peaked at 1,027,868 kB RSS.
+
+        The work remains active. The next slice should remove the residual pink
+        occluder contours while improving the occluded-sky tone-boundary metric,
+        then widen the real-frame corpus gate and revisit memory reserve only if
+        measured peaks require it.
+        """
+    depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
+    supersedes [ @raw-autotune.work.harmonic-highlight-experiment/3 ]
 }
 
 record raw-autotune.work.highlight-boundary-fringe-diagnosis/1 : work {
