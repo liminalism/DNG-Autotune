@@ -59,6 +59,39 @@ record raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does/1 : 
     created_at 2026-08-09
 }
 
+record raw-autotune.papercut.akr-revise-from-help-describes-a-replacement/1 : papercut {
+    title "akr revise --from help describes a replacement body, but a plain-text…"
+    state verified
+    statement """
+        akr revise --from help describes a replacement body, but a plain-text body fails AKR-C031 because the file must parse as a complete record; the required record wrapper is not shown in revise help.
+        """
+    observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.cargo-test-accepts-one-positional-testname/1 : papercut {
+    title "Cargo test accepts one positional TESTNAME filter, so attempting to…"
+    state verified
+    statement """
+        Cargo test accepts one positional TESTNAME filter, so attempting to name two exact tests in one invocation fails before compilation; run the filters as separate commands.
+        """
+    observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.fff-find-files-again-closed-its-transport-while/1 : papercut {
+    title "FFF find_files again closed its transport while locating the requested…"
+    state verified
+    statement """
+        FFF find_files again closed its transport while locating the requested review RAWs, forcing a filesystem fallback before a time-sensitive render run.
+        """
+    observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
+    author "codex"
+    created_at 2026-08-09
+}
+
 record raw-autotune.papercut.fff-multi-grep-returned-transport-closed-while/1 : papercut {
     title "FFF multi_grep returned 'Transport closed' while locating CLI and…"
     state verified
@@ -102,6 +135,28 @@ record raw-autotune.papercut.grade-sky-py-reported-zero-pairs-on-a-normal/1 : pa
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
     author "codex"
     created_at 2026-08-08
+}
+
+record raw-autotune.papercut.imagemagick-compare-returns-exit-status-1-when/1 : papercut {
+    title "ImageMagick compare returns exit status 1 when images differ even…"
+    state verified
+    statement """
+        ImageMagick compare returns exit status 1 when images differ even though it successfully reports RMSE; metric-only review commands need to tolerate that expected status.
+        """
+    observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.imagemagick-crop-review-composition-initially/1 : papercut {
+    title "ImageMagick crop review composition initially put +append before its…"
+    state verified
+    statement """
+        ImageMagick crop review composition initially put +append before its input images; the CLI reports no images found and requires the operator after the input list.
+        """
+    observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
+    author "codex"
+    created_at 2026-08-09
 }
 
 record raw-autotune.papercut.knowledge-context-rejects-a-completed-work/1 : papercut {

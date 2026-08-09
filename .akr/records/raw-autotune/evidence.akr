@@ -98,6 +98,19 @@ record raw-autotune.evidence.harmonic-abstention-full-suite-20260809/1 : evidenc
         """
 }
 
+record raw-autotune.evidence.harmonic-chroma-envelope-tests-20260809/1 : evidence {
+    title "303 unit tests plus in-memory API, output metadata, real-RAW dimension probe, profile-lens, and doc tests passed; focused harmonic fixtures also passed after the retained global chroma-envelope change."
+    state verified
+    result pass
+    method command
+    observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
+    command "cargo test"
+    artifact "src/raw_highlight.rs"
+    summary """
+        303 unit tests plus in-memory API, output metadata, real-RAW dimension probe, profile-lens, and doc tests passed; focused harmonic fixtures also passed after the retained global chroma-envelope change.
+        """
+}
+
 record raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 : evidence {
     title "The analytical suite passed. Relative to revision 1, BlueToNeutralSky peak luminance ratio changed from 1.633 to 1.122 and normalized luminance RMSE from 0.219 to 0.064; constant BlueRamp remained at 0.00289 normalized linear RMSE and 1.196 edge-energy ratio, while FullyClippedCore remained at 0.0234 luminance RMSE and 1.008 peak ratio. Residual BlueToNeutralSky false-colour fraction 0.313 and edge-energy ratio 1.638 keep the experiment active."
     state verified
@@ -108,6 +121,31 @@ record raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 : evidence 
     artifact "src/synthetic.rs"
     summary """
         The analytical suite passed. Relative to revision 1, BlueToNeutralSky peak luminance ratio changed from 1.633 to 1.122 and normalized luminance RMSE from 0.219 to 0.064; constant BlueRamp remained at 0.00289 normalized linear RMSE and 1.196 edge-energy ratio, while FullyClippedCore remained at 0.0234 luminance RMSE and 1.008 peak ratio. Residual BlueToNeutralSky false-colour fraction 0.313 and edge-energy ratio 1.638 keep the experiment active.
+        """
+}
+
+record raw-autotune.evidence.harmonic-magenta-stage-diagnosis-20260809/1 : evidence {
+    title "The right-sky magenta patch is present immediately after the spatial CFA path in a region dominated by two-channel clipping; the later post-demosaic highlight stage shows essentially no chroma/hue delta, and stronger raw boundary constraints did not materially remove the patch."
+    state verified
+    result inconclusive
+    method observation
+    observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
+    artifact "output-tests/20260809-180827-p0800/review-_DSC1290-right-sky-stages.jpg"
+    summary """
+        The right-sky magenta patch is present immediately after the spatial CFA path in a region dominated by two-channel clipping; the later post-demosaic highlight stage shows essentially no chroma/hue delta, and stronger raw boundary constraints did not materially remove the patch.
+        """
+}
+
+record raw-autotune.evidence.harmonic-real-frame-rss-20260809/1 : evidence {
+    title "Three Sony ILCE-7C 24 MP frames completed without failure in 3:28.04 at 1,027,352 kB maximum RSS; 5,864,316 output pixels were rebuilt."
+    state verified
+    result pass
+    method command
+    observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
+    command "/usr/bin/time -v target/release/raw-autotune _DSC1283.ARW _DSC1289.ARW _DSC1290.ARW --highlight-method harmonic --highlight-reconstruction 1 --jobs 1"
+    artifact "output-tests/20260809-180827-p0800/harmonic-chroma-envelope/summary.json"
+    summary """
+        Three Sony ILCE-7C 24 MP frames completed without failure in 3:28.04 at 1,027,352 kB maximum RSS; 5,864,316 output pixels were rebuilt.
         """
 }
 

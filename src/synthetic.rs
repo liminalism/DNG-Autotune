@@ -473,6 +473,7 @@ pub fn evaluate_raw_to_render(
                 fixture.height,
                 &cfa,
                 Some(&confidence),
+                BENCH_WB,
                 spatial,
             )
             .expect("synthetic CFA is valid");

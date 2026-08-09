@@ -25,6 +25,7 @@ const HARMONIC_POLISH_SWEEPS: usize = 60;
 const DIRECT_SOLVE_MAX_UNKNOWNS: usize = 1 << 14;
 const MAX_AFFINE_EXTRAPOLATION_SPANS: f32 = 3.0;
 const HIGH_GAIN_COLOR_SLOPE: f32 = 2.5;
+const CHROMA_ENVELOPE_TOLERANCE: f32 = 0.015;
 const GUIDE_K: f32 = 0.15;
 const WEIGHT_FLOOR: f32 = 1.0e-4;
 const KNEE_LOW: f32 = 0.80;
@@ -898,6 +899,154 @@ fn fit_data(line: LineFit, current: &[[f32; 3]], index: usize, bound_extrapolati
         }
 }
 
+fn usable_white_balance(white_balance: [f32; 3]) -> [f32; 3] {
+    // Match the owned colour transform: a missing first as-shot coefficient
+    // means the file recorded no white balance at all, rather than one bad
+    // channel in an otherwise usable triplet.
+    if white_balance[0].is_nan() {
+        return [1.0; 3];
+    }
+    white_balance.map(|gain| {
+        if gain.is_finite() && gain > EPSILON {
+            gain
+        } else {
+            1.0
+        }
+    })
+}
+
+fn chromaticity(pixel: [f32; 3], white_balance: [f32; 3]) -> Option<[f32; 2]> {
+    let balanced = std::array::from_fn::<_, 3, _>(|c| pixel[c].max(0.0) * white_balance[c]);
+    let sum = balanced.iter().sum::<f32>();
+    (sum > EPSILON && sum.is_finite()).then_some([balanced[0] / sum, balanced[2] / sum])
+}
+
+#[inline]
+fn chroma_cross(origin: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
+    (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0])
+}
+
+fn chroma_hull(mut points: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
+    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+    points.dedup_by(|a, b| (a[0] - b[0]).abs() < 1.0e-6 && (a[1] - b[1]).abs() < 1.0e-6);
+    if points.len() <= 2 {
+        return points;
+    }
+    let mut lower = Vec::with_capacity(points.len());
+    for &point in &points {
+        while lower.len() >= 2
+            && chroma_cross(lower[lower.len() - 2], lower[lower.len() - 1], point) <= 0.0
+        {
+            lower.pop();
+        }
+        lower.push(point);
+    }
+    let mut upper = Vec::with_capacity(points.len());
+    for &point in points.iter().rev() {
+        while upper.len() >= 2
+            && chroma_cross(upper[upper.len() - 2], upper[upper.len() - 1], point) <= 0.0
+        {
+            upper.pop();
+        }
+        upper.push(point);
+    }
+    lower.pop();
+    upper.pop();
+    lower.extend(upper);
+    lower
+}
+
+fn closest_on_segment(point: [f32; 2], a: [f32; 2], b: [f32; 2]) -> [f32; 2] {
+    let edge = [b[0] - a[0], b[1] - a[1]];
+    let length_squared = edge[0] * edge[0] + edge[1] * edge[1];
+    if length_squared <= EPSILON {
+        return a;
+    }
+    let t = (((point[0] - a[0]) * edge[0] + (point[1] - a[1]) * edge[1]) / length_squared)
+        .clamp(0.0, 1.0);
+    [a[0] + t * edge[0], a[1] + t * edge[1]]
+}
+
+fn nearest_chroma_envelope(point: [f32; 2], hull: &[[f32; 2]]) -> ([f32; 2], f32) {
+    if hull.len() >= 3
+        && (0..hull.len())
+            .all(|i| chroma_cross(hull[i], hull[(i + 1) % hull.len()], point) >= -1.0e-6)
+    {
+        return (point, 0.0);
+    }
+    let mut nearest = hull[0];
+    let mut distance_squared = f32::INFINITY;
+    let edges = if hull.len() == 1 { 1 } else { hull.len() };
+    for i in 0..edges {
+        let candidate = closest_on_segment(point, hull[i], hull[(i + 1) % hull.len()]);
+        let squared = (point[0] - candidate[0]).powi(2) + (point[1] - candidate[1]).powi(2);
+        if squared < distance_squared {
+            nearest = candidate;
+            distance_squared = squared;
+        }
+    }
+    (nearest, distance_squared.sqrt())
+}
+
+fn constrain_region_chromaticity(
+    grid: &Grid,
+    region: &Region,
+    current: &mut [[f32; 3]],
+    white_balance: [f32; 3],
+) {
+    let white_balance = usable_white_balance(white_balance);
+    let hull = chroma_hull(
+        region
+            .boundary
+            .iter()
+            .filter_map(|&i| chromaticity(grid.value[i], white_balance))
+            .collect(),
+    );
+    if hull.is_empty() {
+        return;
+    }
+    for &i in &region.cells {
+        if grid.valid[i] == [false; 3] || grid.valid[i] == [true; 3] {
+            continue;
+        }
+        let Some(point) = chromaticity(current[i], white_balance) else {
+            continue;
+        };
+        let (nearest, distance) = nearest_chroma_envelope(point, &hull);
+        if distance <= CHROMA_ENVELOPE_TOLERANCE {
+            continue;
+        }
+        let keep = CHROMA_ENVELOPE_TOLERANCE / distance;
+        let limited = [
+            nearest[0] + keep * (point[0] - nearest[0]),
+            nearest[1] + keep * (point[1] - nearest[1]),
+        ];
+        let proportions = [
+            limited[0],
+            (1.0 - limited[0] - limited[1]).max(0.0),
+            limited[1],
+        ];
+        let mut numerator = 0.0_f32;
+        let mut denominator = 0.0_f32;
+        for c in 0..3 {
+            if grid.valid[i][c] {
+                let measured = current[i][c] * white_balance[c];
+                numerator += measured * proportions[c];
+                denominator += proportions[c] * proportions[c];
+            }
+        }
+        if denominator <= EPSILON {
+            continue;
+        }
+        let scale = numerator / denominator;
+        for c in 0..3 {
+            if !grid.valid[i][c] {
+                current[i][c] = (scale * proportions[c] / white_balance[c]).max(grid.floor[i][c]);
+            }
+        }
+    }
+}
+
 /// Solve the pinned harmonic system directly for a bounded region.  Only the
 /// lower triangle is assembled, and all arithmetic handed to the sparse
 /// factorization is f64.  Obstacle projection is applied when the solution is
@@ -1057,6 +1206,7 @@ fn harmonic_prediction(
     grid: &Grid,
     pyramid: &[[f32; 3]],
     all_regions: &[Region],
+    white_balance: [f32; 3],
 ) -> (Vec<[f32; 3]>, f32, usize, usize) {
     let mut current = pyramid.to_vec();
     let mut fit_quality_sum = 0.0_f64;
@@ -1075,6 +1225,7 @@ fn harmonic_prediction(
 
         if solve_region_direct(grid, region, fits, &mut current) {
             apply_luminance_domes(grid, &cores, &mut current);
+            constrain_region_chromaticity(grid, region, &mut current, white_balance);
             keep_unfitted_partial_cells(grid, region, fits, &mut current);
             continue;
         }
@@ -1130,6 +1281,7 @@ fn harmonic_prediction(
             std::mem::swap(&mut current, &mut next);
         }
         apply_luminance_domes(grid, &cores, &mut current);
+        constrain_region_chromaticity(grid, region, &mut current, white_balance);
         keep_unfitted_partial_cells(grid, region, fits, &mut current);
     }
 
@@ -1185,6 +1337,7 @@ pub fn reconstruct_cfa(
     height: usize,
     cfa: &CFA,
     confidence: Option<&[f32]>,
+    white_balance: [f32; 3],
     method: HighlightMethod,
 ) -> Result<RawHighlightReport> {
     ensure!(
@@ -1224,7 +1377,7 @@ pub fn reconstruct_cfa(
         HighlightMethod::RawPyramid => (pyramid_prediction, 0.0, 0, 0),
         HighlightMethod::Harmonic => {
             let (prediction, fit, cores, fallbacks) =
-                harmonic_prediction(&grid, &pyramid_prediction, &all_regions);
+                harmonic_prediction(&grid, &pyramid_prediction, &all_regions, white_balance);
             (prediction, fit, cores, fallbacks)
         }
         HighlightMethod::Current => unreachable!("checked above"),
@@ -1287,8 +1440,16 @@ mod tests {
         });
         for method in [HighlightMethod::RawPyramid, HighlightMethod::Harmonic] {
             let mut candidate = source.clone();
-            let report = reconstruct_cfa(&mut candidate, width, height, &rggb(), None, method)
-                .expect("valid CFA");
+            let report = reconstruct_cfa(
+                &mut candidate,
+                width,
+                height,
+                &rggb(),
+                None,
+                [1.0; 3],
+                method,
+            )
+            .expect("valid CFA");
             assert_eq!(candidate, source);
             assert_eq!(report.reconstructed_cfa_sites, 0);
         }
@@ -1305,8 +1466,16 @@ mod tests {
         let captured: Vec<f32> = truth.iter().map(|v| v.min(1.0)).collect();
         for method in [HighlightMethod::RawPyramid, HighlightMethod::Harmonic] {
             let mut candidate = captured.clone();
-            reconstruct_cfa(&mut candidate, width, height, &rggb(), None, method)
-                .expect("valid CFA");
+            reconstruct_cfa(
+                &mut candidate,
+                width,
+                height,
+                &rggb(),
+                None,
+                [1.0; 3],
+                method,
+            )
+            .expect("valid CFA");
             for i in 0..candidate.len() {
                 assert!(candidate[i].is_finite() && candidate[i] >= 0.0);
                 assert!(candidate[i] + 1.0e-7 >= captured[i]);
@@ -1336,6 +1505,7 @@ mod tests {
             height,
             &rggb(),
             None,
+            [1.0; 3],
             HighlightMethod::Harmonic,
         )
         .unwrap();
@@ -1345,6 +1515,7 @@ mod tests {
             height,
             &rggb(),
             None,
+            [1.0; 3],
             HighlightMethod::Harmonic,
         )
         .unwrap();
@@ -1399,11 +1570,43 @@ mod tests {
         };
         let current = [[2.0, 0.0, 0.0]];
         let supported_max = 0.3 + MAX_AFFINE_EXTRAPOLATION_SPANS * (0.3 - 0.1);
+        let valid = [true, false, false];
         assert_eq!(
-            fit_data(line, &current, 0, true),
+            fit_data(line, &current, 0, valid != [false; 3]),
             0.05 + 3.0 * supported_max
         );
         assert_eq!(fit_data(line, &current, 0, false), 6.05);
+        assert_eq!(
+            soft_extrapolation_limit(current[0][0], 0.1, 0.3),
+            supported_max
+        );
+    }
+
+    #[test]
+    fn partial_reconstruction_cannot_invent_chroma_beyond_its_measured_boundary() {
+        let boundary = [0.30, 0.60, 1.00];
+        let value = vec![boundary, boundary, boundary, [1.0, 0.60, 1.00]];
+        let grid = Grid {
+            width: 4,
+            height: 1,
+            floor: value.clone(),
+            value,
+            valid: vec![[true; 3], [true; 3], [true; 3], [false, true, true]],
+        };
+        let region = Region {
+            cells: vec![3],
+            boundary: vec![0, 1, 2],
+        };
+        let mut current = vec![boundary, boundary, boundary, [2.4, 0.60, 1.00]];
+        constrain_region_chromaticity(&grid, &region, &mut current, [1.0; 3]);
+        assert_eq!(current[3][1], 0.60, "measured green moved");
+        assert_eq!(current[3][2], 1.00, "measured blue moved");
+        assert!(
+            current[3][0] < 1.2,
+            "unsupported magenta lift survived: {:?}",
+            current[3]
+        );
+        assert!(current[3][0] >= grid.floor[3][0]);
     }
 
     #[test]
@@ -1482,6 +1685,7 @@ mod tests {
             height,
             &cfa,
             Some(&confidence),
+            [1.0; 3],
             HighlightMethod::Harmonic,
         )
         .unwrap();

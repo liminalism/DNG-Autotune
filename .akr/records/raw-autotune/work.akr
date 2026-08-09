@@ -48,7 +48,7 @@ record raw-autotune.work.harmonic-highlight-experiment/1 : work {
 
 record raw-autotune.work.harmonic-highlight-experiment/2 : work {
     title "Harmonic pre-demosaic highlight experiment"
-    state active
+    state superseded
     scope [
         path "Cargo.lock",
         path "Cargo.toml",
@@ -84,6 +84,70 @@ record raw-autotune.work.harmonic-highlight-experiment/2 : work {
         """
     depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
     supersedes [ @raw-autotune.work.harmonic-highlight-experiment/1 ]
+}
+
+record raw-autotune.work.harmonic-highlight-experiment/3 : work {
+    title "Harmonic pre-demosaic highlight experiment"
+    state active
+    scope [
+        path "Cargo.lock",
+        path "Cargo.toml",
+        path "THIRD_PARTY.md",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/memory.rs",
+        path "src/pipeline.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Add and validate an opt-in CLI-only clean-room harmonic highlight
+        experiment on the normalized Bayer mosaic. Use connected clipped
+        regions, local one/two-guide affine colour fits with quality gates,
+        clipping-aware pyramid initialization, anisotropic obstacle-constrained
+        transport, verified sensor-knee inversion, and a separate fully clipped
+        luminance dome. Use pure-Rust faer f64 sparse Cholesky for bounded
+        systems and deterministic projected relaxation for larger or failed
+        systems. Keep measured sites and floors invariant and keep `current` as
+        the unattended default.
+
+        Coloured-highlight abstention rejects non-identifiable collinear
+        two-guide fits and applies a monotone soft leverage bound when a
+        high-gain one-guide colour relation is extrapolated beyond three
+        measured guide spans at a partially clipped site. A white-balance-
+        normalized convex envelope of chromaticities measured around each
+        connected clipped region now limits unsupported partial-cell colour
+        without changing measured channels, sensor lower bounds, supported
+        constant-colour relationships, or fully clipped cores.
+
+        The analytical constant-blue fixture remains unchanged. On the
+        blue-to-neutral sky fixture the envelope reduces edge-energy ratio from
+        1.638 to 0.893 and tone-boundary p99 from 0.0123 to 0.0082; normalized
+        luminance RMSE remains inside its gate at 0.0818, while the residual
+        false-colour fraction remains 0.3125. The complete 303-test unit suite
+        and all integration, real-RAW, and profile tests pass.
+
+        Three Sony ILCE-7C 24 MP frames rendered successfully at harmonic full
+        strength with one concurrent image. The retained envelope run peaked at
+        1,027,352 kB RSS and completed in 3:28.04. Human review preferred the
+        harmonic renders overall but identified a localized magenta blowout in
+        the right sky of `_DSC1290`. Timestamped before/after renders and stage
+        dumps show that stronger boundary constraints do not materially remove
+        the patch: it is already present after the spatial CFA path in an area
+        dominated by two-channel clipping, while the later post-demosaic
+        highlight stage adds essentially no hue delta. This pins the remaining
+        defect to underdetermined chromaticity where sensor lower bounds prevent
+        a raw-domain envelope from reaching the desired local sky hue.
+
+        The work remains active. The next slice should transport measured
+        boundary hue after demosaic while preserving the harmonic luminance
+        field and should be gated against constant-blue, occluded-sky, coloured-
+        highlight, and independent-channel fixtures before another real-frame
+        corpus review. Wider real-frame gates and any memory-reserve adjustment
+        also remain pending.
+        """
+    depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
+    supersedes [ @raw-autotune.work.harmonic-highlight-experiment/2 ]
 }
 
 record raw-autotune.work.highlight-boundary-fringe-diagnosis/1 : work {

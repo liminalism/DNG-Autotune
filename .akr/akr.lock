@@ -5,8 +5,7 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.2"
-    commit git:04304c27a1f377511e6a29cf5d90c69c7fddd580
-    source_graph "sha256:85cdc49537883210463fa8297b886352b29c153c0e2f18e01bda1de0b1f7c46f"
+    source_graph "sha256:d5f802571047065ca04d29a9a35a4e4248da13e828f20fd8d2c886ac1d0ab1d9"
 }
 
 source ".akr/project.akr" {
@@ -25,13 +24,13 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:e0f5e76b74c1a3975ed302ae7827a1ee1cfee207f3527de48e9a6db69d85ab80"
-    records 28
+    hash "sha256:68db04b43d9db0b9b9675a8950825e6fe5e4bdf4b01a815d5214ed72e1c2ebb2"
+    records 31
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
-    hash "sha256:3c9be992c74ea7b8dc4503604cfafd4f66035a3bde86d93b2a834f9b0abe8b1f"
-    records 21
+    hash "sha256:eab99195c5520e67e2a9e502be9b435672c2e34fa0d7fa4691f84594b1c79938"
+    records 26
 }
 
 source ".akr/records/raw-autotune/policies.akr" {
@@ -45,8 +44,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:5e48989b569f7afb4d4c905523ada3f882da49c7f6266a39a3f5eeb67bfc82f3"
-    records 20
+    hash "sha256:0a78628843a97a27e5d3a9b1e17e153e81c42d147bf7cccda7c788cfc5badd2f"
+    records 21
 }
 
 seal @raw-autotune.assessment.sky-blowout-estimator-handoff/1 {
@@ -89,9 +88,24 @@ seal @raw-autotune.evidence.harmonic-abstention-full-suite-20260809/1 {
     hash "sha256:48bd0c8df1256e174877ceb1958bc5d395afa3549bf59b4264bd55128d9c64be"
 }
 
+seal @raw-autotune.evidence.harmonic-chroma-envelope-tests-20260809/1 {
+    state verified
+    hash "sha256:259ee0af33a083ff58ac731fdac1864af2cba798b1613efe7b5bdb1e5d4f96e9"
+}
+
 seal @raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 {
     state verified
     hash "sha256:d8df115a414e68247d73ccfc3a061314af901cf0cd48af940e1c553eb59e44be"
+}
+
+seal @raw-autotune.evidence.harmonic-magenta-stage-diagnosis-20260809/1 {
+    state verified
+    hash "sha256:15426a68456a11afd74138733beb7644c6d3801e2f2d800b14a2e9ea7535f114"
+}
+
+seal @raw-autotune.evidence.harmonic-real-frame-rss-20260809/1 {
+    state verified
+    hash "sha256:3cc42bc5af8261f508e005aabb74ba1635cc9c7f43cb6a4b8f4c28a4faad4810"
 }
 
 seal @raw-autotune.evidence.highlight-fringe-origin-controls/1 {
@@ -219,6 +233,21 @@ seal @raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does/1 {
     hash "sha256:47245cc0493245b65b48d991e1eeeedcee97be2c6d902bb3186d769eca2990ca"
 }
 
+seal @raw-autotune.papercut.akr-revise-from-help-describes-a-replacement/1 {
+    state verified
+    hash "sha256:b8911d8494a64de4310433da59ca3ca2ee1d48f4e07db4481ac36f66cc8fa76c"
+}
+
+seal @raw-autotune.papercut.cargo-test-accepts-one-positional-testname/1 {
+    state verified
+    hash "sha256:13a2f078decd221c325eb55a149bece27a591c6f1cce372af23ea119fcb5a35e"
+}
+
+seal @raw-autotune.papercut.fff-find-files-again-closed-its-transport-while/1 {
+    state verified
+    hash "sha256:2aff343190a041906df2cc7ab4f2bb1f9ae6622a26caea5e42283a80a4158fa4"
+}
+
 seal @raw-autotune.papercut.fff-multi-grep-returned-transport-closed-while/1 {
     state verified
     hash "sha256:901ea8537e2d14a9d80ef8685b69de6e44e689432ee2fc94daf58f0625287722"
@@ -237,6 +266,16 @@ seal @raw-autotune.papercut.forwarding-six-full-resolution-diagnostic-pngs/1 {
 seal @raw-autotune.papercut.grade-sky-py-reported-zero-pairs-on-a-normal/1 {
     state verified
     hash "sha256:22bfbd4a5c102829f41b2922860938fe95fd2293d314fce571d521a5fe5bb70b"
+}
+
+seal @raw-autotune.papercut.imagemagick-compare-returns-exit-status-1-when/1 {
+    state verified
+    hash "sha256:10fce3cdfecd9c5a8d68538ff249ebfecd110157efe12433a44bfb5261ac69f9"
+}
+
+seal @raw-autotune.papercut.imagemagick-crop-review-composition-initially/1 {
+    state verified
+    hash "sha256:2305018d2124c29e943042744a09e54619b47c38b3ea317a92b3807cdffb1ed3"
 }
 
 seal @raw-autotune.papercut.knowledge-context-rejects-a-completed-work/1 {
@@ -305,8 +344,13 @@ seal @raw-autotune.work.harmonic-highlight-experiment/1 {
 }
 
 seal @raw-autotune.work.harmonic-highlight-experiment/2 {
+    state superseded
+    hash "sha256:07491b035668d50475ee396433e5f90be3c6df66a6943e876de3bdc40d4200cf"
+}
+
+seal @raw-autotune.work.harmonic-highlight-experiment/3 {
     state active
-    hash "sha256:0e372896fbfe527092785873271711a544cf7084a5c1ae75834b5864d75ae283"
+    hash "sha256:683285f74fe02495bbdbac16f3abf224b3be4524bca6ebaf26cccf2591f14dc8"
 }
 
 seal @raw-autotune.work.highlight-boundary-fringe-diagnosis/1 {

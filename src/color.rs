@@ -872,6 +872,7 @@ fn demosaic_camera_rgb_with_lens(
                         height,
                         &config.cfa,
                         mosaic_confidence.as_deref(),
+                        [raw.wb_coeffs[0], raw.wb_coeffs[1], raw.wb_coeffs[2]],
                         highlight_method,
                     )?);
                 }
