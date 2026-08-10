@@ -1,6 +1,99 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.work.compression-aware-highlight-ratio-promotion/1 : work {
+    title "Promote compression-aware highlight ratios without white blowout"
+    state superseded
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/highlight.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Promote the existing compression-aware color/luminance-ratio exponent of 0.6 into the unattended archive profile, while keeping exponent 1.0 as the explicit legacy/no-op control and keeping exact external lens profiles opt-in.
+
+        Re-evaluate the earlier white-blowout rejection after the intervening near-white anchor, peak-preserving highlight path, and renderer fixes. Gate the promotion on the 58-file third-batch sky cohort and the documented paired-camera corpus: broad sky green deficit must improve without moving ground exposure, hard clipping must not regress, near-white share must not increase, paired saturation must remain inside the documented daylight range, and hue error must remain materially neutral.
+
+        Advance the versioned unattended profile because this deliberately changes default rendered pixels in the CLI and in-memory API. Record the chosen parameter in the existing report field; do not change the report schema.
+        """
+    acceptance {
+        check implementation-regression-gate {
+            statement """
+                The automatic CLI and in-memory defaults agree on archive-auto-v3, exponent 1.0 remains an explicit no-op control, focused/full tests and clippy pass, repeated jobs-8 renders are byte-identical, and AKR build/check pass.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.compression-highlight-regression-gate-20260810/1
+            ]
+        }
+        check paired-camera-colour-gate {
+            statement """
+                On the documented paired-camera render gate, saturation remains inside the accepted daylight range and aggregate hue error remains materially neutral while near-white share falls.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.compression-highlight-paired-gate-20260810/1 ]
+        }
+        check sky-chroma-white-gate {
+            statement """
+                On raw/raw_3rd_batch, exponent 0.6 reduces the measured sky green deficit without moving ground exposure and does not increase hard clipping or the maximum near-white share.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.compression-highlight-sky-gate-20260810/1 ]
+        }
+    }
+    author "GitHub Uploader"
+}
+
+record raw-autotune.work.compression-aware-highlight-ratio-promotion/2 : work {
+    title "Promote compression-aware highlight ratios without white blowout"
+    state superseded
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/highlight.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Promote the existing compression-aware color/luminance-ratio exponent of 0.6 into the unattended archive profile, while keeping exponent 1.0 as the explicit legacy/no-op control and keeping exact external lens profiles opt-in.
+
+        Re-evaluate the earlier white-blowout rejection after the intervening near-white anchor, peak-preserving highlight path, and renderer fixes. Gate the promotion on the 58-file third-batch sky cohort and the documented paired-camera corpus: broad sky green deficit must improve without moving ground exposure, hard clipping must not regress, near-white share must not increase, paired saturation must remain inside the documented daylight range, and hue error must remain materially neutral.
+
+        Advance the versioned unattended profile because this deliberately changes default rendered pixels in the CLI and in-memory API. Record the chosen parameter in the existing report field; do not change the report schema.
+        """
+    acceptance {
+        check implementation-regression-gate {
+            statement """
+                The automatic CLI and in-memory defaults agree on archive-auto-v3, exponent 1.0 remains an explicit no-op control, focused/full tests and clippy pass, repeated jobs-8 renders are byte-identical, and AKR build/check pass.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.compression-highlight-regression-gate-20260810/1
+            ]
+        }
+        check paired-camera-colour-gate {
+            statement """
+                On the documented paired-camera render gate, saturation remains inside the accepted daylight range and aggregate hue error remains materially neutral while near-white share falls.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.compression-highlight-paired-gate-20260810/1 ]
+        }
+        check sky-chroma-white-gate {
+            statement """
+                On raw/raw_3rd_batch, exponent 0.6 reduces the measured sky green deficit without moving ground exposure and does not increase hard clipping or the maximum near-white share.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.compression-highlight-sky-gate-20260810/1 ]
+        }
+    }
+    supersedes [ @raw-autotune.work.compression-aware-highlight-ratio-promotion/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.work.goal/1 : work {
     title "Goal"
     state proposed
@@ -14,6 +107,55 @@ record raw-autotune.work.goal/1 : work {
             Implement the testing apparatus from `docs/white-blowout-advice.md` (diagnostic dumps, clip-state map, synthetic constant-chromaticity ramps, ablation harness, new metrics) and then execute the advice's production fix sequence — continuous, neighbourhood-guided highlight chromaticity reconstruction with raw-domain clip confidence and perceptual gamut mapping — ending with a controlled local-tone evaluation. No HDR output work until the reconstruction and gamut defects are closed.
             """
     }
+}
+
+record raw-autotune.work.harmonic-highlight-default-promotion/1 : work {
+    title "Promote the accepted harmonic highlight path to the automatic profile"
+    state completed
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/highlight.rs",
+        path "src/main.rs",
+        path "src/pipeline.rs",
+        path "src/raw_highlight.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Promote the visually accepted harmonic highlight reconstruction with the conservative 75-88% inward area-support fade to the unattended CLI, interactive, batch-library, and in-memory API profile. Advance the profile identifier to archive-auto-v4 so it cannot be confused with the rejected, uncommitted archive-auto-v3 compression-ratio experiment.
+
+        Use full reconstruction strength because spatial estimators require it. Preserve the current estimator as an explicit compatibility control, and keep highlight ratio exponent 0.6 and exact external lens profiles opt-in. Commit code, AKR, and generated documentation while excluding render corpora and developer artifacts.
+        """
+    acceptance {
+        check accepted-output-reproduced {
+            statement """
+                An ordinary automatic render reproduces the accepted opt-in core-ramp-75-88 output byte-for-byte.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.harmonic-default-output-identity-20260810/1 ]
+        }
+        check automatic-profile-consistency {
+            statement """
+                The CLI, interactive path, public batch API, and in-memory API all select harmonic reconstruction at strength 1 under archive-auto-v4, while explicit current remains available.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.harmonic-default-profile-consistency-20260810/1
+            ]
+        }
+        check promotion-regression-gate {
+            statement """
+                Full tests, clippy, formatting, deterministic rendering, AKR build/check, and git diff checks pass before commit.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.harmonic-default-promotion-full-gate-20260810/1
+            ]
+        }
+    }
+    author "GitHub Uploader"
 }
 
 record raw-autotune.work.harmonic-highlight-experiment/1 : work {
@@ -152,7 +294,7 @@ record raw-autotune.work.harmonic-highlight-experiment/3 : work {
 
 record raw-autotune.work.harmonic-highlight-experiment/4 : work {
     title "Harmonic pre-demosaic highlight experiment"
-    state proposed
+    state superseded
     scope [
         path "Cargo.lock",
         path "Cargo.toml",
@@ -221,6 +363,80 @@ record raw-autotune.work.harmonic-highlight-experiment/4 : work {
         """
     depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
     supersedes [ @raw-autotune.work.harmonic-highlight-experiment/3 ]
+}
+
+record raw-autotune.work.harmonic-highlight-experiment/5 : work {
+    title "Harmonic pre-demosaic highlight experiment"
+    state completed
+    scope [
+        path "Cargo.lock",
+        path "Cargo.toml",
+        path "THIRD_PARTY.md",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/highlight.rs",
+        path "src/memory.rs",
+        path "src/pipeline.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Add and validate an opt-in CLI-only clean-room harmonic highlight
+        experiment on the normalized Bayer mosaic. Use connected clipped
+        regions, local one/two-guide affine colour fits with quality gates,
+        clipping-aware pyramid initialization, anisotropic obstacle-constrained
+        transport, verified sensor-knee inversion, and a separate fully clipped
+        luminance dome. Use pure-Rust faer f64 sparse Cholesky for bounded
+        systems and deterministic projected relaxation for larger or failed
+        systems. Keep measured sites and floors invariant and keep `current` as
+        the unattended default.
+
+        Coloured-highlight abstention rejects non-identifiable collinear
+        two-guide fits and applies a monotone soft leverage bound when a
+        high-gain one-guide colour relation is extrapolated beyond three
+        measured guide spans at a partially clipped site. A white-balance-
+        normalized convex envelope of chromaticities measured around each
+        connected clipped region limits unsupported partial-cell colour without
+        changing measured channels, sensor lower bounds, supported constant-
+        colour relationships, or fully clipped cores.
+
+        The remaining broad magenta patch in `_DSC1290` is now addressed after
+        demosaic, where the harmonic luminance field already exists. Harmonic
+        alone builds a scale-bounded, edge-aware weighted-Laplacian field in CIE
+        1976 u'v' from fully measured pixels through the one-channel-clipped
+        fringe, and applies it only where two-channel clip confidence is locally
+        area-filling. CIE Y is preserved exactly, single-channel coloured
+        highlights and measured pixels remain bit-exact, invalid XYZ is excluded,
+        and each chroma move is bounded to 0.04 u'v'. `current` and `raw-pyramid`
+        retain their established output.
+
+        The analytical constant-blue, neutral, correlated-detail, fully clipped,
+        and sensor-knee fixtures remain unchanged at reported precision. The
+        coloured-highlight fixture is exactly unchanged by post-demosaic
+        transport. Independent-channel false colour is 0.43799 versus the prior
+        0.43884. The occluded-sky hue error improves from 16.62 to 14.60 degrees,
+        while false colour is effectively flat at 0.27051 versus 0.27014 and its
+        hardest tone-boundary statistic remains a known regression to address.
+        All 306 library tests and every API, metadata, real-RAW probe, lens-profile,
+        and documentation test pass.
+
+        Three Sony ILCE-7C 24 MP frames rendered successfully at harmonic full
+        strength with one concurrent image in
+        `output-tests/20260809-191941-p0800/harmonic-spatial-chroma/`. `_DSC1283`
+        and `_DSC1289` remain visually stable. `_DSC1290` transports 387,688
+        pixels and substantially reduces the broad right-side magenta fill to a
+        pale blue/neutral highlight while preserving the harmonic luminance
+        structure; thin pink contours remain around some occluder edges. The
+        three-frame run peaked at 1,027,868 kB RSS.
+
+        The work remains active. The next slice should remove the residual pink
+        occluder contours while improving the occluded-sky tone-boundary metric,
+        then widen the real-frame corpus gate and revisit memory reserve only if
+        measured peaks require it.
+        """
+    depends_on [ @raw-autotune.work.slice-2-synthetic-ramp-suite-and-ablation/1 ]
+    supersedes [ @raw-autotune.work.harmonic-highlight-experiment/4 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.work.highlight-boundary-fringe-diagnosis/1 : work {
@@ -473,6 +689,55 @@ record raw-autotune.work.risks-rollback/1 : work {
             - **Risk:** `--highlight-reconstruction 0` byte-identical contract violated by new plumbing even when disabled. **Mitigation:** gate is `cargo test --release` + before/after `--dry-run --summary` diff with `strength=0`; CI fails if any pixel or `ToneParams` moves.
             """
     }
+}
+
+record raw-autotune.work.rollback-compression-highlight-ratio-default/1 : work {
+    title "Restore compression-aware highlight ratios to opt-in"
+    state completed
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "output-tests/**",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/highlight.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Roll back the archive-auto-v3 promotion of highlight color/luminance ratio exponent 0.6 after visual review found that the affected skies remain unnatural and show colored gradient tendrils. Restore archive-auto-v2 and exponent 1.0 as the unattended CLI and in-memory defaults. Keep exponent 0.6 available only through the existing explicit expert flag.
+
+        Preserve the visually preferred `output-tests/20260809-191941-p0800/harmonic-spatial-chroma/` result as the tuning baseline. Do not treat aggregate saturation, green-deficit, or near-white metrics as sufficient promotion evidence when the sky topology is visibly wrong.
+        """
+    acceptance {
+        check automatic-path-restored {
+            statement """
+                The ordinary CLI and in-memory automatic profile use archive-auto-v2 with exponent 1.0, while explicit exponent 0.6 remains available and changes only the opt-in render.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.compression-highlight-default-rollback-identity-20260810/1
+            ]
+        }
+        check rejection-recorded {
+            statement """
+                AKR and the changelog record that visual sky topology rejected the automatic promotion despite favorable aggregate metrics, and identify the 20260809 harmonic render as the next tuning baseline.
+                """
+            method observation
+            verified_by [
+                @raw-autotune.evidence.compression-highlight-rejection-recorded-20260810/1
+            ]
+        }
+        check rollback-regression-gate {
+            statement """
+                Focused tests, formatting, clippy, AKR build/check, and a byte-identity comparison against the prior unattended output pass.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.compression-highlight-default-rollback-tests-20260810/1
+            ]
+        }
+    }
+    author "GitHub Uploader"
 }
 
 record raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 : work {

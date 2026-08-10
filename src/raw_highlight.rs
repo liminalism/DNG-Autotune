@@ -1,11 +1,10 @@
 //! Experimental pre-demosaic highlight reconstruction.
 //!
-//! These methods are deliberately opt-in.  They work on the normalized CFA
+//! These methods work on the normalized CFA
 //! mosaic, where a saturated reading is a lower bound and where measured sites
 //! can still be kept exact.  `RawPyramid` is the small, clipping-aware baseline;
 //! `Harmonic` adds connected-region colour-line fitting and an obstacle-
-//! constrained harmonic solve.  Neither path changes the unattended `Current`
-//! estimator.
+//! constrained harmonic solve and is the versioned automatic estimator.
 
 use anyhow::{Result, ensure};
 use clap::ValueEnum;
@@ -33,7 +32,7 @@ const KNEE_HIGH: f32 = 0.995;
 const KNEE_BINS: usize = 24;
 const KNEE_MIN_VOTES: usize = 100;
 
-/// Highlight estimator selected by the batch CLI.
+/// Highlight estimator selected by the automatic profile or an explicit caller.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HighlightMethod {

@@ -40,6 +40,102 @@ record raw-autotune.evidence.blown-sky-renders-white-again/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.compression-highlight-default-rollback-identity-20260810/1 : evidence {
+    title "Restored archive-auto-v2 ordinary output is byte-identical to the pre-promotion default: both _DSC1289 JPEGs have SHA-256 b5ef8b967ac4f9d60571a4d7434b457cf98fb1a6add4eb127d69b26a33e4dbe0."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command ".\\\\target\\\\release\\\\raw-autotune.exe raw\\\\raw_3rd_batch\\\\_DSC1289.ARW -o .agent\\\\scratch\\\\rollback-default-identity-metadata-20260810 --overwrite --no-summary; Get-FileHash ..."
+    artifact ".agent/scratch/rollback-default-identity-metadata-20260810/_DSC1289_auto.jpg"
+    summary """
+        Restored archive-auto-v2 ordinary output is byte-identical to the pre-promotion default: both _DSC1289 JPEGs have SHA-256 b5ef8b967ac4f9d60571a4d7434b457cf98fb1a6add4eb127d69b26a33e4dbe0.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-default-rollback-tests-20260810/1 : evidence {
+    title "Focused release regressions passed: the ordinary CLI uses archive-auto-v2 with exponent 1.0, while the explicit ratio-exponent experiment remains functional."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "cargo test --release ordinary_cli_uses_the_unattended_archive_profile; cargo test --release color_ratio_exponent"
+    artifact "src/cli.rs"
+    summary """
+        Focused release regressions passed: the ordinary CLI uses archive-auto-v2 with exponent 1.0, while the explicit ratio-exponent experiment remains functional.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-paired-gate-20260810/1 : evidence {
+    title "On 42 paired frames, saturation ratio moved 1.114493 to 1.034033, near-white median 0.030280 to 0.003267767, maximum 0.1592422 to 0.1338907, and mean hue error 18.2185 to 18.24891 degrees; exposure was identical."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "Render raw/arw_better and raw/raw_better with --reference at legacy exponent 1.0 and candidate 0.6; compare batch summaries."
+    artifact ".agent/scratch/chroma-white-paired-20260810/ratio-060/summary.json"
+    summary """
+        On 42 paired frames, saturation ratio moved 1.114493 to 1.034033, near-white median 0.030280 to 0.003267767, maximum 0.1592422 to 0.1338907, and mean hue error 18.2185 to 18.24891 degrees; exposure was identical.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-regression-gate-20260810/1 : evidence {
+    title "307 library tests and all integration/doc tests passed; clippy and formatting passed. Ten repeated jobs-8 artifacts were byte-identical. The archive-auto-v3 default matched explicit 0.6, while explicit 1.0 matched the pre-change JPEG byte-for-byte."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "cargo test --release; cargo clippy --all-targets --release -- -D warnings; cargo fmt --check; render five sky frames repeatedly with --jobs 8 and hash JPEGs/sidecars; compare explicit 1.0 to pre-change output."
+    artifact ".agent/scratch/profile-v3-determinism-20260810"
+    summary """
+        307 library tests and all integration/doc tests passed; clippy and formatting passed. Ten repeated jobs-8 artifacts were byte-identical. The archive-auto-v3 default matched explicit 0.6, while explicit 1.0 matched the pre-change JPEG byte-for-byte.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-rejection-recorded-20260810/1 : evidence {
+    title "The visual rejection, scalar-metric limitation, opt-in status, and trusted 191941 harmonic baseline are recorded in the changelog and governing profile decision."
+    state verified
+    result pass
+    method observation
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    artifact "CHANGELOG.md"
+    summary """
+        The visual rejection, scalar-metric limitation, opt-in status, and trusted 191941 harmonic baseline are recorded in the changelog and governing profile decision.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-sky-gate-20260810/1 : evidence {
+    title "On 58 files, exponent 0.6 reduced median near-white 0.022232 to 0.0038817108, held max 0.284304 to 0.284300, and reduced max hard clipping 0.000284 to 0.000268. Across 56 paired sky grades, median green deficit fell 0.11543 to 0.08657, sky moved -0.01 EV, and ground was unchanged."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "Render raw/raw_3rd_batch at legacy exponent 1.0 and candidate 0.6; compare summaries and run python tools/grade_sky.py against raw/jpeg."
+    artifact ".agent/scratch/chroma-white-corpus-20260810/sky-grade.json"
+    summary """
+        On 58 files, exponent 0.6 reduced median near-white 0.022232 to 0.0038817108, held max 0.284304 to 0.284300, and reduced max hard clipping 0.000284 to 0.000268. Across 56 paired sky grades, median green deficit fell 0.11543 to 0.08657, sky moved -0.01 EV, and ground was unchanged.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-visual-rejection-20260810/1 : evidence {
+    title "Visual review found implausible coloured gradient tendrils in the proposed automatic ratio outputs; output-tests/20260809-191941-p0800/harmonic-spatial-chroma is the closest current direction."
+    state verified
+    result fail
+    method manual
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    artifact "output-tests/20260810-profile-v3-chroma-white"
+    summary """
+        Visual review found implausible coloured gradient tendrils in the proposed automatic ratio outputs; output-tests/20260809-191941-p0800/harmonic-spatial-chroma is the closest current direction.
+        """
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.compression-ratio-batch-gate/1 : evidence {
     title "The ratio test preserved luminance and exact midtones. On _DSC1289 profile plus exponent 0.6 reduced sky green deficit to 7.6%, but the 58-frame gate rejected promotion because maximum hard clipping rose 0.204% to 3.178% and maximum near-white share rose 2.0% to 28.0%."
     state superseded
@@ -136,6 +232,76 @@ record raw-autotune.evidence.harmonic-chroma-envelope-tests-20260809/1 : evidenc
     summary """
         303 unit tests plus in-memory API, output metadata, real-RAW dimension probe, profile-lens, and doc tests passed; focused harmonic fixtures also passed after the retained global chroma-envelope change.
         """
+}
+
+record raw-autotune.evidence.harmonic-core-ramp-full-suite-20260810/1 : evidence {
+    title "All 307 library tests and every integration/doc test passed; clippy with warnings denied and formatting were clean for the opt-in core-only harmonic support fade."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "cargo test --release; cargo clippy --release --all-targets --all-features -- -D warnings; cargo fmt --check"
+    artifact "src/highlight.rs"
+    summary """
+        All 307 library tests and every integration/doc test passed; clippy with warnings denied and formatting were clean for the opt-in core-only harmonic support fade.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.harmonic-core-ramp-render-20260810/1 : evidence {
+    title "Three full-resolution Sony frames rendered for the byte-identical hard-75 baseline and the core-only 75-88% inward fade. The candidate leaves support below 75% untouched; the focused topology regression passed."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "raw-autotune ... --highlight-method harmonic --highlight-reconstruction 1 --jobs 1"
+    artifact "output-tests/20260810-harmonic-retune"
+    summary """
+        Three full-resolution Sony frames rendered for the byte-identical hard-75 baseline and the core-only 75-88% inward fade. The candidate leaves support below 75% untouched; the focused topology regression passed.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.harmonic-default-output-identity-20260810/1 : evidence {
+    title "Ordinary archive-auto-v4 jobs-1 and jobs-8 renders and the accepted core-ramp-75-88 _DSC1290 JPEG are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "raw-autotune _DSC1290.ARW --jobs 1/8; Get-FileHash SHA256"
+    artifact ".agent/scratch/harmonic-default-v4-j1/_DSC1290_auto.jpg"
+    summary """
+        Ordinary archive-auto-v4 jobs-1 and jobs-8 renders and the accepted core-ramp-75-88 _DSC1290 JPEG are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.harmonic-default-profile-consistency-20260810/1 : evidence {
+    title "Focused tests passed: archive-auto-v4 selects harmonic strength 1 consistently in CLI/RunOptions and in-memory defaults, while explicit current at strength 0.75 remains accepted."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "cargo test --release ordinary_cli_uses_the_unattended_archive_profile; cargo test --release automatic_api_defaults_match_the_batch_profile; cargo test --release spatial_highlight_methods_require_full_strength"
+    artifact "src/types.rs"
+    summary """
+        Focused tests passed: archive-auto-v4 selects harmonic strength 1 consistently in CLI/RunOptions and in-memory defaults, while explicit current at strength 0.75 remains accepted.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.harmonic-default-promotion-full-gate-20260810/1 : evidence {
+    title "All 307 library tests and every integration/doc test passed under archive-auto-v4; clippy with warnings denied, formatting, and git diff whitespace checks were clean."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "cargo test --release; cargo clippy --release --all-targets --all-features -- -D warnings; cargo fmt --check; git diff --check"
+    artifact "src"
+    summary """
+        All 307 library tests and every integration/doc test passed under archive-auto-v4; clippy with warnings denied, formatting, and git diff whitespace checks were clean.
+        """
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 : evidence {

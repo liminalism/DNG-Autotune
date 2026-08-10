@@ -93,7 +93,8 @@ raw-autotune
 ```
 
 It asks only for one or more RAW files/folders and an output directory, then
-starts. The versioned `archive-auto-v2` profile chooses colour, demosaic,
+starts. The versioned `archive-auto-v4` profile chooses colour, harmonic
+highlight reconstruction,
 corrections, tone, metadata, JPEG settings and safe concurrency. Passing any
 argument uses the non-interactive CLI, with the same defaults and optional
 expert overrides.
@@ -123,7 +124,7 @@ memory the machine reports free and the size of the largest input, and the run
 header says what it chose and why:
 
 ```
-raw-autotune v0.1.19 | 376 file(s) | profile=archive-auto-v2 | preset=auto | concurrent images=5 \
+raw-autotune v0.1.19 | 376 file(s) | profile=archive-auto-v4 | preset=auto | concurrent images=5 \
   (auto: 22.76 GiB available, 2.67 GiB per image at 49.9 MP)
 ```
 

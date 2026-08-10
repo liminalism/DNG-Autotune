@@ -256,17 +256,11 @@ pub fn process_job(
     options: &RunOptions,
     profile: Option<&NoiseProfile>,
 ) -> Result<ProcessReport> {
-    process_job_with_highlight_method(
-        job,
-        options,
-        profile,
-        crate::raw_highlight::HighlightMethod::Current,
-    )
+    process_job_with_highlight_method(job, options, profile, options.highlight_method)
 }
 
-/// Internal batch entry used by the CLI-only highlight experiments.  The
-/// public `process_job` above deliberately remains pinned to the current
-/// unattended estimator.
+/// Internal batch entry that can override the estimator retained in
+/// `RunOptions`; the public entry uses the versioned automatic selection.
 pub fn process_job_with_highlight_method(
     job: &InputJob,
     options: &RunOptions,

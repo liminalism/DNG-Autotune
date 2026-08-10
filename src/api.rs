@@ -35,7 +35,7 @@ impl PixelFormat {
 
 /// Automatic render controls useful to an embedding crate.
 ///
-/// [`Default`] is the same `archive-auto-v2` image policy used by the command
+/// [`Default`] is the same `archive-auto-v4` image policy used by the command
 /// line. The file/output-management members of [`RunOptions`] are intentionally
 /// absent: this API writes nothing.
 #[derive(Debug, Clone)]
@@ -65,6 +65,7 @@ pub struct RenderOptions {
     pub demosaic: DemosaicMethod,
     pub hot_pixels: f32,
     pub highlight_reconstruction: f32,
+    pub highlight_method: crate::raw_highlight::HighlightMethod,
     pub full_dng_color: bool,
     pub lens_correction: crate::lens::LensCorrectionMode,
 }
@@ -104,6 +105,7 @@ impl RenderOptions {
             demosaic: options.demosaic,
             hot_pixels: options.hot_pixels,
             highlight_reconstruction: options.highlight_reconstruction,
+            highlight_method: options.highlight_method,
             full_dng_color: options.full_dng_color,
             lens_correction: options.lens_correction,
         }
@@ -168,6 +170,10 @@ impl RenderOptions {
             self.highlight_reconstruction.is_finite()
                 && (0.0..=1.0).contains(&self.highlight_reconstruction),
             "highlight_reconstruction must be between 0 and 1"
+        );
+        ensure!(
+            !self.highlight_method.is_spatial() || self.highlight_reconstruction == 1.0,
+            "spatial highlight methods require highlight_reconstruction 1"
         );
         Ok(())
     }
@@ -294,7 +300,7 @@ pub fn render_file_rgb16(
                 sub_black: options.sub_black,
                 hot_pixels: options.hot_pixels,
                 highlight_reconstruction: options.highlight_reconstruction,
-                highlight_method: crate::raw_highlight::HighlightMethod::Current,
+                highlight_method: options.highlight_method,
                 demosaic: options.demosaic,
                 snr10_ev: noise_floor.as_ref().map(|floor| floor.snr10_ev),
                 full_dng_color: options.full_dng_color,
@@ -529,6 +535,7 @@ mod tests {
         assert_eq!(api.hot_pixels, batch.hot_pixels);
         assert_eq!(api.highlight_contrast, batch.highlight_contrast);
         assert_eq!(api.highlight_reconstruction, batch.highlight_reconstruction);
+        assert_eq!(api.highlight_method, batch.highlight_method);
         assert_eq!(api.full_dng_color, batch.full_dng_color);
         assert_eq!(api.lens_correction, batch.lens_correction);
     }

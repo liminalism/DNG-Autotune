@@ -131,7 +131,10 @@ fn run() -> Result<i32> {
     // batch invocation keeps working unchanged.
     let (input_paths, options, highlight_method) = if std::env::args().len() <= 1 {
         match interactive::run()? {
-            Some((inputs, options)) => (inputs, options, HighlightMethod::Current),
+            Some((inputs, options)) => {
+                let highlight_method = options.highlight_method;
+                (inputs, options, highlight_method)
+            }
             None => return Ok(0),
         }
     } else {

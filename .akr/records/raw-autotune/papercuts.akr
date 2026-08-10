@@ -1,6 +1,39 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.papercut.a-chained-focused-test-build-command-exceeded/1 : papercut {
+    title "A chained focused-test/build command exceeded the executor's shortened…"
+    state verified
+    statement """
+        A chained focused-test/build command exceeded the executor's shortened timeout before producing results; verification must use separate commands with explicit longer limits.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-10
+}
+
+record raw-autotune.papercut.a-combined-read-only-akr-get-for-three-known/1 : papercut {
+    title "A combined read-only akr get for three known records timed out before…"
+    state verified
+    statement """
+        A combined read-only akr get for three known records timed out before returning output; records must be queried separately or with a longer timeout.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-10
+}
+
+record raw-autotune.papercut.a-powershell-measure-object-call-using-a/1 : papercut {
+    title "A PowerShell Measure-Object call using a calculated-property hashtable…"
+    state verified
+    statement """
+        A PowerShell Measure-Object call using a calculated-property hashtable failed while extracting nested JSON metrics, requiring a retry with an explicit value array; nested summary analysis examples would avoid this small handoff friction.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-09
+}
+
 record raw-autotune.papercut.a-release-build-invocation-returned-without/1 : papercut {
     title "A release build invocation returned without Cargo's Finished line and…"
     state verified
@@ -81,6 +114,28 @@ record raw-autotune.papercut.akr-revise-from-help-describes-a-replacement/1 : pa
     created_at 2026-08-09
 }
 
+record raw-autotune.papercut.akr-search-prints-record-identifiers-with/1 : papercut {
+    title "akr search prints record identifiers with revision suffixes (for…"
+    state verified
+    statement """
+        akr search prints record identifiers with revision suffixes (for example /2), but copying that identifier into the required akr context --goal call fails; context expects the unsuffixed key.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.akr-supersede-documented-with-a-replacement-key/1 : papercut {
+    title "akr supersede documented --with a replacement key and the replacement…"
+    state verified
+    statement """
+        akr supersede documented --with a replacement key and the replacement had already been proposed, but the command still returned AKR-C004 saying different-key supersession is unsupported and repeated the already-satisfied proposal instruction.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-10
+}
+
 record raw-autotune.papercut.cargo-test-accepts-one-positional-testname/1 : papercut {
     title "Cargo test accepts one positional TESTNAME filter, so attempting to…"
     state verified
@@ -90,6 +145,17 @@ record raw-autotune.papercut.cargo-test-accepts-one-positional-testname/1 : pape
     observed_at git:d404dd2299d413e3dbea3715b645f56cc5ba2e81
     author "codex"
     created_at 2026-08-09
+}
+
+record raw-autotune.papercut.cargo-test-accepts-only-one-positional-test/1 : papercut {
+    title "Cargo test accepts only one positional test-name filter; a focused…"
+    state verified
+    statement """
+        Cargo test accepts only one positional test-name filter; a focused verification command listing three test names was rejected and had to be split into separate invocations.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-10
 }
 
 record raw-autotune.papercut.fff-find-files-again-closed-its-transport-while/1 : papercut {
@@ -215,6 +281,28 @@ record raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp/1 : pap
     created_at 2026-08-08
 }
 
+record raw-autotune.papercut.running-several-read-only-akr-search-commands/1 : papercut {
+    title "Running several read-only akr search commands concurrently caused one…"
+    state verified
+    statement """
+        Running several read-only akr search commands concurrently caused one search to fail with AKR-I004 because .akr/cache/index.sqlite had no AKR meta table; AKR cache rebuild/search does not appear concurrency-safe.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-09
+}
+
+record raw-autotune.papercut.the-agents-protocol-names-knowledge-context-as/1 : papercut {
+    title "The AGENTS protocol names knowledge.context as the first-step command,…"
+    state verified
+    statement """
+        The AGENTS protocol names knowledge.context as the first-step command, but that command is not available in the project shell; agents must infer/use the akr CLI equivalent.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-09
+}
+
 record raw-autotune.papercut.the-akr-cli-search-syntax-differs-from-the-mcp/1 : papercut {
     title "The AKR CLI search syntax differs from the MCP shape: --query is…"
     state verified
@@ -238,6 +326,17 @@ record raw-autotune.papercut.the-first-focused-cargo-test-invocation-passed/1 : 
     created_at 2026-08-09
 }
 
+record raw-autotune.papercut.the-first-focused-release-test-compile-exceeded/1 : papercut {
+    title "The first focused release test compile exceeded a 60-second timeout;…"
+    state verified
+    statement """
+        The first focused release test compile exceeded a 60-second timeout; this workspace needs a multi-minute timeout for cold optimized test linking.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-10
+}
+
 record raw-autotune.papercut.the-full-batch-process-stopped-at-the-execution/1 : papercut {
     title "The full batch process stopped at the execution harness's ~30-second…"
     state verified
@@ -247,6 +346,17 @@ record raw-autotune.papercut.the-full-batch-process-stopped-at-the-execution/1 :
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
     author "codex"
     created_at 2026-08-08
+}
+
+record raw-autotune.papercut.the-jobs-8-determinism-harness-used-get/1 : papercut {
+    title "The jobs-8 determinism harness used Get-ChildItem -Include on a literal…"
+    state verified
+    statement """
+        The jobs-8 determinism harness used Get-ChildItem -Include on a literal directory path and silently matched zero files, producing a vacuous success until the hash count was checked; use an explicit extension filter or wildcard path.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-10
 }
 
 record raw-autotune.papercut.the-knowledge-context-mcp-connector-returned/1 : papercut {
@@ -272,6 +382,17 @@ record raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near/1 : pap
     created_at 2026-08-08
 }
 
+record raw-autotune.papercut.updating-a-decision-record-initially-failed/1 : papercut {
+    title "Updating a decision record initially failed with AKR-T001 because its…"
+    state verified
+    statement """
+        Updating a decision record initially failed with AKR-T001 because its prose slot is named decision rather than statement; the retry required changing the typed body after consulting the diagnostic.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-10
+}
+
 record raw-autotune.papercut.while-locating-hdr-sky-local-tone-and/1 : papercut {
     title "While locating HDR, sky, local-tone, and evaluation files, a parallel…"
     state verified
@@ -294,6 +415,17 @@ record raw-autotune.papercut.while-proposing-the-follow-on-work-record-a/1 : pap
     about "akr"
     author "codex"
     created_at 2026-08-08
+}
+
+record raw-autotune.papercut.while-recording-the-visual-rejection-two-apply/1 : papercut {
+    title "While recording the visual rejection, two apply_patch contexts missed…"
+    state verified
+    statement """
+        While recording the visual rejection, two apply_patch contexts missed because the nearby changelog text differed from the expected wording; the exact section had to be re-read before retrying with a minimal anchor.
+        """
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    author "codex"
+    created_at 2026-08-10
 }
 
 record raw-autotune.papercut.while-running-three-targeted-rust-tests-i/1 : papercut {

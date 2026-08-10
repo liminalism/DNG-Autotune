@@ -2,15 +2,33 @@
 
 ## Unreleased — a standalone front-end
 
+### Harmonic highlight reconstruction is now automatic
+
+The visually accepted harmonic estimator is now the unattended highlight path
+for the CLI, interactive front-end, public batch entry point, and in-memory API.
+The versioned profile advances directly to `archive-auto-v4`; `archive-auto-v3`
+identified a rejected, never-shipped compression-ratio experiment and is not
+reused. Automatic harmonic reconstruction runs at its required strength `1.0`.
+The previous per-pixel estimator remains available explicitly with
+`--highlight-method current`.
+
+The accepted spatial-chromaticity footprint begins at the historical 75% area
+support boundary and fades inward to full correction at 88%. It therefore never
+enters the mixed leaf/sky band that produced coloured gradient tendrils in the
+interim 50-75% ramp. Full-resolution review of `_DSC1283`, `_DSC1289`, and
+`_DSC1290` accepted this conservative result for automatic use. The compression-
+aware ratio exponent remains `1.0`, and exact external lens profiles remain
+opt-in; neither rejected experiment is bundled into this promotion.
+
 ### First-principles highlight reconstruction experiments
 
-The CLI now has opt-in `raw-pyramid` and `harmonic` highlight methods. Both run
-on the normalized RGB Bayer mosaic before production demosaic, retain measured
-sites exactly, treat clipped readings as lower bounds, and preserve the original
-raw confidence map for renderer uncertainty. The existing post-demosaic method
-and every public in-memory render remain unchanged by default. Spatial methods
-require `--highlight-reconstruction 1` and reserve method-specific memory in
-the batch planner.
+The CLI has `raw-pyramid` and `harmonic` highlight methods. Both run on the
+normalized RGB Bayer mosaic before production demosaic, retain measured sites
+exactly, treat clipped readings as lower bounds, and preserve the original raw
+confidence map for renderer uncertainty. Harmonic is now automatic;
+`raw-pyramid` remains an experimental control. Spatial methods require
+`--highlight-reconstruction 1` and reserve method-specific memory in the batch
+planner.
 
 The raw-pyramid baseline uses clipping-aware, renormalized five-tap Gaussian
 levels and reconstructs missing channels from coarse colour scaled by surviving
@@ -37,28 +55,24 @@ abstention rule, not a colour guess: it keeps fully clipped dome reconstruction
 separate and prevents a spatially changing sky from turning one valid channel
 into an unbounded green/blue lift.
 
-### Highlight chromaticity transport fades across a region edge
+### Highlight chromaticity transport stays inside an area-filled region
 
-The post-demosaic u'v' transport required three quarters of a pixel's 5x5
-neighbourhood to be underdetermined before it would correct that pixel at all.
-Because the test was a yes/no gate, a clipped region's interior was corrected at
-full strength while its outermost pixels were not corrected at all, so every
-region kept a ring of its original invented hue. That ring is the thin pink
-contour visible along occluder edges — leaves, ridges, branches silhouetted
-against clipped sky — on `_DSC1290`. The neighbourhood fraction is now a
-continuous weight over 0.50 to 0.75: unchanged where the old gate passed, fading
-to zero below, so the correction can no longer step at a region boundary. An
-isolated near-white speckle still measures under 0.10 and is still left alone.
+The post-demosaic u'v' transport historically required three quarters of a
+pixel's 5x5 neighbourhood to be underdetermined. An interim 50-75% outward fade
+improved aggregate boundary statistics but allowed the correction to follow
+mixed leaf/sky structures, drawing implausible coloured gradient tendrils across
+real skies. Visual review rejected that topology despite the scalar gains.
 
-On the occluded-sky bench fixture this moves p90 clip-boundary hue error from
-14.60 to 12.28 degrees and edge energy ratio from 1.0398 to 1.0244, while p99
-boundary a/b error rises from 0.0463 to 0.0798 — the outermost ring is genuinely
-mixed foliage and sky after demosaic, so correcting it is a net gain in the bulk
-and a loss in the tail. On the three Sony targets at harmonic full strength the
-strong-magenta area falls on `_DSC1290` from 0.7526% to 0.7047% and on
-`_DSC1283` from 0.4952% to 0.4520%; `_DSC1289` is unchanged to four decimals,
-having almost no two-channel clipping. `_DSC1290` now transports 438,897 pixels
-rather than 387,688.
+The accepted fade instead begins at the historical 75% boundary and grows
+inward to full correction at 88%. Pixels outside the prior trusted footprint
+remain untouched, while the correction no longer switches immediately to full
+strength just inside it. An isolated near-white speckle remains unsupported and
+unchanged.
+
+The accepted three-frame render transports 897,408 pixels on `_DSC1283`, 9,761
+on `_DSC1289`, and 387,664 on `_DSC1290`. The trusted hard-75 baseline remains
+byte-identical to the earlier selected render; the 75-88% candidate changes only
+the already-qualified interior fringe.
 
 Two related changes were implemented, measured and rejected rather than shipped.
 Discounting a cell's measured boundary data by luminance, so a cell straddling
@@ -71,8 +85,8 @@ fringe at the immediate occluder edge is therefore not a chromaticity-transport
 defect and is not pursued as one. The rejection is recorded at the sampling
 function so it is not retried.
 
-The stage runs only under `--highlight-method harmonic`, so unattended output is
-unchanged. Repeated `--jobs 8` runs of `_DSC1289` are byte-identical.
+The stage is automatic under `archive-auto-v4`; `--highlight-method current`
+selects the previous compatibility path.
 
 ### Exact lens profiles and compression-aware highlight color are opt-in
 
@@ -104,6 +118,14 @@ default and exact profiles remain explicitly opt-in. The result separates two
 effects rather than hiding either: the optical profile helps edge-localized
 purple, while compression-aware ratios help the broad cast, but this particular
 distortion/TCA plus `0.6` configuration fails the batch highlight gate.
+
+A later re-evaluation of the ratio exponent by itself improved green-deficit,
+near-white, and paired-saturation summaries, but visual review rejected it as a
+default: the skies still carried implausible coloured gradient tendrils. Scalar
+chroma and clipping metrics are therefore not promotion evidence without a
+credible sky topology. The closest current result remains the opt-in harmonic
+render in `output-tests/20260809-191941-p0800/harmonic-spatial-chroma/`, which is
+the baseline for further estimator tuning.
 
 Lens-profile resampling also prompted a memory-safety gate. It reserves another
 16 bytes per pixel in the job planner, the planner now uses only half of

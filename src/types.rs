@@ -273,6 +273,8 @@ pub struct RunOptions {
     /// Clipped-highlight reconstruction strength, 0 to 1. 0 is off and
     /// byte-identical; owned colour path only.
     pub highlight_reconstruction: f32,
+    /// Highlight estimator used by automatic and explicitly configured renders.
+    pub highlight_method: crate::raw_highlight::HighlightMethod,
     /// Use the DNG matrix model (ForwardMatrix/ColorMatrix, CameraCalibration,
     /// AnalogBalance, ReductionMatrix, and up to three illuminants) on files
     /// that carry it. On by default and owned colour path only; safely falls
@@ -284,7 +286,7 @@ pub struct RunOptions {
 }
 
 impl RunOptions {
-    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v2";
+    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v4";
 
     /// The unattended archive profile shared by the flag CLI and the minimal
     /// interactive front-end. Callers change only explicit user overrides.
@@ -324,7 +326,8 @@ impl RunOptions {
             sharpen: 1.0,
             demosaic: crate::demosaic::DemosaicMethod::Auto,
             hot_pixels: 0.5,
-            highlight_reconstruction: 0.75,
+            highlight_reconstruction: 1.0,
+            highlight_method: crate::raw_highlight::HighlightMethod::Harmonic,
             full_dng_color: true,
             lens_correction: crate::lens::LensCorrectionMode::Embedded,
         }

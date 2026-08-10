@@ -119,7 +119,7 @@
 //! # Status
 //!
 //! On by default (`--highlight-reconstruction 0.75`) as part of the
-//! `archive-auto-v2` profile. Its interaction with `tone::compress_gamut` and
+//! `archive-auto-v4` profile. Its interaction with `tone::compress_gamut` and
 //! the `highlight_norm` roll-off is the specific thing grading has to check,
 //! since both act on the same highlight range — `compress_gamut` is hue-
 //! preserving, so a colour cast left in by this module survives it unchanged.
@@ -474,8 +474,8 @@ const SPATIAL_CHROMA_FULL_WEIGHT: f32 = 0.75;
 const SPATIAL_CHROMA_TOLERANCE: f32 = 0.010;
 const SPATIAL_CHROMA_MAX_SHIFT: f32 = 0.040;
 const SPATIAL_CHROMA_AREA_RADIUS: isize = 2;
-const SPATIAL_CHROMA_AREA_LOW: f32 = 0.50;
-const SPATIAL_CHROMA_AREA_HIGH: f32 = 0.75;
+const SPATIAL_CHROMA_AREA_LOW: f32 = 0.75;
+const SPATIAL_CHROMA_AREA_HIGH: f32 = 0.88;
 const SPATIAL_CHROMA_SWEEPS: usize = 240;
 const SPATIAL_CHROMA_RELAXATION: f32 = 1.0;
 const SPATIAL_CHROMA_GUIDE_K: f32 = 0.15;
@@ -552,14 +552,11 @@ fn spatial_chroma_support(confidence: [f32; 3]) -> f32 {
         .fold(0.0_f32, f32::max)
 }
 
-/// What fraction of the neighbourhood is itself underdetermined, in `[0, 1]`.
-///
 /// Transport is only meaningful where the ambiguity is area-filling: an isolated
 /// near-white speckle has no region whose boundary colour could be carried into
-/// it. Returning the fraction rather than a yes/no keeps the applied correction
-/// continuous across the edge of a region, which a hard gate could not — it left
-/// the outermost ring of a clipped area at its original hue while its immediate
-/// neighbours were fully transported, drawing a contour along every occluder.
+/// it. The returned fraction is used only at or above the old three-quarter hard
+/// gate: fading inward from there smooths the correction without extending it
+/// into the mixed leaf/sky structures that produced coloured gradient tendrils.
 fn spatial_chroma_area_support(
     confidence: &[[f32; 3]],
     width: usize,
@@ -1471,16 +1468,15 @@ mod tests {
         assert!(report.max_uv_shift <= SPATIAL_CHROMA_MAX_SHIFT + 1.0e-6);
     }
 
-    /// The area-support requirement must fade, not switch.
+    /// Mixed leaf/sky boundaries must not become transport paths.
     ///
-    /// A yes/no gate transported a region's interior at full strength and left
-    /// its outermost pixels untouched, so every clipped region kept a ring of its
-    /// original invented hue — the thin pink contour seen along occluder edges on
-    /// `_DSC1290`. The correction must instead decay across that ring: still
-    /// weaker there, because a pixel whose neighbourhood is half occluder has
-    /// weaker evidence, but never zero next to a fully corrected neighbour.
+    /// Extending the correction through neighbourhoods with only 50-75% area
+    /// support reduced scalar boundary metrics but drew implausible coloured
+    /// tendrils through real skies. Fade inward from the old 75% gate instead:
+    /// the mixed boundary remains untouched and correction grows only in the
+    /// already-area-filled interior.
     #[test]
-    fn spatial_transport_fades_across_the_edge_of_a_region_instead_of_stepping() {
+    fn spatial_transport_requires_area_filling_support_at_a_region_edge() {
         const SIZE: usize = 41;
         const LOW: usize = 10;
         const HIGH: usize = 30;
@@ -1512,14 +1508,8 @@ mod tests {
         let edge = shift(&img, SIZE / 2, LOW);
         let inside = shift(&img, SIZE / 2, LOW + 1);
         let interior = shift(&img, SIZE / 2, SIZE / 2);
-        assert!(
-            edge > 0.0,
-            "the outermost ring of the region was left at its original hue"
-        );
-        assert!(
-            edge < inside && inside <= interior + 1.0e-6,
-            "correction must grow inward, got edge {edge}, next {inside}, interior {interior}"
-        );
+        assert_eq!(edge, 0.0, "mixed boundary was used as a transport path");
+        assert!(inside > 0.0 && inside < interior, "inward fade missing");
     }
 
     /// A single clipped channel still leaves two measured channels and therefore

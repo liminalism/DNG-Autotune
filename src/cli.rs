@@ -281,15 +281,15 @@ pub struct Cli {
     pub hot_pixels: f32,
 
     /// Reconstruct clipped highlights from their surviving channels, 0 to 1.
-    /// Defaults to a conservative automatic strength. Rebuilds a channel that saturated before the others so a
+    /// The automatic harmonic estimator requires full strength. Rebuilds a channel that saturated before the others so a
     /// partially-blown highlight renders neutral instead of tinted. Owned colour
     /// path only (the default); ignored with --raw-color-path rawler.
-    #[arg(long, value_name = "STRENGTH", default_value_t = 0.75)]
+    #[arg(long, value_name = "STRENGTH", default_value_t = 1.0)]
     pub highlight_reconstruction: f32,
 
-    /// Highlight estimator. Spatial methods are first-principles, pre-demosaic
-    /// experiments and require `--highlight-reconstruction 1`.
-    #[arg(long, value_enum, default_value = "current")]
+    /// Highlight estimator. Harmonic is the automatic first-principles path;
+    /// every spatial method requires `--highlight-reconstruction 1`.
+    #[arg(long, value_enum, default_value = "harmonic")]
     pub highlight_method: HighlightMethod,
 
     /// Compatibility spelling: the DNG matrix-profile path is already automatic.
@@ -317,14 +317,10 @@ pub struct Cli {
 }
 
 impl Cli {
-    /// Existing library-facing conversion. Spatial estimators intentionally
-    /// remain available only through the binary batch pipeline.
+    /// Existing library-facing conversion. The selected estimator is retained
+    /// in `RunOptions`, so automatic and explicitly configured callers agree.
     pub fn into_options(self) -> Result<(Vec<PathBuf>, RunOptions)> {
-        let (inputs, options, method) = self.into_pipeline_options()?;
-        ensure!(
-            method == HighlightMethod::Current,
-            "--highlight-method is a CLI batch experiment and cannot be converted to RunOptions"
-        );
+        let (inputs, options, _) = self.into_pipeline_options()?;
         Ok((inputs, options))
     }
 
@@ -501,6 +497,7 @@ impl Cli {
         options.demosaic = self.demosaic;
         options.hot_pixels = self.hot_pixels;
         options.highlight_reconstruction = self.highlight_reconstruction;
+        options.highlight_method = self.highlight_method;
         options.full_dng_color = !self.no_dng_color;
         options.lens_correction = if self.no_lens_correction {
             LensCorrectionMode::Off
@@ -602,6 +599,7 @@ mod tests {
             options.highlight_reconstruction,
             expected.highlight_reconstruction
         );
+        assert_eq!(options.highlight_method, expected.highlight_method);
         assert_eq!(options.full_dng_color, expected.full_dng_color);
         assert_eq!(options.lens_correction, expected.lens_correction);
         assert_eq!(options.summary_path, expected.summary_path);
@@ -631,12 +629,19 @@ mod tests {
     #[test]
     fn spatial_highlight_methods_require_full_strength() {
         for method in ["raw-pyramid", "harmonic"] {
-            let rejected = Cli::try_parse_from(["raw-autotune", ".", "--highlight-method", method])
-                .unwrap()
-                .into_pipeline_options();
+            let rejected = Cli::try_parse_from([
+                "raw-autotune",
+                ".",
+                "--highlight-method",
+                method,
+                "--highlight-reconstruction",
+                "0.75",
+            ])
+            .unwrap()
+            .into_pipeline_options();
             assert!(
                 rejected.is_err(),
-                "{method} accepted the automatic 0.75 strength"
+                "{method} accepted partial reconstruction strength"
             );
 
             let (_, _, selected) = Cli::try_parse_from([
@@ -652,5 +657,27 @@ mod tests {
             .unwrap();
             assert!(selected.is_spatial());
         }
+
+        let (_, options, selected) = Cli::try_parse_from(["raw-autotune", "."])
+            .unwrap()
+            .into_pipeline_options()
+            .unwrap();
+        assert_eq!(selected, HighlightMethod::Harmonic);
+        assert_eq!(options.highlight_method, HighlightMethod::Harmonic);
+        assert_eq!(options.highlight_reconstruction, 1.0);
+
+        let (_, options, selected) = Cli::try_parse_from([
+            "raw-autotune",
+            ".",
+            "--highlight-method",
+            "current",
+            "--highlight-reconstruction",
+            "0.75",
+        ])
+        .unwrap()
+        .into_pipeline_options()
+        .unwrap();
+        assert_eq!(selected, HighlightMethod::Current);
+        assert_eq!(options.highlight_method, HighlightMethod::Current);
     }
 }

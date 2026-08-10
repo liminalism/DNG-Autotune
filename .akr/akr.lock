@@ -5,7 +5,7 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:d38636844daa9896724c34bbc0806b89c3576672aeba57b1f201b9c5055ba02d"
+    source_graph "sha256:4f57ee769c912149b83ce2ee1f54f06363f84eadd3aae727c1e007cc396c5411"
 }
 
 source ".akr/project.akr" {
@@ -19,18 +19,18 @@ source ".akr/records/raw-autotune/assessments.akr" {
 }
 
 source ".akr/records/raw-autotune/decisions.akr" {
-    hash "sha256:1a7917bd8593cb032eec3109603a7f98d25de8fa5f2dacab0dd37394a51b476f"
-    records 4
+    hash "sha256:ec7d9928aee852b1eb775941d7d91eacb84e1cf04e59370147927602bc435bb8"
+    records 5
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:cdfedfdf568c039aa7aa41d5f58870b58e40ebe319a0e5792a55efa9a5cbbe5e"
-    records 37
+    hash "sha256:b46ec6a2ccc96818c6ac4f6b450860a24300925ba3b7df4a0dacecbdca0eb357"
+    records 49
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
-    hash "sha256:e1ed7c4be1fbf36d8af85c8aa0b1de11927705b6ce6be393745f5398815c8014"
-    records 27
+    hash "sha256:218970d1b8e51cb2e949fa4d39c0b7f92589fdfad427b87109ffa04116273874"
+    records 39
 }
 
 source ".akr/records/raw-autotune/policies.akr" {
@@ -44,8 +44,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:5b633ad664f87f31753a2e71c2a491a0178efcb093bd8489d9fe41a115128a6f"
-    records 23
+    hash "sha256:506f856698f221f8d511ab40c179ec6591f446172a1efeed071e7c2ad06405d0"
+    records 28
 }
 
 seal @raw-autotune.assessment.sky-blowout-estimator-handoff/1 {
@@ -66,6 +66,41 @@ seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 {
 seal @raw-autotune.evidence.blown-sky-renders-white-again/1 {
     state verified
     hash "sha256:461e672a7e37d2c4968dd22b3717d6bfb54ff1dc621ba5a4c4a951b41e27eeb2"
+}
+
+seal @raw-autotune.evidence.compression-highlight-default-rollback-identity-20260810/1 {
+    state verified
+    hash "sha256:fb56a6d19b94363bcfa74bad107697d1baec2889ef39028d32abc14df43a9abb"
+}
+
+seal @raw-autotune.evidence.compression-highlight-default-rollback-tests-20260810/1 {
+    state verified
+    hash "sha256:a52f69bcd8a7214b2c9d606fe710600a5dea1fde9a913e850885f2076c435269"
+}
+
+seal @raw-autotune.evidence.compression-highlight-paired-gate-20260810/1 {
+    state verified
+    hash "sha256:3eda3606ae7bec4a9cb73bd12fb8a0b4b1055aef5e95f5dbc063931467303e30"
+}
+
+seal @raw-autotune.evidence.compression-highlight-regression-gate-20260810/1 {
+    state verified
+    hash "sha256:3e82add2c2147387b84f24b71f867d44d062ea4c228c107d093a31bbef1a98ec"
+}
+
+seal @raw-autotune.evidence.compression-highlight-rejection-recorded-20260810/1 {
+    state verified
+    hash "sha256:9de2d45f9013cdd263184eab77524a0eb1251f1b8e2ef6fe14042ad65c8771a6"
+}
+
+seal @raw-autotune.evidence.compression-highlight-sky-gate-20260810/1 {
+    state verified
+    hash "sha256:a43c7deea6f87786aac294a299bc8f1f793cc1e326769ad2ba2c420f13f34903"
+}
+
+seal @raw-autotune.evidence.compression-highlight-visual-rejection-20260810/1 {
+    state verified
+    hash "sha256:f2d41cc4ee683bdb04dc92fae30a84a31e622998e3a318c377281c0d92f28619"
 }
 
 seal @raw-autotune.evidence.compression-ratio-batch-gate/1 {
@@ -101,6 +136,31 @@ seal @raw-autotune.evidence.harmonic-abstention-full-suite-20260809/1 {
 seal @raw-autotune.evidence.harmonic-chroma-envelope-tests-20260809/1 {
     state verified
     hash "sha256:259ee0af33a083ff58ac731fdac1864af2cba798b1613efe7b5bdb1e5d4f96e9"
+}
+
+seal @raw-autotune.evidence.harmonic-core-ramp-full-suite-20260810/1 {
+    state verified
+    hash "sha256:b0ba2f929a8ea107b2969f148402332f646ebc76cec2749bedc20aae4e2b35f0"
+}
+
+seal @raw-autotune.evidence.harmonic-core-ramp-render-20260810/1 {
+    state verified
+    hash "sha256:2c8513304de8b987e3f509ae183c1ce7d9c8f48a2fab81efad2e0c3cf7e086dc"
+}
+
+seal @raw-autotune.evidence.harmonic-default-output-identity-20260810/1 {
+    state verified
+    hash "sha256:f34c4a488f803fa25d3caddb1d6a1d7b9b9436036f5e139cfceaf0aba44da15b"
+}
+
+seal @raw-autotune.evidence.harmonic-default-profile-consistency-20260810/1 {
+    state verified
+    hash "sha256:52c12c572e033506824ad3a164880e0aa7c0f79f295da16c56970143b1ef9dcf"
+}
+
+seal @raw-autotune.evidence.harmonic-default-promotion-full-gate-20260810/1 {
+    state verified
+    hash "sha256:8a58d85fe1a33080ee44d01dcb18c7bcd4d94811861922ae8a15a575c377c6bf"
 }
 
 seal @raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 {
@@ -238,6 +298,21 @@ seal @raw-autotune.evidence.uncertainty-gate-consolidation/1 {
     hash "sha256:cd3b3bde7239b0078fecc86e514e7de911650dcb997cf619dc8b8e62424b5e00"
 }
 
+seal @raw-autotune.papercut.a-chained-focused-test-build-command-exceeded/1 {
+    state verified
+    hash "sha256:6379df805b543af9fc3f194f67fc6b5d3b8198dddb2a5962597a4391970679e7"
+}
+
+seal @raw-autotune.papercut.a-combined-read-only-akr-get-for-three-known/1 {
+    state verified
+    hash "sha256:30ebf0ba55a5f732d08675e2c14b7dff638d9b55c8bec8b39fa330fee9242c7f"
+}
+
+seal @raw-autotune.papercut.a-powershell-measure-object-call-using-a/1 {
+    state verified
+    hash "sha256:2d61fc32ccbee30cfe7ffc4773bad09cebaa34194fa712cfc925b03eef399a80"
+}
+
 seal @raw-autotune.papercut.a-release-build-invocation-returned-without/1 {
     state verified
     hash "sha256:c2ab5d51ace1d908de2b12bba57757ed9235ee40d49b4033e686f76d7b23c5c9"
@@ -273,9 +348,24 @@ seal @raw-autotune.papercut.akr-revise-from-help-describes-a-replacement/1 {
     hash "sha256:b8911d8494a64de4310433da59ca3ca2ee1d48f4e07db4481ac36f66cc8fa76c"
 }
 
+seal @raw-autotune.papercut.akr-search-prints-record-identifiers-with/1 {
+    state verified
+    hash "sha256:950b80fbce59197c4859f83b1b1569ec4ec2e9b5ba00c3fe26c0f951afd928c4"
+}
+
+seal @raw-autotune.papercut.akr-supersede-documented-with-a-replacement-key/1 {
+    state verified
+    hash "sha256:303af0949b12e2a27f47ae0a3aeb7d76f52d943f1952aaef74a90d07e83f14f4"
+}
+
 seal @raw-autotune.papercut.cargo-test-accepts-one-positional-testname/1 {
     state verified
     hash "sha256:13a2f078decd221c325eb55a149bece27a591c6f1cce372af23ea119fcb5a35e"
+}
+
+seal @raw-autotune.papercut.cargo-test-accepts-only-one-positional-test/1 {
+    state verified
+    hash "sha256:05417feeceb1dbc39b9427e4404d41eeb04a6ad19e6c1731015ab88c091718ae"
 }
 
 seal @raw-autotune.papercut.fff-find-files-again-closed-its-transport-while/1 {
@@ -333,6 +423,16 @@ seal @raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp/1 {
     hash "sha256:c0067b95fc86fdcd14a8bd26cf374b5b78935b60cdba1741f8c49b499f3a14dc"
 }
 
+seal @raw-autotune.papercut.running-several-read-only-akr-search-commands/1 {
+    state verified
+    hash "sha256:a554ba4c4ff38e4492bbb814d6c657a48139ccd54832dfd52d840e87fad2e129"
+}
+
+seal @raw-autotune.papercut.the-agents-protocol-names-knowledge-context-as/1 {
+    state verified
+    hash "sha256:c55867b90958947e09a8156a83cd7500f831f1b8c7be7c26b90ff61836796af2"
+}
+
 seal @raw-autotune.papercut.the-akr-cli-search-syntax-differs-from-the-mcp/1 {
     state verified
     hash "sha256:ff7e15b7e5bd17663a10d9071a497d8b218a365f3702e6eb6947cd2278ea2858"
@@ -343,9 +443,19 @@ seal @raw-autotune.papercut.the-first-focused-cargo-test-invocation-passed/1 {
     hash "sha256:6a94cdaa958531c1366adcb5b185ca88a661683756e549d2346803a2e58f60ec"
 }
 
+seal @raw-autotune.papercut.the-first-focused-release-test-compile-exceeded/1 {
+    state verified
+    hash "sha256:7daa54c7d0d31b7c4d3be409cc82593d7f0c99fd82a9a2a32d6cb3b73af47839"
+}
+
 seal @raw-autotune.papercut.the-full-batch-process-stopped-at-the-execution/1 {
     state verified
     hash "sha256:312235f55bad0f7406a89cb70521bbd4e88541b57ce9c415db16c5725537a414"
+}
+
+seal @raw-autotune.papercut.the-jobs-8-determinism-harness-used-get/1 {
+    state verified
+    hash "sha256:4873030cdd14265d4bf67c7bee729c48ded4703fd056cd8f47b187d576f39bea"
 }
 
 seal @raw-autotune.papercut.the-knowledge-context-mcp-connector-returned/1 {
@@ -358,6 +468,11 @@ seal @raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near/1 {
     hash "sha256:c49cc925918066cd6e1085d7148a23598219fad099e7633169f937aa0acffe67"
 }
 
+seal @raw-autotune.papercut.updating-a-decision-record-initially-failed/1 {
+    state verified
+    hash "sha256:3a46c4842839cbafb1c5db53a30aa2229c4c467c43bdb092e4e49e6e432d54aa"
+}
+
 seal @raw-autotune.papercut.while-locating-hdr-sky-local-tone-and/1 {
     state verified
     hash "sha256:1ee0b5fc47cbbd2816d657eee3e68357f29278900a0f111e7d3ad5a9ec2d8974"
@@ -368,9 +483,29 @@ seal @raw-autotune.papercut.while-proposing-the-follow-on-work-record-a/1 {
     hash "sha256:ea8eb78714396b504ee678659e381f41793dcbab36dbd196d0e899d7ecf065db"
 }
 
+seal @raw-autotune.papercut.while-recording-the-visual-rejection-two-apply/1 {
+    state verified
+    hash "sha256:9747f0d2630cfae0c6e89fb0d4632e92513f0dd926b893be30ec5de4db256a8f"
+}
+
 seal @raw-autotune.papercut.while-running-three-targeted-rust-tests-i/1 {
     state verified
     hash "sha256:c5e3288ae283b176cb9f30c153936a292f2f27597c653169464a0ffd98e80ef3"
+}
+
+seal @raw-autotune.work.compression-aware-highlight-ratio-promotion/1 {
+    state superseded
+    hash "sha256:4686a6951be3dae5f730cc9a3d7e5b2ec45b3d3fa466908854e3b5ea6b70dce1"
+}
+
+seal @raw-autotune.work.compression-aware-highlight-ratio-promotion/2 {
+    state superseded
+    hash "sha256:32d1914c0f185407cf224cc829e09edee4d984bd4fd3760466daa1770a5eaa40"
+}
+
+seal @raw-autotune.work.harmonic-highlight-default-promotion/1 {
+    state completed
+    hash "sha256:e6b4c8ec8d5c3a8aa5d0b1df9a71ded58e980e7c25712a81196130d46accd30c"
 }
 
 seal @raw-autotune.work.harmonic-highlight-experiment/1 {
@@ -386,6 +521,16 @@ seal @raw-autotune.work.harmonic-highlight-experiment/2 {
 seal @raw-autotune.work.harmonic-highlight-experiment/3 {
     state superseded
     hash "sha256:e7126792ed1c5499b277a53a97ff108de68a044180058709f3cfa8ae4c3e31b2"
+}
+
+seal @raw-autotune.work.harmonic-highlight-experiment/4 {
+    state superseded
+    hash "sha256:e2908839da851f5c148d787fe2983d661493d1c2c8522eb6b670aec3f8ea12bb"
+}
+
+seal @raw-autotune.work.harmonic-highlight-experiment/5 {
+    state completed
+    hash "sha256:46101314d46a382245f8fd729154549621f6af01307c9121460a2736c3910f39"
 }
 
 seal @raw-autotune.work.highlight-boundary-fringe-diagnosis/1 {
@@ -406,6 +551,11 @@ seal @raw-autotune.work.raw-pyramid-highlight-baseline/1 {
 seal @raw-autotune.work.residual-purple-sky-external-scope/1 {
     state completed
     hash "sha256:2fa06f102ad0b32b14f497d71860ec974f25cf54920938141dd538d3d259b386"
+}
+
+seal @raw-autotune.work.rollback-compression-highlight-ratio-default/1 {
+    state completed
+    hash "sha256:2579ffa261e92849a633c302c07858709b1442c6e36fa9fbd9471fbb5c22a693"
 }
 
 seal @raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 {
