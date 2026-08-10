@@ -23,6 +23,17 @@ record raw-autotune.papercut.a-combined-read-only-akr-get-for-three-known/1 : pa
     created_at 2026-08-10
 }
 
+record raw-autotune.papercut.a-fresh-evidence-add-used-an-inferred-expansion/1 : papercut {
+    title "A fresh evidence_add used an inferred expansion of the displayed short…"
+    state verified
+    statement """
+        A fresh evidence_add used an inferred expansion of the displayed short commit id and failed AKR-G011; the exact 40-character HEAD must be obtained with git rev-parse before setting observed_at.
+        """
+    observed_at git:1fb962843f1fda2052d6a873224ed62c031c248c
+    author "codex"
+    created_at 2026-08-10
+}
+
 record raw-autotune.papercut.a-powershell-measure-object-call-using-a/1 : papercut {
     title "A PowerShell Measure-Object call using a calculated-property hashtable…"
     state verified
@@ -66,6 +77,17 @@ record raw-autotune.papercut.a-two-frame-lens-correction-profile-exact/1 : paper
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
     author "codex"
     created_at 2026-08-08
+}
+
+record raw-autotune.papercut.akr-check-passed-with-commit-none-before-commit/1 : papercut {
+    title "akr check passed with commit (none) before commit, then failed six…"
+    state verified
+    statement """
+        akr check passed with commit (none) before commit, then failed six AKR-R022 temporal checks after commit because work records and their evidence first entered Git together; the workflow needs a pre-commit diagnostic for evidence that will predate newly committed work content.
+        """
+    observed_at git:1fb962843f1fda2052d6a873224ed62c031c248c
+    author "codex"
+    created_at 2026-08-10
 }
 
 record raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 : papercut {

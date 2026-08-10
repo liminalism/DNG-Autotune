@@ -276,6 +276,20 @@ record raw-autotune.evidence.harmonic-default-output-identity-20260810/1 : evide
     author "GitHub Uploader"
 }
 
+record raw-autotune.evidence.harmonic-default-output-identity-committed-20260810/1 : evidence {
+    title "At committed code 1fb96284, ordinary jobs-1, jobs-8, and accepted core-ramp-75-88 _DSC1290 JPEGs are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0."
+    state verified
+    result pass
+    method command
+    observed_at git:1fb962843f1fda2052d6a873224ed62c031c248c
+    command "ordinary archive-auto-v4 jobs-1/jobs-8 render and SHA-256 comparison"
+    artifact ".agent/scratch/harmonic-default-v4-j1/_DSC1290_auto.jpg"
+    summary """
+        At committed code 1fb96284, ordinary jobs-1, jobs-8, and accepted core-ramp-75-88 _DSC1290 JPEGs are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0.
+        """
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.harmonic-default-profile-consistency-20260810/1 : evidence {
     title "Focused tests passed: archive-auto-v4 selects harmonic strength 1 consistently in CLI/RunOptions and in-memory defaults, while explicit current at strength 0.75 remains accepted."
     state verified
@@ -290,6 +304,20 @@ record raw-autotune.evidence.harmonic-default-profile-consistency-20260810/1 : e
     author "GitHub Uploader"
 }
 
+record raw-autotune.evidence.harmonic-default-profile-consistency-committed-20260810/1 : evidence {
+    title "At committed code 1fb96284, archive-auto-v4 selects harmonic strength 1 consistently across CLI, RunOptions, batch, interactive, and in-memory defaults; explicit current remains accepted."
+    state verified
+    result pass
+    method command
+    observed_at git:1fb962843f1fda2052d6a873224ed62c031c248c
+    command "cargo test focused automatic profile gates at commit 1fb96284"
+    artifact "src/types.rs"
+    summary """
+        At committed code 1fb96284, archive-auto-v4 selects harmonic strength 1 consistently across CLI, RunOptions, batch, interactive, and in-memory defaults; explicit current remains accepted.
+        """
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.harmonic-default-promotion-full-gate-20260810/1 : evidence {
     title "All 307 library tests and every integration/doc test passed under archive-auto-v4; clippy with warnings denied, formatting, and git diff whitespace checks were clean."
     state verified
@@ -300,6 +328,20 @@ record raw-autotune.evidence.harmonic-default-promotion-full-gate-20260810/1 : e
     artifact "src"
     summary """
         All 307 library tests and every integration/doc test passed under archive-auto-v4; clippy with warnings denied, formatting, and git diff whitespace checks were clean.
+        """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.harmonic-default-promotion-full-gate-committed-20260810/1 : evidence {
+    title "At committed code 1fb96284, all 307 library and integration/doc tests passed; clippy with warnings denied, formatting, and diff checks were clean."
+    state verified
+    result pass
+    method command
+    observed_at git:1fb962843f1fda2052d6a873224ed62c031c248c
+    command "cargo test --release; cargo clippy --release --all-targets --all-features -- -D warnings; cargo fmt --check; git diff --check"
+    artifact "src"
+    summary """
+        At committed code 1fb96284, all 307 library and integration/doc tests passed; clippy with warnings denied, formatting, and diff checks were clean.
         """
     author "GitHub Uploader"
 }

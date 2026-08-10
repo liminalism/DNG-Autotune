@@ -5,7 +5,7 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:4f57ee769c912149b83ce2ee1f54f06363f84eadd3aae727c1e007cc396c5411"
+    source_graph "sha256:f94ecb2d1bd3cee7bebedefa4a18299e92b3294dea996ff306b40eaafc91438b"
 }
 
 source ".akr/project.akr" {
@@ -24,13 +24,13 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:b46ec6a2ccc96818c6ac4f6b450860a24300925ba3b7df4a0dacecbdca0eb357"
-    records 49
+    hash "sha256:09da34dabd585adfaf437ee9a34785d21ca0b626848107235d8cb50152ad9cf0"
+    records 52
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
-    hash "sha256:218970d1b8e51cb2e949fa4d39c0b7f92589fdfad427b87109ffa04116273874"
-    records 39
+    hash "sha256:5e3aa4cb254e9d9e49e9701b201b76330213279b57ff2d12666959797322402b"
+    records 41
 }
 
 source ".akr/records/raw-autotune/policies.akr" {
@@ -44,8 +44,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:506f856698f221f8d511ab40c179ec6591f446172a1efeed071e7c2ad06405d0"
-    records 28
+    hash "sha256:642f9f28c1bbb38f934a71fc804e7242f122392eadfb0a3581991891e54fe064"
+    records 29
 }
 
 seal @raw-autotune.assessment.sky-blowout-estimator-handoff/1 {
@@ -153,14 +153,29 @@ seal @raw-autotune.evidence.harmonic-default-output-identity-20260810/1 {
     hash "sha256:f34c4a488f803fa25d3caddb1d6a1d7b9b9436036f5e139cfceaf0aba44da15b"
 }
 
+seal @raw-autotune.evidence.harmonic-default-output-identity-committed-20260810/1 {
+    state verified
+    hash "sha256:3c7f39600ae7badbc2ee0799e272100247f960bdc8e56ceb387b19466007b7c3"
+}
+
 seal @raw-autotune.evidence.harmonic-default-profile-consistency-20260810/1 {
     state verified
     hash "sha256:52c12c572e033506824ad3a164880e0aa7c0f79f295da16c56970143b1ef9dcf"
 }
 
+seal @raw-autotune.evidence.harmonic-default-profile-consistency-committed-20260810/1 {
+    state verified
+    hash "sha256:cbab712cf7b2e520b8796e6725a0e796114035d9c025b667baa9bad13e3af9d9"
+}
+
 seal @raw-autotune.evidence.harmonic-default-promotion-full-gate-20260810/1 {
     state verified
     hash "sha256:8a58d85fe1a33080ee44d01dcb18c7bcd4d94811861922ae8a15a575c377c6bf"
+}
+
+seal @raw-autotune.evidence.harmonic-default-promotion-full-gate-committed-20260810/1 {
+    state verified
+    hash "sha256:8c243c880b1b76defa6dc91be0e7dbe05345b1c64419a93b2d3a91d02904bd3f"
 }
 
 seal @raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 {
@@ -308,6 +323,11 @@ seal @raw-autotune.papercut.a-combined-read-only-akr-get-for-three-known/1 {
     hash "sha256:30ebf0ba55a5f732d08675e2c14b7dff638d9b55c8bec8b39fa330fee9242c7f"
 }
 
+seal @raw-autotune.papercut.a-fresh-evidence-add-used-an-inferred-expansion/1 {
+    state verified
+    hash "sha256:1e1d5caf72e907cd56ba53b4a0afe74a3b9e70a44d6e048d88c170a385a2a5ad"
+}
+
 seal @raw-autotune.papercut.a-powershell-measure-object-call-using-a/1 {
     state verified
     hash "sha256:2d61fc32ccbee30cfe7ffc4773bad09cebaa34194fa712cfc925b03eef399a80"
@@ -326,6 +346,11 @@ seal @raw-autotune.papercut.a-targeted-cargo-test-invocation-with-two-exact/1 {
 seal @raw-autotune.papercut.a-two-frame-lens-correction-profile-exact/1 {
     state verified
     hash "sha256:0c700ed86dd31322bf8c7298dd4517997c9eb0c99ef9cdee8a3972b53549f975"
+}
+
+seal @raw-autotune.papercut.akr-check-passed-with-commit-none-before-commit/1 {
+    state verified
+    hash "sha256:29de8487a4c83ddcf5f272bef083624c334053db1e33e046286faf568575a09a"
 }
 
 seal @raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 {
@@ -505,7 +530,7 @@ seal @raw-autotune.work.compression-aware-highlight-ratio-promotion/2 {
 
 seal @raw-autotune.work.harmonic-highlight-default-promotion/1 {
     state completed
-    hash "sha256:e6b4c8ec8d5c3a8aa5d0b1df9a71ded58e980e7c25712a81196130d46accd30c"
+    hash "sha256:5968a6d5acbab27960b4150adc0ae654f4a8b3b46fec06124256dbe3cd853550"
 }
 
 seal @raw-autotune.work.harmonic-highlight-experiment/1 {
@@ -554,8 +579,13 @@ seal @raw-autotune.work.residual-purple-sky-external-scope/1 {
 }
 
 seal @raw-autotune.work.rollback-compression-highlight-ratio-default/1 {
-    state completed
-    hash "sha256:2579ffa261e92849a633c302c07858709b1442c6e36fa9fbd9471fbb5c22a693"
+    state superseded
+    hash "sha256:32b3892d3dcdb6d4fbb041aaa8c7cf4df7c6d2c2f351585267b4cfcd55d687ec"
+}
+
+seal @raw-autotune.work.rollback-compression-highlight-ratio-default/2 {
+    state superseded
+    hash "sha256:649163cf69ebd29f6e3fb17fdfb60ca5ec12bf401ed6a939f9942bb35ae12b28"
 }
 
 seal @raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 {

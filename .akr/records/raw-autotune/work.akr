@@ -134,7 +134,10 @@ record raw-autotune.work.harmonic-highlight-default-promotion/1 : work {
                 An ordinary automatic render reproduces the accepted opt-in core-ramp-75-88 output byte-for-byte.
                 """
             method command
-            verified_by [ @raw-autotune.evidence.harmonic-default-output-identity-20260810/1 ]
+            verified_by [
+                @raw-autotune.evidence.harmonic-default-output-identity-20260810/1,
+                @raw-autotune.evidence.harmonic-default-output-identity-committed-20260810/1
+            ]
         }
         check automatic-profile-consistency {
             statement """
@@ -142,7 +145,8 @@ record raw-autotune.work.harmonic-highlight-default-promotion/1 : work {
                 """
             method command
             verified_by [
-                @raw-autotune.evidence.harmonic-default-profile-consistency-20260810/1
+                @raw-autotune.evidence.harmonic-default-profile-consistency-20260810/1,
+                @raw-autotune.evidence.harmonic-default-profile-consistency-committed-20260810/1
             ]
         }
         check promotion-regression-gate {
@@ -151,7 +155,8 @@ record raw-autotune.work.harmonic-highlight-default-promotion/1 : work {
                 """
             method command
             verified_by [
-                @raw-autotune.evidence.harmonic-default-promotion-full-gate-20260810/1
+                @raw-autotune.evidence.harmonic-default-promotion-full-gate-20260810/1,
+                @raw-autotune.evidence.harmonic-default-promotion-full-gate-committed-20260810/1
             ]
         }
     }
@@ -693,7 +698,7 @@ record raw-autotune.work.risks-rollback/1 : work {
 
 record raw-autotune.work.rollback-compression-highlight-ratio-default/1 : work {
     title "Restore compression-aware highlight ratios to opt-in"
-    state completed
+    state superseded
     scope [
         path "CHANGELOG.md",
         path "README.md",
@@ -737,6 +742,56 @@ record raw-autotune.work.rollback-compression-highlight-ratio-default/1 : work {
             ]
         }
     }
+    author "GitHub Uploader"
+}
+
+record raw-autotune.work.rollback-compression-highlight-ratio-default/2 : work {
+    title "Restore compression-aware highlight ratios to opt-in"
+    state superseded
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "output-tests/**",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/highlight.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Roll back the archive-auto-v3 promotion of highlight color/luminance ratio exponent 0.6 after visual review found that the affected skies remain unnatural and show colored gradient tendrils. Restore archive-auto-v2 and exponent 1.0 as the unattended CLI and in-memory defaults. Keep exponent 0.6 available only through the existing explicit expert flag.
+
+        Preserve the visually preferred `output-tests/20260809-191941-p0800/harmonic-spatial-chroma/` result as the tuning baseline. Do not treat aggregate saturation, green-deficit, or near-white metrics as sufficient promotion evidence when the sky topology is visibly wrong.
+        """
+    acceptance {
+        check automatic-path-restored {
+            statement """
+                The ordinary CLI and in-memory automatic profile use archive-auto-v2 with exponent 1.0, while explicit exponent 0.6 remains available and changes only the opt-in render.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.compression-highlight-default-rollback-identity-20260810/1
+            ]
+        }
+        check rejection-recorded {
+            statement """
+                AKR and the changelog record that visual sky topology rejected the automatic promotion despite favorable aggregate metrics, and identify the 20260809 harmonic render as the next tuning baseline.
+                """
+            method observation
+            verified_by [
+                @raw-autotune.evidence.compression-highlight-rejection-recorded-20260810/1
+            ]
+        }
+        check rollback-regression-gate {
+            statement """
+                Focused tests, formatting, clippy, AKR build/check, and a byte-identity comparison against the prior unattended output pass.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.compression-highlight-default-rollback-tests-20260810/1
+            ]
+        }
+    }
+    supersedes [ @raw-autotune.work.rollback-compression-highlight-ratio-default/1 ]
     author "GitHub Uploader"
 }
 
