@@ -785,6 +785,19 @@ record raw-autotune.evidence.scene-artifacts-gitignored/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.scene-corpus-rtx4060/1 : evidence {
+    title "Primary scene corpus completed on RTX 4060"
+    state verified
+    result pass
+    method command
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 target/release/raw-autotune raw/raw_3rd_batch raw/raw_at_night raw/raw_extremely_bright --dry-run --semantic --summary .agent/scratch/scene-corpus-primary-20260813.json"
+    artifact ".agent/scratch/scene-corpus-primary-20260813.json"
+    summary """
+        Observed 74/74 RAW files analyzed (58 day/mixed, 8 night, 8 extreme-bright), zero skipped or failed; both scene models reported lege-gpu Vulkan on the NVIDIA GeForce RTX 4060 Laptop GPU and no fallback.
+        """
+}
+
 record raw-autotune.evidence.scene-perception-validation-20260813/1 : evidence {
     title "Both feature configurations passed clippy with warnings denied; the default release suite passed 324 unit tests and all integration tests."
     state verified
@@ -794,6 +807,45 @@ record raw-autotune.evidence.scene-perception-validation-20260813/1 : evidence {
     command "cargo clippy --all-targets --release -- -D warnings && cargo clippy --all-targets --release --features semantic -- -D warnings && cargo test --release"
     summary """
         Both feature configurations passed clippy with warnings denied; the default release suite passed 324 unit tests and all integration tests.
+        """
+}
+
+record raw-autotune.evidence.scene-policy-remains-observational/1 : evidence {
+    title "Semantic policy remained observational"
+    state verified
+    result pass
+    method command
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    command "jq '[.files[] | select((.scene.policy_adjustments | length) != 0)] | length' .agent/scratch/scene-corpus-primary-20260813.json"
+    artifact ".agent/scratch/scene-corpus-primary-20260813.json"
+    summary """
+        Observed zero files with semantic policy adjustments across the 74-image corpus; the detector did not change rendering.
+        """
+}
+
+record raw-autotune.evidence.scene-policy-report/1 : evidence {
+    title "Scene evidence usefulness report"
+    state verified
+    result pass
+    method command
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    command "python3 tools/scene_policy_report.py .agent/scratch/scene-corpus-primary-20260813.json --output .agent/scratch/scene-corpus-primary-report.json"
+    artifact ".agent/scratch/scene-corpus-primary-report.json"
+    summary """
+        Observed a deterministic report covering region distributions, correlations, group splits, per-image RAW/encoder hints, guardrails, and failure modes: sky 42/74, vegetation 65/74, building/interior 64/74, face 0/74, person 1/74 below gate; four high-confidence clipped-sky cases and four conservative chroma-profile candidates.
+        """
+}
+
+record raw-autotune.evidence.scene-policy-report-tests/1 : evidence {
+    title "Scene policy report tests passed"
+    state verified
+    result pass
+    method command
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    command "python3 -m unittest tools.test_scene_policy_report -v && python3 -m py_compile tools/scene_policy_report.py tools/test_scene_policy_report.py"
+    artifact "tools/test_scene_policy_report.py"
+    summary """
+        Observed two unit tests pass and both report modules byte-compile successfully.
         """
 }
 
@@ -820,6 +872,18 @@ record raw-autotune.evidence.scene-rtx4060-vulkan-20260813/1 : evidence {
     artifact ".agent/scratch/scene-gpu-4060-20260813/_DSC1289_auto.json"
     summary """
         wgpu enumerated three Linux adapters, selected NVIDIA GeForce RTX 4060 Laptop GPU (Vulkan, DiscreteGpu), and both scene model provenance entries recorded that backend with no CPU fallback.
+        """
+}
+
+record raw-autotune.evidence.scene-visual-audit/1 : evidence {
+    title "Scene mask visual audit"
+    state verified
+    result pass
+    method observation
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    artifact ".agent/scratch/scene-visual-audit-contact-sheet.png"
+    summary """
+        Observed that the four clipped-sky candidates align their sky masks with real sky in the proxy; vegetation/building masks are broadly spatially plausible. The corpus's sole person response is a low-confidence false positive on a faucet still life, so face/person exposure and encoder ROI remain unusable.
         """
 }
 

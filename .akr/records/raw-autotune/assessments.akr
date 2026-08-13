@@ -1,6 +1,41 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.assessment.scene-evidence-usefulness/1 : assessment {
+    title "Scene evidence is useful first for sky-localized highlight work, not subject policy"
+    state superseded
+    scope [ path "src/pipeline.rs", path "src/scene.rs", path "tools/scene_policy_report.py" ]
+    statement """
+        On the 74-image primary day/night/extreme-bright RAW corpus, scene evidence adds useful spatial context for bounded sky-highlight luma ablations and possible 10-bit highlight-profile hints: sky was detected in 42 files and four high-confidence sky regions contained material clipping, with visual masks aligned to real sky. Vegetation and building/interior masks are useful measurement strata but do not yet justify render changes. Night grain retention is already determined by RAW low-light analysis, semantic chroma hints still need encoder ablation, and face/person exposure or ROI policy is unsupported (zero faces and one low-confidence false-positive person response).
+        """
+    confidence high
+    as_of git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    derived_from [ @raw-autotune.work.scene-evidence-corpus-policy/2 ]
+    supported_by [
+        @raw-autotune.evidence.scene-corpus-rtx4060/1,
+        @raw-autotune.evidence.scene-policy-report/1,
+        @raw-autotune.evidence.scene-visual-audit/1
+    ]
+}
+
+record raw-autotune.assessment.scene-evidence-usefulness/2 : assessment {
+    title "Scene evidence is useful first for sky-localized highlight work, not subject policy"
+    state verified
+    scope [ path "src/pipeline.rs", path "src/scene.rs" ]
+    statement """
+        On the 74-image primary day/night/extreme-bright RAW corpus, scene evidence adds useful spatial context for bounded sky-highlight luma ablations and possible 10-bit highlight-profile hints: sky was detected in 42 files and four high-confidence sky regions contained material clipping, with visual masks aligned to real sky. Vegetation and building/interior masks are useful measurement strata but do not yet justify render changes. Night grain retention is already determined by RAW low-light analysis, semantic chroma hints still need encoder ablation, and face/person exposure or ROI policy is unsupported (zero faces and one low-confidence false-positive person response).
+        """
+    confidence high
+    as_of git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    derived_from [ @raw-autotune.work.scene-evidence-corpus-policy/2 ]
+    supersedes [ @raw-autotune.assessment.scene-evidence-usefulness/1 ]
+    supported_by [
+        @raw-autotune.evidence.scene-corpus-rtx4060/1,
+        @raw-autotune.evidence.scene-policy-report/1,
+        @raw-autotune.evidence.scene-visual-audit/1
+    ]
+}
+
 record raw-autotune.assessment.sky-blowout-estimator-handoff/1 : assessment {
     title "Sky blowout estimator handoff attribution"
     state verified

@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:c7a3f600341f4ecaf770967101c91f2beae2f401ab63704869323883139fb69e"
+    source_graph "sha256:802f7abcd594f0227564c8be44d0bcf4cb10bc2c92c117595ca5466a03e07375"
 }
 
 source ".akr/project.akr" {
@@ -14,8 +14,8 @@ source ".akr/project.akr" {
 }
 
 source ".akr/records/raw-autotune/assessments.akr" {
-    hash "sha256:cbe85e3fde10c03aab3c5b3118a3db9a9b834717d7e8659017ea771f91604e0a"
-    records 1
+    hash "sha256:dff4304316f948fb8d8ecc8f7f9e63cb1357e9d21705187df2228d92a4bbe1b3"
+    records 3
 }
 
 source ".akr/records/raw-autotune/decisions.akr" {
@@ -24,13 +24,13 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:cfc5403a52adf6ac0fb7bb88a710ec4300ef4044744a2ca6bd3ebc507d587b9b"
-    records 72
+    hash "sha256:b1cf0447b3a2354042a10266b31ec859346999e1481c19a6c4c4be7303cffb8d"
+    records 77
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
-    hash "sha256:6ea70e8b1f086b7948e3eb377ead76cd60f3751fcd0ef503e5cd3856cd000672"
-    records 50
+    hash "sha256:ab673600d21d53b502893b237fc2397a856232162434629075978d807650d104"
+    records 51
 }
 
 source ".akr/records/raw-autotune/policies.akr" {
@@ -44,8 +44,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:e64d6d368532ea47cd8d8eb65c6500ea0f4bd5af30d6433c22c3ecac977c2da3"
-    records 36
+    hash "sha256:14c8451b09274f84c9cb64a32f34b38761c9c064f3208183419e85d709247900"
+    records 38
 }
 
 resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
@@ -82,6 +82,16 @@ resolution @raw-autotune.work.scene-perception-infra/1 {
     slot implements
     to @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1
     hash "sha256:6c5d7df560168ec083fd639cfca2f0e5e217b6abc5a163b54edd7a6ef5d949a1"
+}
+
+seal @raw-autotune.assessment.scene-evidence-usefulness/1 {
+    state superseded
+    hash "sha256:ca03c29a0c31bd2b0d09b8edc8544eda047fe091cf547c39267b960895ab992a"
+}
+
+seal @raw-autotune.assessment.scene-evidence-usefulness/2 {
+    state verified
+    hash "sha256:b3146e32ff0524afb40e4ca0326cabb0858c99cc5977e7e7db14eae457116d67"
 }
 
 seal @raw-autotune.assessment.sky-blowout-estimator-handoff/1 {
@@ -379,9 +389,29 @@ seal @raw-autotune.evidence.scene-artifacts-gitignored/1 {
     hash "sha256:e7d7e2f69871891a33d1232974e32394adbc948c0a3f7eb9a6ce59e8727b393b"
 }
 
+seal @raw-autotune.evidence.scene-corpus-rtx4060/1 {
+    state verified
+    hash "sha256:d6fcd343a649fca2863b9a669a5419733186ed2c9d5d0d350415f775dd9641a3"
+}
+
 seal @raw-autotune.evidence.scene-perception-validation-20260813/1 {
     state verified
     hash "sha256:3f62cafac101924d70df1a9a8888b26598068880c95e20a5ff010dff691e3ae9"
+}
+
+seal @raw-autotune.evidence.scene-policy-remains-observational/1 {
+    state verified
+    hash "sha256:14932d7eeca5501688811bf8baa5d6e3f11ccde0a839363914cbb3dd983aaac4"
+}
+
+seal @raw-autotune.evidence.scene-policy-report/1 {
+    state verified
+    hash "sha256:3e19e12b9334bec981e8f02087010059f378fa14e191e1c68abd6530840f5b16"
+}
+
+seal @raw-autotune.evidence.scene-policy-report-tests/1 {
+    state verified
+    hash "sha256:72c428237715304de636adb5989c66023a89555d60b66adf448447f99dbb4649"
 }
 
 seal @raw-autotune.evidence.scene-rtx4060-pixel-identity-20260813/1 {
@@ -392,6 +422,11 @@ seal @raw-autotune.evidence.scene-rtx4060-pixel-identity-20260813/1 {
 seal @raw-autotune.evidence.scene-rtx4060-vulkan-20260813/1 {
     state verified
     hash "sha256:f804b9fec35e4ab3a4d7363921b18669759ca5eb09d28feb2277b967de0002ff"
+}
+
+seal @raw-autotune.evidence.scene-visual-audit/1 {
+    state verified
+    hash "sha256:9c4a9365f7003300ea1ce194abcc887a429d1bf5655368af174a58ea97090e74"
 }
 
 seal @raw-autotune.evidence.semantic-inference-is-observational-20260813/1 {
@@ -624,6 +659,11 @@ seal @raw-autotune.papercut.the-akr-cli-search-syntax-differs-from-the-mcp/1 {
     hash "sha256:ff7e15b7e5bd17663a10d9071a497d8b218a365f3702e6eb6947cd2278ea2858"
 }
 
+seal @raw-autotune.papercut.the-corpus-smoke-command-combined-summary-file/1 {
+    state verified
+    hash "sha256:0d3a65d18abcde7da5f01bd93d18b8e6e7bc251e8eafaa562182e888f55b035a"
+}
+
 seal @raw-autotune.papercut.the-first-focused-cargo-test-invocation-passed/1 {
     state verified
     hash "sha256:6a94cdaa958531c1366adcb5b185ca88a661683756e549d2346803a2e58f60ec"
@@ -782,6 +822,16 @@ seal @raw-autotune.work.rollback-compression-highlight-ratio-default/1 {
 seal @raw-autotune.work.rollback-compression-highlight-ratio-default/2 {
     state superseded
     hash "sha256:649163cf69ebd29f6e3fb17fdfb60ca5ec12bf401ed6a939f9942bb35ae12b28"
+}
+
+seal @raw-autotune.work.scene-evidence-corpus-policy/1 {
+    state superseded
+    hash "sha256:ee435b644e699e55ee87e5c74e3f5d3b9880d21ee2f997fd5c22efbd5b15d8d3"
+}
+
+seal @raw-autotune.work.scene-evidence-corpus-policy/2 {
+    state completed
+    hash "sha256:6b6b8a68938ffe48cb34083f6dbccd271eef9133b5bc2fa3d43063287f448e79"
 }
 
 seal @raw-autotune.work.scene-model-pack/1 {

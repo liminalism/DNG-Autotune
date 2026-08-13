@@ -927,6 +927,93 @@ record raw-autotune.work.rollback-compression-highlight-ratio-default/2 : work {
     author "GitHub Uploader"
 }
 
+record raw-autotune.work.scene-evidence-corpus-policy/1 : work {
+    title "Qualify scene evidence for bounded RAW and encoder policy"
+    state superseded
+    scope [
+        path "src/pipeline.rs",
+        path "src/scene.rs",
+        path "src/types.rs",
+        path "tests/**",
+        path "tools/scene_policy_report.py"
+    ]
+    intent """
+        Run the observational scene detector across the named RAW test groups on the Linux RTX 4060, quantify mask confidence and region statistics against existing RAW analysis and output-quality metrics, and identify only signals stable enough for bounded RAW tuning or eventual encoder-profile hints. Keep render changes disabled until a candidate can be evaluated against feature-off pixels and false-positive controls.
+        """
+    acceptance {
+        check corpus-run {
+            statement """
+                The named day, extreme-bright, and night RAW test groups produce scene sidecars on the RTX 4060 without inference fallback or failed files.
+                """
+            method command
+            command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 cargo run --release -- <stratified RAW corpus> --semantic --sidecar"
+        }
+        check no-premature-policy {
+            statement """
+                Scene inference remains observational until the corpus report supports a bounded policy and explicit false-positive controls.
+                """
+            method observation
+        }
+        check usefulness-report {
+            statement """
+                A reproducible corpus report summarizes region coverage, confidence, RAW-analysis correlations, failure modes, and candidate bounded RAW/encoder actions.
+                """
+            method command
+            command "python3 tools/scene_policy_report.py <semantic sidecars>"
+        }
+    }
+    after [
+        @raw-autotune.work.scene-perception-default-lege-gpu/1,
+        @raw-autotune.work.scene-perception-infra/1
+    ]
+}
+
+record raw-autotune.work.scene-evidence-corpus-policy/2 : work {
+    title "Qualify scene evidence for bounded RAW and encoder policy"
+    state completed
+    scope [
+        path "src/pipeline.rs",
+        path "src/scene.rs",
+        path "src/types.rs",
+        path "tests/**",
+        path "tools/scene_policy_report.py",
+        path "tools/test_scene_policy_report.py"
+    ]
+    intent """
+        Run the observational scene detector across the named RAW test groups on the Linux RTX 4060, quantify mask confidence and region statistics against existing RAW analysis and output-quality metrics, and identify only signals stable enough for bounded RAW tuning or eventual encoder-profile hints. Keep render changes disabled until a candidate can be evaluated against feature-off pixels and false-positive controls.
+        """
+    acceptance {
+        check corpus-run {
+            statement """
+                The named day, extreme-bright, and night RAW test groups produce scene sidecars on the RTX 4060 without inference fallback or failed files.
+                """
+            method command
+            command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 cargo run --release -- <stratified RAW corpus> --semantic --sidecar"
+            verified_by [ @raw-autotune.evidence.scene-corpus-rtx4060/1 ]
+        }
+        check no-premature-policy {
+            statement """
+                Scene inference remains observational until the corpus report supports a bounded policy and explicit false-positive controls.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.scene-policy-remains-observational/1 ]
+        }
+        check usefulness-report {
+            statement """
+                A reproducible corpus report summarizes region coverage, confidence, RAW-analysis correlations, failure modes, and candidate bounded RAW/encoder actions.
+                """
+            method command
+            command "python3 tools/scene_policy_report.py <semantic sidecars>"
+            verified_by [ @raw-autotune.evidence.scene-policy-report/1 ]
+        }
+    }
+    after [
+        @raw-autotune.work.scene-perception-default-lege-gpu/1,
+        @raw-autotune.work.scene-perception-infra/1
+    ]
+    supersedes [ @raw-autotune.work.scene-evidence-corpus-policy/1 ]
+}
+
 record raw-autotune.work.scene-model-pack/1 : work {
     title "Scene-model pack: fetch, prepare, remap"
     state superseded
