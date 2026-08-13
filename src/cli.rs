@@ -212,6 +212,18 @@ pub struct Cli {
     )]
     pub semantic_sky_highlights: f32,
 
+    /// Experimental mask-gated reduction of measured positive Oklab `a`
+    /// (magenta) in bright/reconstructed sky. This is not white balance: the
+    /// semantic label supplies only the spatial feather, luminance and the
+    /// blue/yellow ratio are preserved, and 0 is off.
+    #[arg(
+        long,
+        value_name = "0..1",
+        default_value_t = 0.0,
+        requires = "semantic"
+    )]
+    pub semantic_sky_chroma: f32,
+
     /// Directory containing prepared scene_image ONNX graphs.
     #[arg(long, value_name = "DIR", requires = "semantic")]
     pub semantic_model_dir: Option<PathBuf>,
@@ -403,6 +415,14 @@ impl Cli {
             "--semantic-sky-highlights requires --semantic"
         );
         ensure!(
+            self.semantic_sky_chroma.is_finite() && (0.0..=1.0).contains(&self.semantic_sky_chroma),
+            "--semantic-sky-chroma must be between 0 and 1"
+        );
+        ensure!(
+            self.semantic_sky_chroma == 0.0 || self.semantic,
+            "--semantic-sky-chroma requires --semantic"
+        );
+        ensure!(
             self.preview_exposure
                 .is_none_or(|value| value.is_finite() && (0.0..=1.0).contains(&value)),
             "--preview-exposure must be between 0 and 1"
@@ -540,6 +560,7 @@ impl Cli {
         options.dump_stages = self.dump_stages;
         options.semantic = self.semantic;
         options.semantic_sky_highlights = self.semantic_sky_highlights;
+        options.semantic_sky_chroma = self.semantic_sky_chroma;
         if let Some(directory) = self.semantic_model_dir {
             options.semantic_model_dir = directory;
         }
@@ -665,6 +686,35 @@ mod tests {
     }
 
     #[test]
+    fn semantic_sky_chroma_is_explicit_and_bounded() {
+        assert!(Cli::try_parse_from(["raw-autotune", ".", "--semantic-sky-chroma", "1"]).is_err());
+        let options = Cli::try_parse_from([
+            "raw-autotune",
+            ".",
+            "--semantic",
+            "--semantic-sky-chroma",
+            "1",
+        ])
+        .unwrap()
+        .into_options()
+        .unwrap()
+        .1;
+        assert_eq!(options.semantic_sky_chroma, 1.0);
+
+        for value in ["-0.01", "1.01", "NaN", "inf"] {
+            let accepted = Cli::try_parse_from([
+                "raw-autotune",
+                ".",
+                "--semantic",
+                "--semantic-sky-chroma",
+                value,
+            ])
+            .is_ok_and(|cli| cli.into_options().is_ok());
+            assert!(!accepted, "{value} was accepted");
+        }
+    }
+
+    #[test]
     fn ordinary_cli_uses_the_unattended_archive_profile() {
         let options = Cli::try_parse_from(["raw-autotune", "."])
             .unwrap()
@@ -695,6 +745,7 @@ mod tests {
         );
         assert_eq!(options.highlight_method, expected.highlight_method);
         assert_eq!(options.semantic_sky_highlights, 0.0);
+        assert_eq!(options.semantic_sky_chroma, 0.0);
         assert_eq!(options.full_dng_color, expected.full_dng_color);
         assert_eq!(options.lens_correction, expected.lens_correction);
         assert_eq!(options.summary_path, expected.summary_path);

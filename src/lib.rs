@@ -13,6 +13,7 @@ pub mod cli;
 pub mod color;
 pub mod demosaic;
 pub mod dngcolor;
+pub mod encoder_hints;
 pub mod files;
 pub mod highlight;
 pub mod hotpixels;

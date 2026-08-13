@@ -203,6 +203,44 @@ record raw-autotune.evidence.default-lege-gpu-build-20260813/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.encoder-hints-api-tests/1 : evidence {
+    title "Encoder hints API and report tests"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "cargo test -q --all-targets && python3 -m unittest tools.test_grade_sky tools.test_scene_policy_report"
+    summary """
+        All 335 Rust unit tests and every integration/tool test passed. Encoder hints are versioned, compactly serialized, derive independently, expose in-memory/source-coordinate mask access, and exclude unsupported face/person ROI.
+        """
+}
+
+record raw-autotune.evidence.encoder-hints-real-frames/1 : evidence {
+    title "Encoder hints on clipped-sky frames"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "jq '{schema_version, files: [.files[] | {input, encoder_hints}]}' .agent/scratch/sky-chroma/on-summary.json"
+    artifact ".agent/scratch/sky-chroma/on-summary.json"
+    summary """
+        All four clipped-sky frames emitted schema-1 encoder hints with minimum 10-bit and sky/vegetation ROI descriptors; only DSC1283 requested 4:4:4 or high-quality 4:2:2 from its independent chroma gate, and no face/person ROI was emitted.
+        """
+}
+
+record raw-autotune.evidence.encoder-hints-render-neutral/1 : evidence {
+    title "Encoder hints leave output pixels unchanged"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "cmp -s .agent/scratch/sky-chroma/off-check/_DSC1272_auto.png .agent/scratch/sky-ablation/off/_DSC1272_auto.png"
+    artifact ".agent/scratch/sky-chroma/off-check/_DSC1272_auto.png"
+    summary """
+        Adding always-derived encoder hints changed report schema but left the default rendered PNG byte-identical, SHA-256 11dc0d8f92f1f9e490aee01758b56f1bf65fcf69492412a5e89b05b4f7609035.
+        """
+}
+
 record raw-autotune.evidence.exact-lens-profile-gate/1 : evidence {
     title "Three integration tests passed: the Sony ILCE-7C / FE 24mm F2.8 G resolves exactly, off is inert, and external-profile RGB and clip-confidence planes receive identical resampling."
     state superseded
@@ -947,6 +985,32 @@ record raw-autotune.evidence.semantic-sky-camera-grade/1 : evidence {
     artifact ".agent/scratch/sky-ablation/camera-grade.json"
     summary """
         Median sky error versus paired camera JPEG moved from -0.42 EV off to -0.43 EV on while ground stayed -0.05 EV; sky green deficit moved 22.9% to 23.0%. The mask is useful, but this compression direction does not merit default promotion.
+        """
+}
+
+record raw-autotune.evidence.semantic-sky-chroma-ablation/1 : evidence {
+    title "Mask-gated sky chroma RTX 4060 ablation"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 target/release/raw-autotune raw/raw_3rd_batch/_DSC1272.ARW raw/raw_3rd_batch/_DSC1283.ARW raw/raw_3rd_batch/_DSC1288.ARW raw/raw_3rd_batch/_DSC1289.ARW --semantic --semantic-sky-chroma 1 --sharpen 0 --format png --dump-stages .agent/scratch/sky-chroma/on-dumps --summary .agent/scratch/sky-chroma/on-summary.json"
+    artifact ".agent/scratch/sky-chroma/on-summary.json"
+    summary """
+        RTX 4060 Vulkan processed 4/4. The mask gated positive-Oklab-a correction to 0%-7.27% of each frame, preserved global exposure, luminance and blue/yellow ratio by construction, and visual inspection found changes confined to bright/reconstructed sky topology.
+        """
+}
+
+record raw-autotune.evidence.semantic-sky-chroma-camera-grade/1 : evidence {
+    title "Camera-paired sky chroma grade"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "python3 tools/grade_sky.py .agent/scratch/sky-ablation/off .agent/scratch/sky-chroma/on --reference raw/jpeg --json .agent/scratch/sky-chroma/camera-grade.json --per-frame"
+    artifact ".agent/scratch/sky-chroma/camera-grade.json"
+    summary """
+        Median sky and ground EV stayed -0.42/-0.05 and sky green deficit stayed 22.9%; purple fraction improved modestly 0.48% to 0.46%, including 0.36% to 0.31% on DSC1288. The result supports opt-in diagnostics only, not default sky white balance.
         """
 }
 

@@ -179,9 +179,9 @@ fn dump_stage(
 /// configuration is worse than none.
 fn limitations(options: &RunOptions, color: &ColorReport, luma_denoised: bool) -> Vec<String> {
     let mut limitations = if options.semantic {
-        if options.semantic_sky_highlights > 0.0 {
+        if options.semantic_sky_highlights > 0.0 || options.semantic_sky_chroma > 0.0 {
             vec![
-                "experimental dense-mask sky highlight policy may apply bounded scene-linear luminance compression; global exposure and chromaticity remain unchanged, and no depth model is available"
+                "experimental dense-mask sky policy may apply bounded scene-linear luminance and/or measured-magenta correction; global exposure remains unchanged, sky semantics never infer a white point, and no depth model is available"
                     .to_string(),
             ]
         } else {
@@ -333,6 +333,7 @@ fn process_job_inner(
             chroma_denoise: None,
             luma_denoise: None,
             scene: None,
+            encoder_hints: None,
             sharpen: None,
             reference: None,
             color: None,
@@ -612,7 +613,7 @@ fn process_job_inner(
     // balance. The default remains report-only. The explicit sky experiment
     // retains the dense mask as a full-resolution EV map but applies it only
     // after global analysis, so semantics cannot move the exposure controller.
-    let (scene, semantic_sky_highlights) = if options.semantic {
+    let (scene, semantic_sky_highlights, semantic_sky_chroma) = if options.semantic {
         let (proxy, mut evidence) = crate::scene::observe(
             &linear,
             working_to_display.as_ref(),
@@ -645,6 +646,27 @@ fn process_job_inner(
         } else {
             None
         };
+        let sky_chroma_map = if options.semantic_sky_chroma > 0.0 {
+            let map = crate::scene::build_sky_chroma_map(
+                &linear,
+                working_to_display.as_ref(),
+                highlight_uncertainty.as_deref(),
+                &proxy,
+                &evidence,
+                options.semantic_sky_chroma,
+            )?;
+            let report = map.report().clone();
+            if report.affected_pixels > 0 {
+                evidence.policy_adjustments.push(format!(
+                    "{}: dense sky mask reduced measured positive Oklab a on {} pixel(s) at strength {:.2}",
+                    report.version, report.affected_pixels, report.strength,
+                ));
+            }
+            evidence.sky_chroma_adjustment = Some(report);
+            Some(map)
+        } else {
+            None
+        };
         if let Some(directory) = &options.dump_stages
             && let Err(error) = crate::scene::dump(directory, &job.input, &proxy, &evidence.masks)
         {
@@ -658,6 +680,14 @@ fn process_job_inner(
         {
             eprintln!(
                 "DUMP  {}: semantic sky policy diagnostics failed: {error:#}",
+                job.input.display()
+            );
+        }
+        if let (Some(directory), Some(map)) = (&options.dump_stages, &sky_chroma_map)
+            && let Err(error) = crate::scene::dump_sky_chroma_map(directory, &job.input, map)
+        {
+            eprintln!(
+                "DUMP  {}: semantic sky chroma diagnostics failed: {error:#}",
                 job.input.display()
             );
         }
@@ -676,9 +706,9 @@ fn process_job_inner(
                 format!(" | {} inference error(s)", evidence.inference_errors.len())
             }
         );
-        (Some(evidence), sky_map)
+        (Some(evidence), sky_map, sky_chroma_map)
     } else {
-        (None, None)
+        (None, None, None)
     };
 
     // Applied to developed scene-linear RGB, on top of the camera's as-shot
@@ -747,6 +777,8 @@ fn process_job_inner(
     // At the default 1.0 the multiplication is exact, so output does not move.
     parameters.saturation *= options.saturation_scale;
     parameters.highlight_color_ratio_exponent = options.highlight_color_ratio_exponent;
+    let encoder_hints =
+        crate::encoder_hints::EncoderProfileHints::derive(&analysis, scene.as_ref());
     let parameters = parameters;
 
     // The comparison the corpus work actually runs on. Available here, before
@@ -805,6 +837,27 @@ fn process_job_inner(
                 directory,
                 &job.input,
                 "04-after-semantic-sky",
+                &linear,
+                working_to_display.as_ref(),
+            );
+        }
+    }
+    if let Some(map) = &semantic_sky_chroma {
+        map.apply(&mut linear)?;
+        let report = map.report();
+        eprintln!(
+            "SKY-C {}: eligible {} | affected {:.3}% | mean Oklab a reduction {:.5} | strength {:.2}",
+            job.input.display(),
+            report.eligible,
+            report.affected_fraction * 100.0,
+            report.mean_a_reduction,
+            report.strength,
+        );
+        if let Some(directory) = &options.dump_stages {
+            dump_stage(
+                directory,
+                &job.input,
+                "05-after-semantic-sky-chroma",
                 &linear,
                 working_to_display.as_ref(),
             );
@@ -936,6 +989,7 @@ fn process_job_inner(
             chroma_denoise,
             luma_denoise: luma_denoise.clone(),
             scene,
+            encoder_hints: Some(encoder_hints),
             sharpen: None,
             reference,
             color: Some(color),
@@ -1044,7 +1098,7 @@ fn process_job_inner(
         let sidecar = Sidecar {
             schema_version: crate::types::report_schema_version(
                 options.semantic,
-                options.semantic_sky_highlights > 0.0,
+                options.semantic_sky_highlights > 0.0 || options.semantic_sky_chroma > 0.0,
             ),
             application: "raw-autotune".to_string(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1067,6 +1121,7 @@ fn process_job_inner(
             chroma_denoise: chroma_denoise.clone(),
             luma_denoise: luma_denoise.clone(),
             scene: scene.clone(),
+            encoder_hints: encoder_hints.clone(),
             sharpen: sharpen.clone(),
             preview: preview.clone(),
             reference: reference.clone(),
@@ -1102,6 +1157,7 @@ fn process_job_inner(
         chroma_denoise,
         luma_denoise,
         scene,
+        encoder_hints: Some(encoder_hints),
         sharpen,
         reference,
         color: Some(color),

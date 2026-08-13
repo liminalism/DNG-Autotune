@@ -94,6 +94,59 @@ record raw-autotune.work.compression-aware-highlight-ratio-promotion/2 : work {
     author "GitHub Uploader"
 }
 
+record raw-autotune.work.encoder-profile-hints-api/1 : work {
+    title "Expose render-neutral encoder profile hints"
+    state completed
+    scope [
+        path "src/api.rs",
+        path "src/encoder_hints.rs",
+        path "src/main.rs",
+        path "src/pipeline.rs",
+        path "src/types.rs",
+        path "tests/**",
+        path "tools/**"
+    ]
+    intent """
+        Define a versioned, serializable encoder-profile hints API derived from RAW analysis and semantic region evidence, independent of any encoder implementation. Hints must describe minimum bit depth, chroma fidelity, grain preservation, and optional spatial ROI inputs with explicit reasons/confidence, while never changing rendered pixels. Expose the result through the library API and JSON reports so future encoder work can live separately.
+        """
+    acceptance {
+        check guardrails {
+            statement """
+                Unsupported face/person ROI signals and absent semantic evidence do not produce semantic ROI priority.
+                """
+            method command
+            command "cargo test -q --lib encoder_hints"
+            verified_by [ @raw-autotune.evidence.encoder-hints-api-tests/1 ]
+        }
+        check render-neutral {
+            statement """
+                Enabling semantic observation and deriving encoder hints does not change rendered pixels.
+                """
+            method command
+            command "cargo test -q --all-targets"
+            verified_by [ @raw-autotune.evidence.encoder-hints-render-neutral/1 ]
+        }
+        check report-plumbing {
+            statement """
+                Batch summaries and sidecars expose the same structured hint schema without embedding dense confidence buffers.
+                """
+            method command
+            command "cargo test -q --lib encoder_profile"
+            verified_by [ @raw-autotune.evidence.encoder-hints-real-frames/1 ]
+        }
+        check versioned-api {
+            statement """
+                A public versioned encoder-hints type is deterministic, serializable, and independently constructible from analysis and optional scene evidence.
+                """
+            method command
+            command "cargo test -q --lib encoder_hints"
+            verified_by [ @raw-autotune.evidence.encoder-hints-api-tests/1 ]
+        }
+    }
+    depends_on [ @raw-autotune.work.scene-evidence-corpus-policy/2 ]
+    derived_from [ @raw-autotune.assessment.scene-evidence-usefulness/2 ]
+}
+
 record raw-autotune.work.goal/1 : work {
     title "Goal"
     state proposed
@@ -1175,6 +1228,109 @@ record raw-autotune.work.scene-perception-infra/1 : work {
     }
     after [ @raw-autotune.work.lege-gpu-onnx-session, @raw-autotune.work.scene-model-pack ]
     implements [ @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs ]
+}
+
+record raw-autotune.work.semantic-sky-chromatic-ablation/1 : work {
+    title "Evaluate mask-gated sky chromatic correction"
+    state superseded
+    scope [
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/pipeline.rs",
+        path "src/scene.rs",
+        path "src/types.rs",
+        path "tests/**",
+        path "tools/**"
+    ]
+    intent """
+        Determine whether the dense sky mask can safely gate a sky-only chromatic correction. Do not infer a white point from the semantic label or neutralize natural blue. Any opt-in experiment must be driven by measured reconstruction uncertainty or the known bright-sky magenta/green-deficit signature, remain bounded and spatially feathered, preserve luminance/global exposure, and be evaluated against paired camera JPEGs before promotion.
+        """
+    acceptance {
+        check bounded-colour-only {
+            statement """
+                Any implemented experiment is deterministic, bounded, spatially weighted, preserves luminance within tolerance, and is zero/off by default.
+                """
+            method command
+            command "cargo test -q --lib scene::tests"
+        }
+        check camera-paired-ablation {
+            statement """
+                Candidate frames are graded against paired camera JPEGs for sky green deficit, purple fraction, brightness, and ground isolation.
+                """
+            method observation
+        }
+        check no-concealment {
+            statement """
+                No default promotion conceals the known highlight-reconstruction discontinuity; a negative or inconclusive experiment remains diagnostic-only.
+                """
+            method observation
+        }
+        check not-semantic-whitepoint {
+            statement """
+                The semantic sky label is used only as a spatial gate; correction direction comes from measured colour evidence, not an assumed neutral sky.
+                """
+            method observation
+        }
+    }
+    depends_on [ @raw-autotune.work.semantic-sky-highlight-ablation/2 ]
+    derived_from [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 ]
+}
+
+record raw-autotune.work.semantic-sky-chromatic-ablation/2 : work {
+    title "Evaluate mask-gated sky chromatic correction"
+    state completed
+    scope [
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/pipeline.rs",
+        path "src/scene.rs",
+        path "src/types.rs",
+        path "tests/**",
+        path "tools/**"
+    ]
+    intent """
+        Determine whether the dense sky mask can safely gate a sky-only chromatic correction. Do not infer a white point from the semantic label or neutralize natural blue. Any opt-in experiment must be driven by measured reconstruction uncertainty or the known bright-sky magenta/green-deficit signature, remain bounded and spatially feathered, preserve luminance/global exposure, and be evaluated against paired camera JPEGs before promotion.
+        """
+    note """
+        The positive-Oklab-a experiment is spatially safe and directionally helpful but too modest and too entangled with the known reconstruction defect for default promotion. It remains explicit opt-in: median sky/ground EV and green deficit were unchanged, while purple fraction moved only 0.48% to 0.46%. The correct durable fix remains upstream reconstruction; semantics can gate diagnostics but must never define a sky white point.
+        """
+    acceptance {
+        check bounded-colour-only {
+            statement """
+                Any implemented experiment is deterministic, bounded, spatially weighted, preserves luminance within tolerance, and is zero/off by default.
+                """
+            method command
+            command "cargo test -q --lib scene::tests"
+            verified_by [
+                @raw-autotune.evidence.encoder-hints-api-tests/1,
+                @raw-autotune.evidence.semantic-sky-chroma-ablation/1
+            ]
+        }
+        check camera-paired-ablation {
+            statement """
+                Candidate frames are graded against paired camera JPEGs for sky green deficit, purple fraction, brightness, and ground isolation.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.semantic-sky-chroma-camera-grade/1 ]
+        }
+        check no-concealment {
+            statement """
+                No default promotion conceals the known highlight-reconstruction discontinuity; a negative or inconclusive experiment remains diagnostic-only.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.semantic-sky-chroma-camera-grade/1 ]
+        }
+        check not-semantic-whitepoint {
+            statement """
+                The semantic sky label is used only as a spatial gate; correction direction comes from measured colour evidence, not an assumed neutral sky.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.semantic-sky-chroma-ablation/1 ]
+        }
+    }
+    depends_on [ @raw-autotune.work.semantic-sky-highlight-ablation/2 ]
+    derived_from [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 ]
+    supersedes [ @raw-autotune.work.semantic-sky-chromatic-ablation/1 ]
 }
 
 record raw-autotune.work.semantic-sky-highlight-ablation/1 : work {

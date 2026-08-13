@@ -290,6 +290,7 @@ fn run_pipeline(
                     chroma_denoise: report.chroma_denoise,
                     luma_denoise: report.luma_denoise,
                     scene: report.scene,
+                    encoder_hints: report.encoder_hints,
                     sharpen: report.sharpen,
                     reference: report.reference,
                     color: report.color,
@@ -422,6 +423,7 @@ fn run_pipeline(
                     chroma_denoise: report.chroma_denoise,
                     luma_denoise: report.luma_denoise,
                     scene: report.scene,
+                    encoder_hints: report.encoder_hints,
                     sharpen: report.sharpen,
                     reference: report.reference,
                     color: report.color,
@@ -451,6 +453,7 @@ fn run_pipeline(
                     chroma_denoise: None,
                     luma_denoise: None,
                     scene: None,
+                    encoder_hints: None,
                     sharpen: None,
                     reference: None,
                     color: None,
@@ -592,7 +595,7 @@ fn run_pipeline(
         let summary = types::BatchSummary {
             schema_version: types::report_schema_version(
                 options.semantic,
-                options.semantic_sky_highlights > 0.0,
+                options.semantic_sky_highlights > 0.0 || options.semantic_sky_chroma > 0.0,
             ),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             automatic_profile_version: types::RunOptions::AUTO_PROFILE_VERSION.to_string(),

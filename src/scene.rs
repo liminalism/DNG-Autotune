@@ -25,6 +25,9 @@ const SKY_CONFIDENCE_FULL: f32 = 0.95;
 const SKY_HIGHLIGHT_START: f32 = 0.75;
 const SKY_HIGHLIGHT_FULL: f32 = 1.25;
 const SKY_MAX_COMPRESSION_EV: f32 = 0.35;
+const SKY_MAGENTA_A_START: f32 = 0.005;
+const SKY_MAGENTA_A_FULL: f32 = 0.015;
+const SKY_MAX_MAGENTA_REDUCTION: f32 = 0.80;
 
 /// Fixed, neutral sRGB view used only for perception.
 #[derive(Debug, Clone)]
@@ -189,6 +192,8 @@ pub struct SceneEvidence {
     pub policy_adjustments: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sky_highlight_adjustment: Option<SkyHighlightAdjustmentReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sky_chroma_adjustment: Option<SkyChromaAdjustmentReport>,
     pub masks: RegionMasks,
 }
 
@@ -211,6 +216,25 @@ pub struct SkyHighlightAdjustmentReport {
     pub correction_mean_abs_ev: f32,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct SkyChromaAdjustmentReport {
+    pub version: &'static str,
+    pub strength: f32,
+    pub eligible: bool,
+    pub correction_axis: &'static str,
+    pub preserves: [&'static str; 2],
+    pub sky_area_fraction: f32,
+    pub sky_mean_confidence: f32,
+    pub sky_clipped_fraction: f32,
+    pub magenta_a_start: f32,
+    pub magenta_a_full: f32,
+    pub max_magenta_reduction: f32,
+    pub affected_pixels: usize,
+    pub affected_fraction: f32,
+    pub mean_positive_a_before: f32,
+    pub mean_a_reduction: f32,
+}
+
 /// Full-resolution scene-linear EV corrections derived from the dense sky
 /// confidence plane. One scalar is applied to all three channels at each pixel.
 pub struct SkyHighlightMap {
@@ -218,6 +242,67 @@ pub struct SkyHighlightMap {
     height: usize,
     corrections_ev: Vec<f32>,
     report: SkyHighlightAdjustmentReport,
+}
+
+/// Full-resolution weights for the opt-in sky chroma experiment. The semantic
+/// label locates pixels only; the direction comes from measured positive Oklab
+/// `a` (magenta), never from an assumed neutral sky white point.
+pub struct SkyChromaMap {
+    width: usize,
+    height: usize,
+    weights: Vec<f32>,
+    working_to_display: Option<Matrix3>,
+    display_to_working: Option<Matrix3>,
+    report: SkyChromaAdjustmentReport,
+}
+
+impl SkyChromaMap {
+    pub fn report(&self) -> &SkyChromaAdjustmentReport {
+        &self.report
+    }
+
+    pub fn weights(&self) -> &[f32] {
+        &self.weights
+    }
+
+    /// Reduce only the measured magenta opponent component. Oklab `b/L` is
+    /// held fixed so natural sky blue is not neutralized, and linear luminance
+    /// is restored exactly before conversion back to the working space.
+    pub fn apply(&self, image: &mut LinearImage) -> Result<()> {
+        ensure!(
+            image.width == self.width
+                && image.height == self.height
+                && image.pixels.len() == self.weights.len(),
+            "sky chroma map must match the image it adjusts"
+        );
+        image
+            .pixels
+            .par_iter_mut()
+            .zip(self.weights.par_iter())
+            .for_each(|(pixel, weight)| {
+                if *weight == 0.0 {
+                    return;
+                }
+                let display = matrix_pixel(self.working_to_display.as_ref(), *pixel);
+                let before_y = luminance(display);
+                let lab = crate::oklab::from_linear_srgb(display);
+                if lab.a <= 0.0 {
+                    return;
+                }
+                let mut corrected = crate::oklab::to_linear_srgb(crate::oklab::Oklab {
+                    l: lab.l,
+                    a: lab.a * (1.0 - SKY_MAX_MAGENTA_REDUCTION * *weight),
+                    b: lab.b,
+                });
+                let after_y = luminance(corrected);
+                if before_y.is_finite() && after_y.is_finite() && after_y.abs() > 1.0e-8 {
+                    let gain = before_y / after_y;
+                    corrected.iter_mut().for_each(|channel| *channel *= gain);
+                }
+                *pixel = matrix_pixel(self.display_to_working.as_ref(), corrected);
+            });
+        Ok(())
+    }
 }
 
 impl SkyHighlightMap {
@@ -368,6 +453,7 @@ pub fn observe(
         inference_errors: Vec::new(),
         policy_adjustments: Vec::new(),
         sky_highlight_adjustment: None,
+        sky_chroma_adjustment: None,
         masks: RegionMasks::blank(),
     };
 
@@ -528,6 +614,124 @@ pub fn build_sky_highlight_map(
             affected_fraction: affected_pixels as f32 / pixel_count as f32,
             correction_min_ev,
             correction_mean_abs_ev,
+        },
+    })
+}
+
+/// Build a bounded chromatic correction from measured sky pixels.
+///
+/// This is intentionally not sky white balance: sky confidence contributes
+/// only a spatial feather. A pixel must independently contain highlight or
+/// reconstruction evidence and a positive Oklab `a` component before it moves.
+pub fn build_sky_chroma_map(
+    image: &LinearImage,
+    working_to_display: Option<&Matrix3>,
+    reconstruction_uncertainty: Option<&[f32]>,
+    proxy: &SemanticProxy,
+    evidence: &SceneEvidence,
+    strength: f32,
+) -> Result<SkyChromaMap> {
+    ensure!(
+        strength.is_finite() && (0.0..=1.0).contains(&strength) && strength > 0.0,
+        "semantic sky chroma strength must be above zero and at most one"
+    );
+    ensure!(
+        image.width == proxy.source_width && image.height == proxy.source_height,
+        "semantic proxy must describe the image adjusted by its mask"
+    );
+    ensure!(
+        reconstruction_uncertainty.is_none_or(|map| map.len() == image.pixels.len()),
+        "highlight uncertainty map must match the semantic source image"
+    );
+    let sky_mask = evidence
+        .masks
+        .masks
+        .iter()
+        .find(|mask| mask.kind == RegionKind::Sky)
+        .context("scene evidence has no sky confidence mask")?;
+    let sky_stats = evidence
+        .regions
+        .iter()
+        .find(|region| region.kind == RegionKind::Sky)
+        .context("scene evidence has no sky region statistics")?;
+    let sky_clipped_fraction = sky_stats.clipped_fraction.unwrap_or(0.0);
+    let eligible = sky_stats.area_fraction >= SKY_POLICY_MIN_AREA
+        && sky_stats.mean_confidence >= SKY_POLICY_MIN_MEAN_CONFIDENCE
+        && sky_clipped_fraction >= SKY_POLICY_MIN_CLIPPED_FRACTION;
+    let display_to_working = working_to_display
+        .copied()
+        .map(|matrix| crate::color::invert3(matrix).context("working/display matrix is singular"))
+        .transpose()?;
+
+    let mut weights = vec![0.0_f32; image.pixels.len()];
+    if eligible {
+        weights
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, weight)| {
+                let source_x = index % image.width;
+                let source_y = index / image.width;
+                let confidence = mask_confidence_at_source(sky_mask, proxy, source_x, source_y);
+                let sky_weight = smoothstep(
+                    (confidence - SKY_CONFIDENCE_START)
+                        / (SKY_CONFIDENCE_FULL - SKY_CONFIDENCE_START),
+                );
+                if sky_weight == 0.0 {
+                    return;
+                }
+                let display = matrix_pixel(working_to_display, image.pixels[index]);
+                let maximum = display.into_iter().fold(f32::NEG_INFINITY, f32::max);
+                let brightness_weight = smoothstep(
+                    (maximum - SKY_HIGHLIGHT_START) / (SKY_HIGHLIGHT_FULL - SKY_HIGHLIGHT_START),
+                );
+                let uncertainty_weight = reconstruction_uncertainty
+                    .and_then(|map| map.get(index))
+                    .map_or(0.0, |value| smoothstep(*value / 0.5));
+                let evidence_weight = brightness_weight.max(uncertainty_weight);
+                let magenta_a = crate::oklab::from_linear_srgb(display).a;
+                let magenta_weight = smoothstep(
+                    (magenta_a - SKY_MAGENTA_A_START) / (SKY_MAGENTA_A_FULL - SKY_MAGENTA_A_START),
+                );
+                *weight = strength * sky_weight * evidence_weight * magenta_weight;
+            });
+    }
+
+    let mut affected_pixels = 0usize;
+    let mut positive_a = 0.0_f64;
+    let mut a_reduction = 0.0_f64;
+    for (index, weight) in weights.iter().copied().enumerate() {
+        if weight <= 1.0e-6 {
+            continue;
+        }
+        affected_pixels += 1;
+        let display = matrix_pixel(working_to_display, image.pixels[index]);
+        let a = crate::oklab::from_linear_srgb(display).a.max(0.0);
+        positive_a += a as f64;
+        a_reduction += (a * SKY_MAX_MAGENTA_REDUCTION * weight) as f64;
+    }
+    let affected_denominator = affected_pixels.max(1) as f64;
+    Ok(SkyChromaMap {
+        width: image.width,
+        height: image.height,
+        weights,
+        working_to_display: working_to_display.copied(),
+        display_to_working,
+        report: SkyChromaAdjustmentReport {
+            version: "sky-magenta-opponent-v1",
+            strength,
+            eligible,
+            correction_axis: "positive_oklab_a",
+            preserves: ["linear_luminance", "oklab_b_over_l"],
+            sky_area_fraction: sky_stats.area_fraction,
+            sky_mean_confidence: sky_stats.mean_confidence,
+            sky_clipped_fraction,
+            magenta_a_start: SKY_MAGENTA_A_START,
+            magenta_a_full: SKY_MAGENTA_A_FULL,
+            max_magenta_reduction: SKY_MAX_MAGENTA_REDUCTION,
+            affected_pixels,
+            affected_fraction: affected_pixels as f32 / image.pixels.len().max(1) as f32,
+            mean_positive_a_before: (positive_a / affected_denominator) as f32,
+            mean_a_reduction: (a_reduction / affected_denominator) as f32,
         },
     })
 }
@@ -987,6 +1191,24 @@ pub fn dump_sky_highlight_map(directory: &Path, input: &Path, map: &SkyHighlight
     Ok(())
 }
 
+/// Write a full-resolution 8-bit visualization of the sky chroma weight.
+pub fn dump_sky_chroma_map(directory: &Path, input: &Path, map: &SkyChromaMap) -> Result<()> {
+    std::fs::create_dir_all(directory)?;
+    let stem = input
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "unnamed".to_string());
+    let pixels: Vec<u8> = map
+        .weights
+        .iter()
+        .map(|weight| (weight.clamp(0.0, 1.0) * 255.0 + 0.5) as u8)
+        .collect();
+    let image = image::GrayImage::from_raw(map.width as u32, map.height as u32, pixels)
+        .ok_or_else(|| anyhow!("invalid full-resolution sky chroma policy buffer"))?;
+    image.save(directory.join(format!("{stem}-semantic-sky-chroma.png")))?;
+    Ok(())
+}
+
 pub fn model_dir(path: &Path) -> PathBuf {
     if path.as_os_str().is_empty() {
         PathBuf::from(DEFAULT_MODEL_DIR)
@@ -1032,6 +1254,7 @@ mod tests {
             inference_errors: Vec::new(),
             policy_adjustments: Vec::new(),
             sky_highlight_adjustment: None,
+            sky_chroma_adjustment: None,
             masks,
         }
     }
@@ -1137,5 +1360,42 @@ mod tests {
         assert!(after[0] < before[0]);
         assert!((before[0] * after[1] - before[1] * after[0]).abs() < 1.0e-6);
         assert!((before[0] * after[2] - before[2] * after[0]).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn sky_chroma_policy_uses_magenta_evidence_without_neutralizing_blue() {
+        let source = image(4, 2, [1.0, 0.45, 1.0]);
+        let proxy = build_proxy(&source, None).unwrap();
+        let evidence = eligible_evidence(&proxy);
+        let map = build_sky_chroma_map(&source, None, None, &proxy, &evidence, 1.0).unwrap();
+        assert!(
+            map.weights()
+                .iter()
+                .all(|weight| (0.0..=1.0).contains(weight))
+        );
+        assert!(map.report().affected_pixels > 0);
+
+        let before = source.pixels[0];
+        let before_y = luminance(before);
+        let before_lab = crate::oklab::from_linear_srgb(before);
+        let mut adjusted = source;
+        map.apply(&mut adjusted).unwrap();
+        let after = adjusted.pixels[0];
+        let after_lab = crate::oklab::from_linear_srgb(after);
+        assert!(after_lab.a < before_lab.a);
+        assert!((luminance(after) - before_y).abs() < 1.0e-5);
+        assert!((after_lab.b / after_lab.l - before_lab.b / before_lab.l).abs() < 1.0e-5);
+    }
+
+    #[test]
+    fn sky_chroma_policy_leaves_non_sky_pixels_exactly_untouched() {
+        let source = image(4, 2, [1.0, 0.45, 1.0]);
+        let proxy = build_proxy(&source, None).unwrap();
+        let mut evidence = eligible_evidence(&proxy);
+        evidence.masks.get_mut(RegionKind::Sky).confidence.fill(0);
+        let map = build_sky_chroma_map(&source, None, None, &proxy, &evidence, 1.0).unwrap();
+        let mut adjusted = source.clone();
+        map.apply(&mut adjusted).unwrap();
+        assert_eq!(adjusted.pixels, source.pixels);
     }
 }

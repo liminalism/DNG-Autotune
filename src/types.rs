@@ -46,14 +46,13 @@ pub const MID_GRAY: f32 = 0.18;
 ///   `analysis.capture_ev100` input, and the optional `luma_denoise` block,
 ///   present only when the frame was noisy enough for the luminance denoiser to
 ///   run. `luma_denoise` and `capture_ev100` are omitted when absent.
-pub const REPORT_SCHEMA_VERSION: u32 = 19;
-/// Schema 20 added observational semantic evidence. Schema 21 adds the optional
-/// mask-resolved sky-highlight luma experiment report. Both are emitted only
-/// when semantic evidence is requested. Keeping the
-/// feature-off report at 19 makes the observational feature genuinely absent
-/// from legacy dry-run summaries rather than changing their version alone.
-pub const SEMANTIC_REPORT_SCHEMA_VERSION: u32 = 20;
-pub const SEMANTIC_POLICY_REPORT_SCHEMA_VERSION: u32 = 21;
+/// 22 adds the render-neutral `encoder_hints` contract to every completed or
+///   analyzed file. Schemas 20/21 were the short-lived semantic-only reports.
+pub const REPORT_SCHEMA_VERSION: u32 = 22;
+/// Schema 23 carries observational semantic evidence plus encoder hints. Schema
+/// 24 additionally records an explicitly enabled semantic render experiment.
+pub const SEMANTIC_REPORT_SCHEMA_VERSION: u32 = 23;
+pub const SEMANTIC_POLICY_REPORT_SCHEMA_VERSION: u32 = 24;
 
 pub const fn report_schema_version(semantic: bool, semantic_policy: bool) -> u32 {
     if semantic_policy {
@@ -266,6 +265,9 @@ pub struct RunOptions {
     /// Experimental strength for dense-mask sky highlight luminance
     /// compression. Requires semantic inference and is zero by default.
     pub semantic_sky_highlights: f32,
+    /// Experimental mask-gated positive-Oklab-a reduction for bright sky.
+    /// This is not a semantic white-point estimate and is zero by default.
+    pub semantic_sky_chroma: f32,
     /// Directory containing prepared scene_image ONNX graphs.
     pub semantic_model_dir: PathBuf,
     /// Copy the source EXIF into the output and embed the sRGB ICC profile.
@@ -353,6 +355,7 @@ impl RunOptions {
             dump_stages: None,
             semantic: false,
             semantic_sky_highlights: 0.0,
+            semantic_sky_chroma: 0.0,
             semantic_model_dir: PathBuf::from(crate::scene::DEFAULT_MODEL_DIR),
             write_metadata: true,
             noise_scan: None,
@@ -617,6 +620,9 @@ pub struct Sidecar {
     /// inference was requested.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scene: Option<crate::scene::SceneEvidence>,
+    /// Render-neutral guidance for a downstream encoder. Dense confidence
+    /// bytes remain available through the in-memory API, not duplicated here.
+    pub encoder_hints: crate::encoder_hints::EncoderProfileHints,
     /// Output sharpening, when the frame was clean enough to take it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sharpen: Option<crate::sharpen::SharpenReport>,
@@ -644,7 +650,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn semantic_policy_has_an_explicit_report_schema() {
+    fn encoder_profile_report_schema_is_explicit() {
         assert_eq!(report_schema_version(false, false), REPORT_SCHEMA_VERSION);
         assert_eq!(
             report_schema_version(true, false),
@@ -719,6 +725,8 @@ pub struct ProcessReport {
     pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
     /// Scene evidence when optional inference was requested.
     pub scene: Option<crate::scene::SceneEvidence>,
+    /// Encoder guidance when the file reached analysis.
+    pub encoder_hints: Option<crate::encoder_hints::EncoderProfileHints>,
     /// Output sharpening, when one was applied.
     pub sharpen: Option<crate::sharpen::SharpenReport>,
     /// The camera's own JPEG of this capture, measured against ours.
@@ -762,6 +770,8 @@ pub struct SummaryEntry {
     pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scene: Option<crate::scene::SceneEvidence>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoder_hints: Option<crate::encoder_hints::EncoderProfileHints>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sharpen: Option<crate::sharpen::SharpenReport>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -78,6 +78,9 @@ pub struct RenderOptions {
     /// Experimental dense-mask sky highlight luminance compression, 0 to 1.
     /// Requires `semantic`; zero is byte-identical to the observational path.
     pub semantic_sky_highlights: f32,
+    /// Experimental mask-gated removal of measured sky magenta, 0 to 1.
+    /// Does not infer a white point or neutralize the blue/yellow axis.
+    pub semantic_sky_chroma: f32,
     /// Directory containing prepared scene_image ONNX graphs.
     pub semantic_model_dir: std::path::PathBuf,
 }
@@ -124,6 +127,7 @@ impl RenderOptions {
             lens_correction: options.lens_correction,
             semantic: options.semantic,
             semantic_sky_highlights: options.semantic_sky_highlights,
+            semantic_sky_chroma: options.semantic_sky_chroma,
             semantic_model_dir: options.semantic_model_dir.clone(),
         }
     }
@@ -161,6 +165,14 @@ impl RenderOptions {
         ensure!(
             self.semantic_sky_highlights == 0.0 || self.semantic,
             "semantic_sky_highlights requires semantic inference"
+        );
+        ensure!(
+            self.semantic_sky_chroma.is_finite() && (0.0..=1.0).contains(&self.semantic_sky_chroma),
+            "semantic_sky_chroma must be between 0 and 1"
+        );
+        ensure!(
+            self.semantic_sky_chroma == 0.0 || self.semantic,
+            "semantic_sky_chroma requires semantic inference"
         );
         ensure!(
             self.preview_exposure
@@ -231,12 +243,37 @@ pub struct RenderReport {
     pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scene: Option<crate::scene::SceneEvidence>,
+    /// Versioned, render-neutral guidance for a downstream encoder.
+    pub encoder_hints: crate::encoder_hints::EncoderProfileHints,
     pub sharpen: Option<crate::sharpen::SharpenReport>,
     pub color: ColorReport,
     pub guidance_mode: GuidanceMode,
     pub analysis: AnalysisStats,
     pub parameters: ToneParams,
     pub measured: crate::metrics::OutputStats,
+}
+
+impl RenderReport {
+    /// Borrow a dense semantic confidence plane selected by the encoder-hints
+    /// contract. This keeps encoder integration independent of scene-model
+    /// internals while avoiding confidence bytes in JSON sidecars.
+    pub fn encoder_confidence_mask(&self, kind: crate::scene::RegionKind) -> Option<&[u8]> {
+        self.scene
+            .as_ref()
+            .and_then(|scene| self.encoder_hints.confidence_mask(scene, kind))
+    }
+
+    /// Sample an encoder ROI hint directly in rendered pixel coordinates.
+    pub fn encoder_confidence_at(
+        &self,
+        kind: crate::scene::RegionKind,
+        x: usize,
+        y: usize,
+    ) -> Option<f32> {
+        self.scene
+            .as_ref()
+            .and_then(|scene| self.encoder_hints.confidence_at_source(scene, kind, x, y))
+    }
 }
 
 /// Self-describing packed image ready to hand to another crate.
@@ -390,7 +427,7 @@ pub fn render_file_rgb16(
     // One shared perception hook for API and CLI at the same pipeline
     // boundary. Only the explicit sky experiment retains a render input, and
     // it is applied after analysis so the global controller cannot consume it.
-    let (scene, semantic_sky_highlights) = if options.semantic {
+    let (scene, semantic_sky_highlights, semantic_sky_chroma) = if options.semantic {
         let (proxy, mut evidence) = crate::scene::observe(
             &linear,
             working_to_display.as_ref(),
@@ -423,9 +460,30 @@ pub fn render_file_rgb16(
         } else {
             None
         };
-        (Some(evidence), sky_map)
+        let sky_chroma_map = if options.semantic_sky_chroma > 0.0 {
+            let map = crate::scene::build_sky_chroma_map(
+                &linear,
+                working_to_display.as_ref(),
+                highlight_uncertainty.as_deref(),
+                &proxy,
+                &evidence,
+                options.semantic_sky_chroma,
+            )?;
+            let report = map.report().clone();
+            if report.affected_pixels > 0 {
+                evidence.policy_adjustments.push(format!(
+                    "{}: dense sky mask reduced measured positive Oklab a on {} pixel(s) at strength {:.2}",
+                    report.version, report.affected_pixels, report.strength,
+                ));
+            }
+            evidence.sky_chroma_adjustment = Some(report);
+            Some(map)
+        } else {
+            None
+        };
+        (Some(evidence), sky_map, sky_chroma_map)
     } else {
-        (None, None)
+        (None, None, None)
     };
     let local_white_balance = (options.local_white_balance > 0.0)
         .then(|| crate::whitebalance::apply(&mut linear, options.local_white_balance))
@@ -449,6 +507,8 @@ pub fn render_file_rgb16(
     )?;
     parameters.saturation *= options.saturation_scale;
     parameters.highlight_color_ratio_exponent = options.highlight_color_ratio_exponent;
+    let encoder_hints =
+        crate::encoder_hints::EncoderProfileHints::derive(&analysis, scene.as_ref());
     let guidance_mode = if preview.is_some() && preview_strength > 0.0 {
         GuidanceMode::PreviewGuided
     } else {
@@ -463,6 +523,9 @@ pub fn render_file_rgb16(
         options.luma_denoise,
     );
     if let Some(map) = &semantic_sky_highlights {
+        map.apply(&mut linear)?;
+    }
+    if let Some(map) = &semantic_sky_chroma {
         map.apply(&mut linear)?;
     }
 
@@ -546,6 +609,7 @@ pub fn render_file_rgb16(
             chroma_denoise,
             luma_denoise,
             scene,
+            encoder_hints,
             sharpen,
             color,
             guidance_mode,
