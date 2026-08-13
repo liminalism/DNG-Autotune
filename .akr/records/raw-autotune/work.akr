@@ -1177,6 +1177,128 @@ record raw-autotune.work.scene-perception-infra/1 : work {
     implements [ @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs ]
 }
 
+record raw-autotune.work.semantic-sky-highlight-ablation/1 : work {
+    title "Ablate mask-resolved sky highlight luma policy"
+    state superseded
+    scope [
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/pipeline.rs",
+        path "src/scene.rs",
+        path "src/types.rs",
+        path "tests/**",
+        path "tools/**"
+    ]
+    intent """
+        Add an explicit experimental control that resamples the per-pixel semantic sky confidence mask from its letterboxed 512 proxy into scene-linear image coordinates, intersects it with measured highlight/reconstruction evidence, and applies only a small bounded luminance compression while preserving RGB chromaticity. Keep semantic inference and the adjustment opt-in; feature-off output must remain byte-identical. Evaluate the four validated clipped-sky files against feature-off output with spatial metrics and visual inspection before any default or public policy promotion.
+        """
+    acceptance {
+        check bounded-luma-only {
+            statement """
+                The experiment changes only qualifying bright sky pixels, preserves per-pixel RGB chromaticity within numerical tolerance, is deterministic, and obeys its configured luminance cap.
+                """
+            method command
+        }
+        check feature-off-identity {
+            statement """
+                Semantic disabled and experimental strength zero preserve the established output byte-for-byte on representative sky input.
+                """
+            method command
+        }
+        check four-frame-ablation {
+            statement """
+                Feature-off versus mask-resolved outputs for _DSC1272, _DSC1283, _DSC1288, and _DSC1289 are measured and visually reviewed, with a recorded promote/reject/refine conclusion.
+                """
+            method observation
+        }
+        check mask-resolved {
+            statement """
+                Tests demonstrate that sky confidence is sampled per image pixel with correct letterbox inversion, bilinear bounds, confidence gating, and no padding spill.
+                """
+            method command
+        }
+        check no-default-promotion {
+            statement """
+                The unattended default remains unchanged and the sidecar explicitly identifies any experimental semantic policy adjustment.
+                """
+            method command
+        }
+    }
+    after [ @raw-autotune.work.scene-evidence-corpus-policy/2 ]
+    depends_on [ @raw-autotune.work.scene-perception-infra/1 ]
+    derived_from [ @raw-autotune.assessment.scene-evidence-usefulness/2 ]
+}
+
+record raw-autotune.work.semantic-sky-highlight-ablation/2 : work {
+    title "Ablate mask-resolved sky highlight luma policy"
+    state completed
+    scope [
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/pipeline.rs",
+        path "src/scene.rs",
+        path "src/types.rs",
+        path "tests/**",
+        path "tools/**"
+    ]
+    intent """
+        Add an explicit experimental control that resamples the per-pixel semantic sky confidence mask from its letterboxed 512 proxy into scene-linear image coordinates, intersects it with measured highlight/reconstruction evidence, and applies only a small bounded luminance compression while preserving RGB chromaticity. Keep semantic inference and the adjustment opt-in; feature-off output must remain byte-identical. Evaluate the four validated clipped-sky files against feature-off output with spatial metrics and visual inspection before any default or public policy promotion.
+        """
+    note """
+        The mask-resolved mechanism is validated and useful for spatial measurement and future encoder ROI/profile hints. The tested RAW luma-compression policy remains opt-in and is not promoted: paired camera grading showed the candidate skies were already darker, with median sky error moving from -0.42 EV to -0.43 EV and green deficit from 22.9% to 23.0%, while ground stayed unchanged at -0.05 EV.
+        """
+    acceptance {
+        check bounded-luma-only {
+            statement """
+                The map is deterministic, capped at 0.35 EV, and scales scene-linear RGB uniformly.
+                """
+            method command
+            command "cargo test -q --lib scene::tests"
+            verified_by [ @raw-autotune.evidence.semantic-sky-mask-tests/1 ]
+        }
+        check feature-off-identity {
+            statement """
+                Observation-only and feature-absent renders are byte-identical.
+                """
+            method command
+            command "cmp -s .agent/scratch/sky-ablation/no-semantic/_DSC1272_auto.png .agent/scratch/sky-ablation/off/_DSC1272_auto.png"
+            verified_by [ @raw-autotune.evidence.semantic-sky-feature-off/1 ]
+        }
+        check four-frame-ablation {
+            statement """
+                Four clipped-sky frames have GPU output, full-resolution maps, spatial metrics, and visual comparison.
+                """
+            method observation
+            verified_by [
+                @raw-autotune.evidence.semantic-sky-camera-grade/1,
+                @raw-autotune.evidence.semantic-sky-four-frame-ablation/1
+            ]
+        }
+        check mask-resolved {
+            statement """
+                Tests prove letterbox inversion and spatial sky-mask selection at source resolution.
+                """
+            method command
+            command "cargo test -q --all-targets"
+            verified_by [ @raw-autotune.evidence.semantic-sky-mask-tests/1 ]
+        }
+        check no-default-promotion {
+            statement """
+                Default behavior remains unchanged and the failed luma direction is recorded without promotion.
+                """
+            method observation
+            verified_by [
+                @raw-autotune.evidence.semantic-sky-camera-grade/1,
+                @raw-autotune.evidence.semantic-sky-feature-off/1
+            ]
+        }
+    }
+    after [ @raw-autotune.work.scene-evidence-corpus-policy/2 ]
+    depends_on [ @raw-autotune.work.scene-perception-infra/1 ]
+    derived_from [ @raw-autotune.assessment.scene-evidence-usefulness/2 ]
+    supersedes [ @raw-autotune.work.semantic-sky-highlight-ablation/1 ]
+}
+
 record raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 : work {
     title "Slice 1 — Diagnostic dumps and clip-state map (Phase A.1)"
     state completed

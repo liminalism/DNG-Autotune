@@ -33,6 +33,22 @@ class GradeSkyTest(unittest.TestCase):
             self.assertEqual(unpaired, 0)
             measure.assert_called_once_with(frame, reference)
 
+    def test_grade_accepts_lossless_png_ablation_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rendered = root / "rendered"
+            rendered.mkdir()
+            frame = rendered / "_DSC1288_auto.png"
+            frame.touch()
+            reference = root / "_DSC1288.JPG"
+            reference.touch()
+
+            with patch.object(grade_sky, "measure", return_value={"frame": "_DSC1288_auto"}):
+                rows, unpaired = grade_sky.grade(rendered, {"_dsc1288": reference})
+
+            self.assertEqual(rows, [{"frame": "_DSC1288_auto"}])
+            self.assertEqual(unpaired, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

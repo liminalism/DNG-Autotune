@@ -75,6 +75,9 @@ pub struct RenderOptions {
     pub lens_correction: crate::lens::LensCorrectionMode,
     /// Collect observational scene evidence without changing returned pixels.
     pub semantic: bool,
+    /// Experimental dense-mask sky highlight luminance compression, 0 to 1.
+    /// Requires `semantic`; zero is byte-identical to the observational path.
+    pub semantic_sky_highlights: f32,
     /// Directory containing prepared scene_image ONNX graphs.
     pub semantic_model_dir: std::path::PathBuf,
 }
@@ -120,6 +123,7 @@ impl RenderOptions {
             full_dng_color: options.full_dng_color,
             lens_correction: options.lens_correction,
             semantic: options.semantic,
+            semantic_sky_highlights: options.semantic_sky_highlights,
             semantic_model_dir: options.semantic_model_dir.clone(),
         }
     }
@@ -148,6 +152,15 @@ impl RenderOptions {
         ensure!(
             !(self.hdr > 0.0 && self.local_tone > 0.0),
             "hdr and local_tone are two local-tone operators; set only one"
+        );
+        ensure!(
+            self.semantic_sky_highlights.is_finite()
+                && (0.0..=1.0).contains(&self.semantic_sky_highlights),
+            "semantic_sky_highlights must be between 0 and 1"
+        );
+        ensure!(
+            self.semantic_sky_highlights == 0.0 || self.semantic,
+            "semantic_sky_highlights requires semantic inference"
         );
         ensure!(
             self.preview_exposure
@@ -374,10 +387,11 @@ pub fn render_file_rgb16(
         .working_space
         .to_display()
         .filter(|_| options.raw_color_path == RawColorPath::Owned);
-    // One shared perception hook for API and CLI, at the same pipeline
-    // boundary. Its result is report-only and cannot reach the renderer.
-    let scene = if options.semantic {
-        let (_, evidence) = crate::scene::observe(
+    // One shared perception hook for API and CLI at the same pipeline
+    // boundary. Only the explicit sky experiment retains a render input, and
+    // it is applied after analysis so the global controller cannot consume it.
+    let (scene, semantic_sky_highlights) = if options.semantic {
+        let (proxy, mut evidence) = crate::scene::observe(
             &linear,
             working_to_display.as_ref(),
             highlight_uncertainty.as_deref(),
@@ -385,9 +399,33 @@ pub fn render_file_rgb16(
             preview_semantic_eligible,
             &options.semantic_model_dir,
         )?;
-        Some(evidence)
+        let sky_map = if options.semantic_sky_highlights > 0.0 {
+            let map = crate::scene::build_sky_highlight_map(
+                &linear,
+                working_to_display.as_ref(),
+                highlight_uncertainty.as_deref(),
+                &proxy,
+                &evidence,
+                options.semantic_sky_highlights,
+            )?;
+            let report = map.report().clone();
+            if report.affected_pixels > 0 {
+                evidence.policy_adjustments.push(format!(
+                    "{}: dense sky mask compressed {} pixel(s) by up to {:.3} EV at strength {:.2}",
+                    report.version,
+                    report.affected_pixels,
+                    -report.correction_min_ev,
+                    report.strength,
+                ));
+            }
+            evidence.sky_highlight_adjustment = Some(report);
+            Some(map)
+        } else {
+            None
+        };
+        (Some(evidence), sky_map)
     } else {
-        None
+        (None, None)
     };
     let local_white_balance = (options.local_white_balance > 0.0)
         .then(|| crate::whitebalance::apply(&mut linear, options.local_white_balance))
@@ -424,6 +462,9 @@ pub fn render_file_rgb16(
         noise_floor.as_ref().map(|floor| floor.snr10_ev),
         options.luma_denoise,
     );
+    if let Some(map) = &semantic_sky_highlights {
+        map.apply(&mut linear)?;
+    }
 
     // Automatic night tone map, driven by the low-light score, unless the caller
     // asked for HDR or local tone explicitly.

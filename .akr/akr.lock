@@ -5,8 +5,7 @@ build {
     tool "akr 0.3.1"
     grammar "0.1"
     vocabulary "0.2"
-    commit git:8e4f58e3913ca9bf7e29b43a14ea1a845f32f8cb
-    source_graph "sha256:802f7abcd594f0227564c8be44d0bcf4cb10bc2c92c117595ca5466a03e07375"
+    source_graph "sha256:42b6d2459b57c8ece12e8739efd9b076fc27e591cb0f7220e8e8d680435aeae1"
 }
 
 source ".akr/project.akr" {
@@ -25,8 +24,8 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:b1cf0447b3a2354042a10266b31ec859346999e1481c19a6c4c4be7303cffb8d"
-    records 77
+    hash "sha256:312525a129eed64871cf994b83063d4dc4bfa47b6e358b4743d6141e4281bbe6"
+    records 81
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
@@ -45,8 +44,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:14c8451b09274f84c9cb64a32f34b38761c9c064f3208183419e85d709247900"
-    records 38
+    hash "sha256:ad009bb56a6bb66c02e8d6abdc2d4f23f26887bddee7e97240f429406da5c4a2"
+    records 40
 }
 
 resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
@@ -448,6 +447,26 @@ seal @raw-autotune.evidence.semantic-preview-split-20260813/1 {
 seal @raw-autotune.evidence.semantic-sidecar-and-masks-20260813/1 {
     state verified
     hash "sha256:0128a2b4f07fdf7cea15778eb33259943869473babd323394a93e5404b378986"
+}
+
+seal @raw-autotune.evidence.semantic-sky-camera-grade/1 {
+    state verified
+    hash "sha256:6be9eefb64e7c5054fc0bedada9f35a572aac5dc3cc0b50fe0aeb49a5ad51e8b"
+}
+
+seal @raw-autotune.evidence.semantic-sky-feature-off/1 {
+    state verified
+    hash "sha256:dedaba3dfec5fcdd8c78290170a9ac5b0ef35405a3bc6460df80329e47f25f32"
+}
+
+seal @raw-autotune.evidence.semantic-sky-four-frame-ablation/1 {
+    state verified
+    hash "sha256:5017faa601919aab1589c6d2060ab47f4c7b4a774e12600aabd9a2e3304eaf2d"
+}
+
+seal @raw-autotune.evidence.semantic-sky-mask-tests/1 {
+    state verified
+    hash "sha256:4edf5b9a653fa958b900bf54e0be73a0b46d612c216785815960068fddc6d2ab"
 }
 
 seal @raw-autotune.evidence.sky-stage-attribution-20260809/1 {
@@ -853,6 +872,16 @@ seal @raw-autotune.work.scene-perception-default-lege-gpu/1 {
 seal @raw-autotune.work.scene-perception-infra/1 {
     state completed
     hash "sha256:bd35ec1c83241c124abc8491c2569b19b92c847b13377b954f40732c2f81cf40"
+}
+
+seal @raw-autotune.work.semantic-sky-highlight-ablation/1 {
+    state superseded
+    hash "sha256:f2d0efbf57bf35d7141468bc6d88ee1da1fea8722c5eef4cd76e5c0f70a30661"
+}
+
+seal @raw-autotune.work.semantic-sky-highlight-ablation/2 {
+    state completed
+    hash "sha256:8334a182573d252b4d05b3b3b16c510d549dede4b45c624f8cabd0a97f4f8f74"
 }
 
 seal @raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 {

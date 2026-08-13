@@ -179,10 +179,17 @@ fn dump_stage(
 /// configuration is worse than none.
 fn limitations(options: &RunOptions, color: &ColorReport, luma_denoised: bool) -> Vec<String> {
     let mut limitations = if options.semantic {
-        vec![
-            "scene inference is observational only; no semantic evidence changes rendering, and no depth model is available"
-                .to_string(),
-        ]
+        if options.semantic_sky_highlights > 0.0 {
+            vec![
+                "experimental dense-mask sky highlight policy may apply bounded scene-linear luminance compression; global exposure and chromaticity remain unchanged, and no depth model is available"
+                    .to_string(),
+            ]
+        } else {
+            vec![
+                "scene inference is observational only; no semantic evidence changes rendering, and no depth model is available"
+                    .to_string(),
+            ]
+        }
     } else {
         vec!["global analysis only; no face, subject, scene, or depth model".to_string()]
     };
@@ -602,10 +609,11 @@ fn process_job_inner(
     }
 
     // Perception observes the neutral, chroma-denoised scene before local white
-    // balance. It is intentionally report-only: no value from SceneEvidence is
-    // accepted by analysis, tone, or rendering in this slice.
-    let scene = if options.semantic {
-        let (proxy, evidence) = crate::scene::observe(
+    // balance. The default remains report-only. The explicit sky experiment
+    // retains the dense mask as a full-resolution EV map but applies it only
+    // after global analysis, so semantics cannot move the exposure controller.
+    let (scene, semantic_sky_highlights) = if options.semantic {
+        let (proxy, mut evidence) = crate::scene::observe(
             &linear,
             working_to_display.as_ref(),
             highlight_uncertainty.as_deref(),
@@ -613,11 +621,43 @@ fn process_job_inner(
             preview_semantic_eligible,
             &options.semantic_model_dir,
         )?;
+        let sky_map = if options.semantic_sky_highlights > 0.0 {
+            let map = crate::scene::build_sky_highlight_map(
+                &linear,
+                working_to_display.as_ref(),
+                highlight_uncertainty.as_deref(),
+                &proxy,
+                &evidence,
+                options.semantic_sky_highlights,
+            )?;
+            let report = map.report().clone();
+            if report.affected_pixels > 0 {
+                evidence.policy_adjustments.push(format!(
+                    "{}: dense sky mask compressed {} pixel(s) by up to {:.3} EV at strength {:.2}",
+                    report.version,
+                    report.affected_pixels,
+                    -report.correction_min_ev,
+                    report.strength,
+                ));
+            }
+            evidence.sky_highlight_adjustment = Some(report);
+            Some(map)
+        } else {
+            None
+        };
         if let Some(directory) = &options.dump_stages
             && let Err(error) = crate::scene::dump(directory, &job.input, &proxy, &evidence.masks)
         {
             eprintln!(
                 "DUMP  {}: semantic diagnostics failed: {error:#}",
+                job.input.display()
+            );
+        }
+        if let (Some(directory), Some(map)) = (&options.dump_stages, &sky_map)
+            && let Err(error) = crate::scene::dump_sky_highlight_map(directory, &job.input, map)
+        {
+            eprintln!(
+                "DUMP  {}: semantic sky policy diagnostics failed: {error:#}",
                 job.input.display()
             );
         }
@@ -636,9 +676,9 @@ fn process_job_inner(
                 format!(" | {} inference error(s)", evidence.inference_errors.len())
             }
         );
-        Some(evidence)
+        (Some(evidence), sky_map)
     } else {
-        None
+        (None, None)
     };
 
     // Applied to developed scene-linear RGB, on top of the camera's as-shot
@@ -748,6 +788,27 @@ fn process_job_inner(
             report.snr10_ev,
             report.mean_abs_correction_ev,
         );
+    }
+    if let Some(map) = &semantic_sky_highlights {
+        map.apply(&mut linear)?;
+        let report = map.report();
+        eprintln!(
+            "SKY   {}: eligible {} | affected {:.3}% | correction {:+.3}..0.000 EV | strength {:.2}",
+            job.input.display(),
+            report.eligible,
+            report.affected_fraction * 100.0,
+            report.correction_min_ev,
+            report.strength,
+        );
+        if let Some(directory) = &options.dump_stages {
+            dump_stage(
+                directory,
+                &job.input,
+                "04-after-semantic-sky",
+                &linear,
+                working_to_display.as_ref(),
+            );
+        }
     }
     let linear = linear;
 
@@ -981,7 +1042,10 @@ fn process_job_inner(
 
     if options.write_sidecar {
         let sidecar = Sidecar {
-            schema_version: crate::types::report_schema_version(options.semantic),
+            schema_version: crate::types::report_schema_version(
+                options.semantic,
+                options.semantic_sky_highlights > 0.0,
+            ),
             application: "raw-autotune".to_string(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             automatic_profile_version: RunOptions::AUTO_PROFILE_VERSION.to_string(),

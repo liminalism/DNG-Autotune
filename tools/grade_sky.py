@@ -17,8 +17,9 @@ like*, and specifically the three things that went wrong on the tropical batch:
    green deficit against the brightest channel in bright pixels. That is the
    quantity, not "looks purple".
 
-It reads finished JPEGs, so it does not care which renderer produced them and
-cannot drift out of sync with the pipeline the way a reimplementation would.
+It reads finished JPEG or PNG renders, so it does not care which renderer
+produced them and cannot drift out of sync with the pipeline the way a
+reimplementation would.
 
 Usage
 -----
@@ -147,7 +148,7 @@ def stem_of(rendered: Path) -> str:
 
 
 def rendered_frames(rendered_dir: Path) -> list[Path]:
-    """Return finished JPEGs below an output directory in stable order.
+    """Return finished JPEG/PNG renders below a directory in stable order.
 
     `raw-autotune --recursive` preserves the input directory structure below
     its output root.  Looking only at `iterdir()` silently yields no pairs for
@@ -156,7 +157,7 @@ def rendered_frames(rendered_dir: Path) -> list[Path]:
     return sorted(
         path
         for path in rendered_dir.rglob("*")
-        if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg"}
+        if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png"}
     )
 
 

@@ -1,14 +1,15 @@
-//! Optional scene-perception evidence.
+//! Optional scene-perception evidence and explicitly requested experiments.
 //!
-//! This module is deliberately downstream-only: it observes the scene-linear
-//! image after chroma denoise and never returns a value that the renderer can
-//! consume.  That boundary lets the first perception slice collect corpus
-//! evidence without silently becoming a new exposure or colour controller.
+//! The default path is downstream-only: it observes the scene-linear image
+//! after chroma denoise without changing exposure, colour, or output pixels.
+//! Experimental consumers must be explicitly enabled, preserve the legacy
+//! controller decision, and record the spatial policy they applied.
 
 use crate::analyze::luminance;
 use crate::color::Matrix3;
 use crate::types::{LinearImage, MID_GRAY};
 use anyhow::{Context, Result, anyhow, ensure};
+use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -16,6 +17,14 @@ use std::path::{Path, PathBuf};
 pub const PROXY_SIZE: usize = 512;
 pub const DEFAULT_MODEL_DIR: &str = "models/artifacts";
 const MASK_THRESHOLD: u8 = 128;
+const SKY_POLICY_MIN_AREA: f32 = 0.05;
+const SKY_POLICY_MIN_MEAN_CONFIDENCE: f32 = 0.75;
+const SKY_POLICY_MIN_CLIPPED_FRACTION: f32 = 0.10;
+const SKY_CONFIDENCE_START: f32 = 0.75;
+const SKY_CONFIDENCE_FULL: f32 = 0.95;
+const SKY_HIGHLIGHT_START: f32 = 0.75;
+const SKY_HIGHLIGHT_FULL: f32 = 1.25;
+const SKY_MAX_COMPRESSION_EV: f32 = 0.35;
 
 /// Fixed, neutral sRGB view used only for perception.
 #[derive(Debug, Clone)]
@@ -175,10 +184,73 @@ pub struct SceneEvidence {
     pub regions: Vec<RegionStats>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub inference_errors: Vec<String>,
-    /// Empty in this slice by construction. Later policy slices must append an
-    /// explicit explanation here whenever they consume semantic evidence.
+    /// Empty for observation-only runs. Explicit policy experiments append an
+    /// explanation here whenever they consume semantic evidence.
     pub policy_adjustments: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sky_highlight_adjustment: Option<SkyHighlightAdjustmentReport>,
     pub masks: RegionMasks,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkyHighlightAdjustmentReport {
+    pub version: &'static str,
+    pub strength: f32,
+    pub eligible: bool,
+    pub sky_area_fraction: f32,
+    pub sky_mean_confidence: f32,
+    pub sky_clipped_fraction: f32,
+    pub confidence_start: f32,
+    pub confidence_full: f32,
+    pub highlight_start: f32,
+    pub highlight_full: f32,
+    pub max_compression_ev: f32,
+    pub affected_pixels: usize,
+    pub affected_fraction: f32,
+    pub correction_min_ev: f32,
+    pub correction_mean_abs_ev: f32,
+}
+
+/// Full-resolution scene-linear EV corrections derived from the dense sky
+/// confidence plane. One scalar is applied to all three channels at each pixel.
+pub struct SkyHighlightMap {
+    width: usize,
+    height: usize,
+    corrections_ev: Vec<f32>,
+    report: SkyHighlightAdjustmentReport,
+}
+
+impl SkyHighlightMap {
+    pub fn report(&self) -> &SkyHighlightAdjustmentReport {
+        &self.report
+    }
+
+    pub fn corrections_ev(&self) -> &[f32] {
+        &self.corrections_ev
+    }
+
+    /// Apply the already measured map without feeding it back into global
+    /// exposure analysis. Scaling RGB together preserves scene chromaticity.
+    pub fn apply(&self, image: &mut LinearImage) -> Result<()> {
+        ensure!(
+            image.width == self.width
+                && image.height == self.height
+                && image.pixels.len() == self.corrections_ev.len(),
+            "sky highlight map must match the image it adjusts"
+        );
+        image
+            .pixels
+            .par_iter_mut()
+            .zip(self.corrections_ev.par_iter())
+            .for_each(|(pixel, correction_ev)| {
+                if *correction_ev == 0.0 {
+                    return;
+                }
+                let gain = correction_ev.exp2();
+                pixel.iter_mut().for_each(|channel| *channel *= gain);
+            });
+        Ok(())
+    }
 }
 
 #[inline]
@@ -295,6 +367,7 @@ pub fn observe(
         regions: Vec::new(),
         inference_errors: Vec::new(),
         policy_adjustments: Vec::new(),
+        sky_highlight_adjustment: None,
         masks: RegionMasks::blank(),
     };
 
@@ -309,6 +382,154 @@ pub fn observe(
         &evidence.masks,
     );
     Ok((proxy, evidence))
+}
+
+#[inline]
+fn smoothstep(value: f32) -> f32 {
+    let value = value.clamp(0.0, 1.0);
+    value * value * (3.0 - 2.0 * value)
+}
+
+#[inline]
+fn mask_confidence_at_source(
+    mask: &RegionMask,
+    proxy: &SemanticProxy,
+    source_x: usize,
+    source_y: usize,
+) -> f32 {
+    // Invert build_proxy's pixel-centre transform. Clamp to content pixels,
+    // never the black letterbox, so interpolation cannot leak through padding.
+    let proxy_x = proxy.content_x as f32
+        + (source_x as f32 + 0.5) * proxy.content_width as f32 / proxy.source_width as f32
+        - 0.5;
+    let proxy_y = proxy.content_y as f32
+        + (source_y as f32 + 0.5) * proxy.content_height as f32 / proxy.source_height as f32
+        - 0.5;
+    let min_x = proxy.content_x as f32;
+    let min_y = proxy.content_y as f32;
+    let max_x = (proxy.content_x + proxy.content_width - 1) as f32;
+    let max_y = (proxy.content_y + proxy.content_height - 1) as f32;
+    let proxy_x = proxy_x.clamp(min_x, max_x);
+    let proxy_y = proxy_y.clamp(min_y, max_y);
+    let x0 = proxy_x.floor() as usize;
+    let y0 = proxy_y.floor() as usize;
+    let x1 = (x0 + 1).min(proxy.content_x + proxy.content_width - 1);
+    let y1 = (y0 + 1).min(proxy.content_y + proxy.content_height - 1);
+    let fx = proxy_x - x0 as f32;
+    let fy = proxy_y - y0 as f32;
+    let sample = |x: usize, y: usize| mask.confidence[y * mask.width + x] as f32 / 255.0;
+    let top = sample(x0, y0) + (sample(x1, y0) - sample(x0, y0)) * fx;
+    let bottom = sample(x0, y1) + (sample(x1, y1) - sample(x0, y1)) * fx;
+    top + (bottom - top) * fy
+}
+
+/// Build the opt-in sky highlight experiment from the actual dense mask.
+///
+/// The aggregate region measurements are only a false-positive gate. Every
+/// correction below is independently weighted by the full spatial confidence
+/// mask and by that pixel's highlight/reconstruction evidence.
+pub fn build_sky_highlight_map(
+    image: &LinearImage,
+    working_to_display: Option<&Matrix3>,
+    reconstruction_uncertainty: Option<&[f32]>,
+    proxy: &SemanticProxy,
+    evidence: &SceneEvidence,
+    strength: f32,
+) -> Result<SkyHighlightMap> {
+    ensure!(
+        strength.is_finite() && (0.0..=1.0).contains(&strength),
+        "semantic sky highlight strength must be between 0 and 1"
+    );
+    ensure!(
+        strength > 0.0,
+        "semantic sky highlight strength must be above zero"
+    );
+    ensure!(
+        image.width == proxy.source_width && image.height == proxy.source_height,
+        "semantic proxy must describe the image adjusted by its mask"
+    );
+    ensure!(
+        reconstruction_uncertainty.is_none_or(|map| map.len() == image.pixels.len()),
+        "highlight uncertainty map must match the semantic source image"
+    );
+    let sky_mask = evidence
+        .masks
+        .masks
+        .iter()
+        .find(|mask| mask.kind == RegionKind::Sky)
+        .context("scene evidence has no sky confidence mask")?;
+    let sky_stats = evidence
+        .regions
+        .iter()
+        .find(|region| region.kind == RegionKind::Sky)
+        .context("scene evidence has no sky region statistics")?;
+    let sky_clipped_fraction = sky_stats.clipped_fraction.unwrap_or(0.0);
+    let eligible = sky_stats.area_fraction >= SKY_POLICY_MIN_AREA
+        && sky_stats.mean_confidence >= SKY_POLICY_MIN_MEAN_CONFIDENCE
+        && sky_clipped_fraction >= SKY_POLICY_MIN_CLIPPED_FRACTION;
+
+    let mut corrections_ev = vec![0.0_f32; image.pixels.len()];
+    if eligible {
+        corrections_ev
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(index, correction)| {
+                let source_x = index % image.width;
+                let source_y = index / image.width;
+                let confidence = mask_confidence_at_source(sky_mask, proxy, source_x, source_y);
+                let sky_weight = smoothstep(
+                    (confidence - SKY_CONFIDENCE_START)
+                        / (SKY_CONFIDENCE_FULL - SKY_CONFIDENCE_START),
+                );
+                if sky_weight == 0.0 {
+                    return;
+                }
+                let display = matrix_pixel(working_to_display, image.pixels[index]);
+                let maximum = display.into_iter().fold(f32::NEG_INFINITY, f32::max);
+                let brightness_weight = smoothstep(
+                    (maximum - SKY_HIGHLIGHT_START) / (SKY_HIGHLIGHT_FULL - SKY_HIGHLIGHT_START),
+                );
+                let uncertainty_weight = reconstruction_uncertainty
+                    .and_then(|map| map.get(index))
+                    .map_or(0.0, |value| smoothstep(*value / 0.5));
+                let highlight_weight = brightness_weight.max(uncertainty_weight);
+                *correction = -SKY_MAX_COMPRESSION_EV * strength * sky_weight * highlight_weight;
+            });
+    }
+
+    let affected_pixels = corrections_ev
+        .iter()
+        .filter(|value| **value < -1.0e-6)
+        .count();
+    let correction_min_ev = corrections_ev.iter().copied().fold(0.0_f32, f32::min);
+    let correction_mean_abs_ev = corrections_ev
+        .iter()
+        .map(|value| value.abs() as f64)
+        .sum::<f64>() as f32
+        / corrections_ev.len().max(1) as f32;
+    let pixel_count = corrections_ev.len().max(1);
+    Ok(SkyHighlightMap {
+        width: image.width,
+        height: image.height,
+        corrections_ev,
+        report: SkyHighlightAdjustmentReport {
+            version: "sky-highlight-luma-v1",
+            strength,
+            eligible,
+            sky_area_fraction: sky_stats.area_fraction,
+            sky_mean_confidence: sky_stats.mean_confidence,
+            sky_clipped_fraction,
+            confidence_start: SKY_CONFIDENCE_START,
+            confidence_full: SKY_CONFIDENCE_FULL,
+            highlight_start: SKY_HIGHLIGHT_START,
+            highlight_full: SKY_HIGHLIGHT_FULL,
+            max_compression_ev: SKY_MAX_COMPRESSION_EV,
+            affected_pixels,
+            affected_fraction: affected_pixels as f32 / pixel_count as f32,
+            correction_min_ev,
+            correction_mean_abs_ev,
+        },
+    })
 }
 
 fn infer(proxy: &SemanticProxy, model_dir: &Path, evidence: &mut SceneEvidence) {
@@ -745,6 +966,27 @@ pub fn dump(
     Ok(())
 }
 
+/// Write a full-resolution 8-bit visualization of the policy weight.
+/// Black is untouched; white is the configured maximum compression.
+pub fn dump_sky_highlight_map(directory: &Path, input: &Path, map: &SkyHighlightMap) -> Result<()> {
+    std::fs::create_dir_all(directory)?;
+    let stem = input
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "unnamed".to_string());
+    let pixels: Vec<u8> = map
+        .corrections_ev
+        .iter()
+        .map(|correction| {
+            ((-*correction / SKY_MAX_COMPRESSION_EV).clamp(0.0, 1.0) * 255.0 + 0.5) as u8
+        })
+        .collect();
+    let image = image::GrayImage::from_raw(map.width as u32, map.height as u32, pixels)
+        .ok_or_else(|| anyhow!("invalid full-resolution sky policy buffer"))?;
+    image.save(directory.join(format!("{stem}-semantic-sky-policy.png")))?;
+    Ok(())
+}
+
 pub fn model_dir(path: &Path) -> PathBuf {
     if path.as_os_str().is_empty() {
         PathBuf::from(DEFAULT_MODEL_DIR)
@@ -759,6 +1001,39 @@ mod tests {
 
     fn image(width: usize, height: usize, value: [f32; 3]) -> LinearImage {
         LinearImage::new(width, height, vec![value; width * height]).unwrap()
+    }
+
+    fn eligible_evidence(proxy: &SemanticProxy) -> SceneEvidence {
+        let mut masks = RegionMasks::blank();
+        let sky = masks.get_mut(RegionKind::Sky);
+        for y in proxy.content_y..proxy.content_y + proxy.content_height {
+            for x in proxy.content_x..proxy.content_x + proxy.content_width {
+                sky.confidence[y * PROXY_SIZE + x] = 255;
+            }
+        }
+        SceneEvidence {
+            proxy: SemanticProxyInfo::from(proxy),
+            embedded_preview_semantic_eligible: false,
+            models: Vec::new(),
+            raw_scores: BTreeMap::new(),
+            regions: vec![RegionStats {
+                kind: RegionKind::Sky,
+                area_fraction: 0.5,
+                mean_confidence: 1.0,
+                p10_ev: Some(1.0),
+                p50_ev: Some(2.0),
+                p90_ev: Some(3.0),
+                clipped_fraction: Some(0.5),
+                reconstruction_uncertainty: Some(0.2),
+                mean_chroma: Some(0.1),
+                noise_snr10_ev: None,
+                sharpness: Some(0.01),
+            }],
+            inference_errors: Vec::new(),
+            policy_adjustments: Vec::new(),
+            sky_highlight_adjustment: None,
+            masks,
+        }
     }
 
     #[test]
@@ -782,5 +1057,85 @@ mod tests {
         assert!((neutral_map(MID_GRAY) - 0.5).abs() < 1.0e-6);
         assert!(neutral_map(100.0) < 1.0);
         assert!(neutral_map(100.0) > neutral_map(1.0));
+    }
+
+    #[test]
+    fn sky_policy_inverts_letterbox_and_uses_the_spatial_mask() {
+        let source = image(8, 4, [1.5, 0.75, 0.375]);
+        let proxy = build_proxy(&source, None).unwrap();
+        let mut evidence = eligible_evidence(&proxy);
+        let sky = evidence.masks.get_mut(RegionKind::Sky);
+        // Deliberately poison the padding. Correct inverse sampling must never
+        // allow it to affect a source pixel.
+        sky.confidence.fill(255);
+        for y in proxy.content_y..proxy.content_y + proxy.content_height {
+            for x in proxy.content_x..proxy.content_x + proxy.content_width {
+                sky.confidence[y * PROXY_SIZE + x] =
+                    if x < proxy.content_x + proxy.content_width / 2 {
+                        255
+                    } else {
+                        0
+                    };
+            }
+        }
+
+        let map = build_sky_highlight_map(&source, None, None, &proxy, &evidence, 1.0).unwrap();
+        for y in 0..source.height {
+            for x in 0..source.width {
+                let correction = map.corrections_ev()[y * source.width + x];
+                if x < source.width / 2 {
+                    assert!(
+                        correction < 0.0,
+                        "left sky pixel ({x}, {y}) was not adjusted"
+                    );
+                } else {
+                    assert_eq!(correction, 0.0, "right non-sky pixel ({x}, {y}) moved");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sky_policy_requires_pixel_confidence_and_highlight_evidence() {
+        let mut source = image(3, 1, [1.5, 1.0, 0.5]);
+        source.pixels[2] = [0.2, 0.15, 0.1];
+        let proxy = build_proxy(&source, None).unwrap();
+        let mut evidence = eligible_evidence(&proxy);
+        let sky = evidence.masks.get_mut(RegionKind::Sky);
+        for y in proxy.content_y..proxy.content_y + proxy.content_height {
+            for x in proxy.content_x..proxy.content_x + proxy.content_width {
+                let source_band = (x - proxy.content_x) * 3 / proxy.content_width;
+                sky.confidence[y * PROXY_SIZE + x] = if source_band == 1 { 180 } else { 255 };
+            }
+        }
+        let map = build_sky_highlight_map(&source, None, None, &proxy, &evidence, 1.0).unwrap();
+        assert!(map.corrections_ev()[0] < 0.0);
+        assert_eq!(map.corrections_ev()[1], 0.0);
+        assert_eq!(map.corrections_ev()[2], 0.0);
+        assert_eq!(map.report().affected_pixels, 1);
+    }
+
+    #[test]
+    fn sky_policy_is_bounded_deterministic_and_preserves_chromaticity() {
+        let source = image(4, 2, [1.5, 0.75, 0.375]);
+        let proxy = build_proxy(&source, None).unwrap();
+        let evidence = eligible_evidence(&proxy);
+        let first = build_sky_highlight_map(&source, None, None, &proxy, &evidence, 1.0).unwrap();
+        let second = build_sky_highlight_map(&source, None, None, &proxy, &evidence, 1.0).unwrap();
+        assert_eq!(first.corrections_ev(), second.corrections_ev());
+        assert!(
+            first
+                .corrections_ev()
+                .iter()
+                .all(|value| (-SKY_MAX_COMPRESSION_EV..=0.0).contains(value))
+        );
+
+        let before = source.pixels[0];
+        let mut adjusted = source;
+        first.apply(&mut adjusted).unwrap();
+        let after = adjusted.pixels[0];
+        assert!(after[0] < before[0]);
+        assert!((before[0] * after[1] - before[1] * after[0]).abs() < 1.0e-6);
+        assert!((before[0] * after[2] - before[2] * after[0]).abs() < 1.0e-6);
     }
 }

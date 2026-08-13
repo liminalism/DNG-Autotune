@@ -937,6 +937,57 @@ record raw-autotune.evidence.semantic-sidecar-and-masks-20260813/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.semantic-sky-camera-grade/1 : evidence {
+    title "Camera-paired sky policy grade"
+    state verified
+    result pass
+    method command
+    observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
+    command "python3 tools/grade_sky.py .agent/scratch/sky-ablation/off .agent/scratch/sky-ablation/on --reference raw/jpeg --json .agent/scratch/sky-ablation/camera-grade.json --per-frame"
+    artifact ".agent/scratch/sky-ablation/camera-grade.json"
+    summary """
+        Median sky error versus paired camera JPEG moved from -0.42 EV off to -0.43 EV on while ground stayed -0.05 EV; sky green deficit moved 22.9% to 23.0%. The mask is useful, but this compression direction does not merit default promotion.
+        """
+}
+
+record raw-autotune.evidence.semantic-sky-feature-off/1 : evidence {
+    title "Semantic feature-off pixel identity"
+    state verified
+    result pass
+    method command
+    observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
+    command "target/release/raw-autotune raw/raw_3rd_batch/_DSC1272.ARW --output .agent/scratch/sky-ablation/no-semantic --format png --overwrite --sharpen 0 --no-summary --jobs 1 && sha256sum .agent/scratch/sky-ablation/no-semantic/_DSC1272_auto.png .agent/scratch/sky-ablation/off/_DSC1272_auto.png && cmp -s .agent/scratch/sky-ablation/no-semantic/_DSC1272_auto.png .agent/scratch/sky-ablation/off/_DSC1272_auto.png"
+    artifact ".agent/scratch/sky-ablation/off/_DSC1272_auto.png"
+    summary """
+        Observation-only semantic inference and no semantic inference produced byte-identical 16-bit PNG output, SHA-256 11dc0d8f92f1f9e490aee01758b56f1bf65fcf69492412a5e89b05b4f7609035.
+        """
+}
+
+record raw-autotune.evidence.semantic-sky-four-frame-ablation/1 : evidence {
+    title "Four-frame RTX 4060 sky-mask ablation"
+    state verified
+    result pass
+    method command
+    observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
+    command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 target/release/raw-autotune raw/raw_3rd_batch/_DSC1272.ARW raw/raw_3rd_batch/_DSC1283.ARW raw/raw_3rd_batch/_DSC1288.ARW raw/raw_3rd_batch/_DSC1289.ARW --semantic --semantic-sky-highlights 1 --sharpen 0 --format png --dump-stages .agent/scratch/sky-ablation/on-dumps --summary .agent/scratch/sky-ablation/on-summary.json"
+    artifact ".agent/scratch/sky-ablation/on-summary.json"
+    summary """
+        RTX 4060 Vulkan processed 4/4 without fallback. Full-resolution masks affected 6.205%-16.926% of pixels and preserved identical exposure decisions; visual inspection found clean sky localization around foliage and wires.
+        """
+}
+
+record raw-autotune.evidence.semantic-sky-mask-tests/1 : evidence {
+    title "Dense sky policy unit and full-suite tests"
+    state verified
+    result pass
+    method command
+    observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
+    command "cargo test -q --all-targets && python3 -m unittest tools.test_grade_sky tools.test_scene_policy_report"
+    summary """
+        All 329 Rust unit tests and every integration/tool test passed; mask inversion, per-pixel confidence/highlight gates, deterministic 0.35 EV cap, and scene-linear chromaticity invariance are covered.
+        """
+}
+
 record raw-autotune.evidence.sky-stage-attribution-20260809/1 : evidence {
     title "36 tone tests passed. The pre-change and renderer-exact diagnostic renders had identical SHA-256 386a90ebbc5c8032a0f84f0f614277e0b367f0fbc880d6fb5fd50df40db1d7e0. In the fixed upper-sky crop, p90 clip-boundary a/b step was 0.00423 after reconstruction, 0.01922 after the tone curve, 0.01930 after chroma, 0.01605 before and after gamut, and 0.01612 final; reconstruction-off final was 0.00313, local-tone 0.35 was 0.01618, and HDR 0.5 was 0.01663. Current classification counted 344861 pixels with at least two clipped channels and zero with three."
     state verified

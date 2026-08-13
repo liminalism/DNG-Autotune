@@ -590,7 +590,10 @@ fn run_pipeline(
 
     if let Some(path) = &options.summary_path {
         let summary = types::BatchSummary {
-            schema_version: types::report_schema_version(options.semantic),
+            schema_version: types::report_schema_version(
+                options.semantic,
+                options.semantic_sky_highlights > 0.0,
+            ),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             automatic_profile_version: types::RunOptions::AUTO_PROFILE_VERSION.to_string(),
             preset: options.preset,
