@@ -11,6 +11,8 @@ publish = false
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
+lege-gpu = { path = "../Lege-ecosystem/lege-gpu" }
+sha2 = "0.10"
 faer = { version = "0.24.4", default-features = false, features = ["std", "sparse-linalg"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 jpeg-encoder = "0.7"
@@ -21,6 +23,15 @@ rayon = "1.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 walkdir = "2.5"
+
+[features]
+default = ["semantic"]
+# Compatibility name for existing build scripts. The dependencies are normal,
+# unconditional dependencies; `--semantic` is the runtime opt-in.
+semantic = []
+
+[[example]]
+name = "probe-scene-model"
 
 [profile.release]
 opt-level = 3

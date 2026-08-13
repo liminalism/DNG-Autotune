@@ -491,6 +491,33 @@ record raw-autotune.work.highlight-boundary-fringe-diagnosis/1 : work {
     }
 }
 
+record raw-autotune.work.lege-gpu-onnx-session/1 : work {
+    title "lege-gpu OnnxSession for scene_image graphs"
+    state completed
+    scope [ path "Cargo.toml", path "examples/**" ]
+    intent """
+        Add a scene_image ModelTarget and a public OnnxSession (from_path/from_bytes, run_cpu, optional run_gpu, public Tensor) to Lege-ecosystem/lege-gpu. Path-depend that crate from raw-autotune behind the semantic Cargo feature. Existing OCR model targets must keep preparing. Do not add ort.
+        """
+    acceptance {
+        check ocr-targets-untouched {
+            statement """
+                lege-gpu's existing prepared-model targets still prepare; the new target does not relax INT8 or TopK rejection.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.lege-gpu-adapter-skip-tests/1 ]
+        }
+        check session-loads-prepared-scene-model {
+            statement """
+                OnnxSession::from_path loads a prepared scene_image graph and run_cpu returns the declared output ranks on a synthetic or fixture sRGB tensor.
+                """
+            method command
+            command "cargo run --release --features semantic --example probe-scene-model"
+            verified_by [ @raw-autotune.evidence.yunet-lege-gpu-cpu-probe/1 ]
+        }
+    }
+    implements [ @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs ]
+}
+
 record raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/1 : work {
     title "Midtone/shadow contrast: why our curve sits ~2x above reference renderers below the highlight end"
     state proposed
@@ -509,6 +536,111 @@ record raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/1 : 
         First steps when picked up. Reproduce the percentile comparison across the paired-JPEG corpus, not just _DSC1289, and establish whether the ~2x midtone lift is systematic or specific to high-dynamic-range backlit scenes. If systematic, the question is the curve's shadow placement; if scene-dependent, it is the analyzer's target/contrast selection for this tonal class. Only then propose a change.
         """
     derived_from [ @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 ]
+}
+
+record raw-autotune.work.night-low-light-rendering/1 : work {
+    title "Night / low-light rendering: raw detection, HDR-at-night local tone, noise-aware luma denoise"
+    state superseded
+    scope [
+        path "src/analyze.rs",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/localtone.rs",
+        path "src/luma.rs",
+        path "src/main.rs",
+        path "src/pipeline.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Substantially improve night/low-light rendering, on explicit user direction. Three coordinated additions, each inert (byte-identical) on clean daytime frames and fully deterministic.
+
+        (1) DETECTION. A per-frame low_light_score in src/analyze.rs that fuses scene median darkness (p50_ev) with sensor noise (snr10_ev) and ISO, recorded in AnalysisStats and the sidecar (schema bump). The existing shape-based tonal_class does not capture absolute low light: the eight night pairs (ISO 6400-12800, p50 -2.8..-4.7 EV, snr10 about -0.9 EV) classify as Normal/HighDynamicRange, and daytime _DSC1275 (ISO 2500, f/18, bright ambient) has p50 -6.47 EV, so darkness or ISO alone mislead. Darkness AND noise must agree.
+
+        (2) HDR-AT-NIGHT. Make the existing edge-aware single-frame local tone operator (src/localtone.rs build_hdr) automatic when low_light_score is high, at a strength scaled by it, to normalize/compress bright light sources and locally lift shadows while retaining local contrast. Per the user: do NOT globally lift contrast or exposure just because the scene is dark; the effect must be local. The global exposure controller is left untouched, honouring the controller freeze in docs/REVIEW-2026-07-30.md.
+
+        (3) LUMA DENOISE. A new src/luma.rs: a noise-aware, self-guided, edge-preserving luminance denoiser scaled by snr10_ev (like chroma denoise but gentler, blend capped, worked in the log2-EV domain so the noisier shadows are cleaned hardest). It runs after analysis, so the exposure decision is byte-identical, and before the tone map and render, so the locally lifted shadows are not grainy. Empirically the current ISO 12800 renders carry heavy luma grain at 100% that the camera removes while chroma noise is already clean; the limitations string already admits luma noise is not reduced.
+
+        Research basis: NPLIE (research/Illumination-estimation-...pdf) adaptive illumination adjustment I_f = I^log(I), a nature-preserving spatially varying gain that lifts shadows and preserves/compresses highlights; and the adaptive-gamma / Lite-ZeroDCE paper (research/An-adaptive-Correction-...pdf), scene-mean-driven adaptive correction with colour-constancy and well-exposedness objectives.
+
+        Keeps every other constraint from raw-autotune.requirement.constraints-and-non-goals: byte-identical when off, --dry-run --summary diff ignores only elapsed_ms, determinism under --jobs 8, no earlier clamp, no HDR output container (this is tone mapping, not PQ/gain-map), and --highlight-contrast stays diagnostic.
+        """
+    author "GitHub Uploader"
+    source {
+        kind external
+        path "research/An-adaptive-Correction-Deep-Learning-based-Zero-Reference-Approach-for-Low-Light-Images.pdf"
+        excerpt """
+            Set the gamma parameter based on the average intensity of an image ... The gamma value is kept small for a low-light image with very poor overall brightness.
+            """
+    }
+    source {
+        kind external
+        path "research/Illumination-estimation-for-nature-preserving-low-light-image-enhancement.pdf"
+        excerpt """
+            The proposed illumination adjustment is given as: I_f = I^log(I) ... The adaptive illumination adjustment improves the lightness of dark-regions and restricts the lightness of regions with normal illumination.
+            """
+    }
+}
+
+record raw-autotune.work.night-low-light-rendering/2 : work {
+    title "Night / low-light rendering: raw detection, HDR-at-night local tone, noise-aware luma denoise"
+    state completed
+    scope [
+        path "src/analyze.rs",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/localtone.rs",
+        path "src/luma.rs",
+        path "src/main.rs",
+        path "src/pipeline.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Substantially improve night/low-light rendering, on explicit user direction. Three coordinated additions, each inert (byte-identical) on clean daytime frames and fully deterministic.
+
+        (1) DETECTION. A per-frame low_light_score in src/analyze.rs fuses scene median darkness (p50_ev), sensor noise (snr10_ev/ISO), and a physical ambient-light gate (capture_ev100 derived from shutter, aperture, and ISO), recorded in AnalysisStats and the sidecar (schema bump). The shape-based tonal_class does not capture absolute low light. Darkness and noise alone also do not suffice: the daylight waterfall stress frames _DSC1277/_DSC1278 are deliberately dark raw captures at ISO 8000-10000 and previously scored 0.87-0.96, but their f/18, 1/1600 s exposures are 12.3-12.7 EV100. Automatic night tone must require darkness AND noise AND low capture EV when complete exposure metadata is available, with the former two-cue decision retained as a fallback when metadata is incomplete. This is physical capture classification, not semantic scene detection.
+
+        (2) HDR-AT-NIGHT. Make the existing edge-aware single-frame local tone operator (src/localtone.rs build_hdr) automatic when low_light_score is high, at a strength scaled by it, to normalize/compress bright light sources and locally lift shadows while retaining local contrast. Per the user: do NOT globally lift contrast or exposure just because the scene is dark; the effect must be local. The global exposure controller is left untouched, honouring the controller freeze in docs/REVIEW-2026-07-30.md.
+
+        (3) LUMA DENOISE. A new src/luma.rs: a noise-aware, self-guided, edge-preserving luminance denoiser scaled by snr10_ev (like chroma denoise but gentler, blend capped, worked in the log2-EV domain so the noisier shadows are cleaned hardest). It runs after analysis, so the exposure decision is byte-identical, and before the tone map and render, so the locally lifted shadows are not grainy. Empirically the current ISO 12800 renders carry heavy luma grain at 100% that the camera removes while chroma noise is already clean; the limitations string already admits luma noise is not reduced.
+
+        Research basis: NPLIE (research/Illumination-estimation-...pdf) adaptive illumination adjustment I_f = I^log(I), a nature-preserving spatially varying gain that lifts shadows and preserves/compresses highlights; and the adaptive-gamma / Lite-ZeroDCE paper (research/An-adaptive-Correction-...pdf), scene-mean-driven adaptive correction with colour-constancy and well-exposedness objectives.
+
+        Keeps every other constraint from raw-autotune.requirement.constraints-and-non-goals: byte-identical when off, --dry-run --summary diff ignores only elapsed_ms, determinism under --jobs 8, no earlier clamp, no HDR output container (this is tone mapping, not PQ/gain-map), and --highlight-contrast stays diagnostic.
+        """
+    acceptance {
+        check build-tests-and-lints-pass {
+            statement """
+                The release test suite and release clippy pass after the EV100 detector refinement.
+                """
+            method command
+            command "cargo test --release && cargo clippy --lib --bins --release -- -D warnings"
+            verified_by [ @raw-autotune.evidence.night-ev100-build-tests-20260813/1 ]
+        }
+        check day-night-tone-is-inert {
+            statement """
+                A high-ISO daylight frame renders byte-identically with night tone enabled or disabled, while a confirmed night frame changes.
+                """
+            method command
+            command "sha256sum .agent/scratch/night-day-ev100-pixels/day-{on,off}/_DSC1277_auto.jpg .agent/scratch/night-day-ev100-pixels/night-{on,off}/_DSC1310_auto.jpg"
+            verified_by [ @raw-autotune.evidence.night-day-tone-pixel-gate-20260813/1 ]
+        }
+        check night-day-detector-separates-corpus {
+            statement """
+                The eight night positives remain above the automatic tone threshold while the five hostile high-ISO daylight negatives score zero through the physical EV100 gate.
+                """
+            method command
+            command "jq -r '.files[] | [(.input|split(\"/\")|last), .analysis.capture_ev100, .analysis.low_light_score] | @tsv' .agent/scratch/night-day-ev100-gate-20260813.json"
+            verified_by [ @raw-autotune.evidence.night-day-ev100-separation-20260813/1 ]
+        }
+        check night-render-improves {
+            statement """
+                Detected night frames receive useful local tone compression and noise-aware luma cleanup without a global exposure lift.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.night-low-light-render-improvement-20260810/1 ]
+        }
+    }
+    supersedes [ @raw-autotune.work.night-low-light-rendering/1 ]
 }
 
 record raw-autotune.work.open-questions/1 : work {
@@ -793,6 +925,169 @@ record raw-autotune.work.rollback-compression-highlight-ratio-default/2 : work {
     }
     supersedes [ @raw-autotune.work.rollback-compression-highlight-ratio-default/1 ]
     author "GitHub Uploader"
+}
+
+record raw-autotune.work.scene-model-pack/1 : work {
+    title "Scene-model pack: fetch, prepare, remap"
+    state superseded
+    scope [ path "models/**", path "tools/scene_models/**" ]
+    intent """
+        Download pinned YuNet FP32, reparameterized MobileOne-S0, and two or three lightweight segmenter candidates. Rewrite each into a lege-gpu-compatible prepared ONNX graph: FLOAT32, NCHW, input renamed to scene_image, Conv+BN fused, no QuantizeLinear/TopK/NMS, static or stamped 512x512. Keep the segmenter that both prepares and remaps onto the most RegionMasks classes. Commit manifest, remaps, and license notes; do not commit weight blobs.
+        """
+    acceptance {
+        check mobileone-prepares {
+            statement """
+                A reparameterized MobileOne-S0 prepared graph exists and is recorded as a backbone, not as SceneScores.
+                """
+            method observation
+        }
+        check no-weight-blobs-committed {
+            statement """
+                models/artifacts/ is gitignored; only manifest.json, remaps, and LICENSE-NOTES.md are tracked.
+                """
+            method command
+            command "git check-ignore -q models/artifacts"
+        }
+        check segmenter-prepares {
+            statement """
+                A prepared segmenter artifact exists with a committed class remap covering at least person plus one of sky, vegetation, or building.
+                """
+            method observation
+        }
+        check yunet-prepares {
+            statement """
+                A prepared YuNet FP32 artifact exists, its SHA-256 is pinned in models/manifest.json, and inspect reports only ops lege-gpu accepts.
+                """
+            method command
+            command "python3 tools/scene_models/inspect.py models/artifacts/yunet.prepared.onnx"
+        }
+    }
+    implements [ @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs ]
+}
+
+record raw-autotune.work.scene-model-pack/2 : work {
+    title "Scene-model pack: fetch, prepare, remap"
+    state completed
+    scope [ path "models/**", path "tools/scene_models/**" ]
+    intent """
+        Download pinned YuNet FP32, reparameterized MobileOne-S0, and two or three lightweight segmenter candidates. Rewrite each into a lege-gpu-compatible prepared ONNX graph: FLOAT32, NCHW, input renamed to scene_image, Conv+BN fused, no QuantizeLinear/TopK/NMS, static or stamped 512x512. Keep the segmenter that both prepares and remaps onto the most RegionMasks classes. Commit manifest, remaps, and license notes; do not commit weight blobs.
+        """
+    acceptance {
+        check mobileone-prepares {
+            statement """
+                A reparameterized MobileOne-S0 prepared graph exists and is recorded as a backbone, not as SceneScores.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.mobileone-lege-gpu-cpu-probe/1 ]
+        }
+        check no-weight-blobs-committed {
+            statement """
+                models/artifacts/ is gitignored; only manifest.json, remaps, and LICENSE-NOTES.md are tracked.
+                """
+            method command
+            command "git check-ignore -q models/artifacts"
+            verified_by [ @raw-autotune.evidence.scene-artifacts-gitignored/1 ]
+        }
+        check segmenter-prepares {
+            statement """
+                A prepared segmenter artifact exists with a committed class remap covering at least person plus one of sky, vegetation, or building.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.cityscapes-lraspp-lege-gpu-cpu-probe/1 ]
+        }
+        check yunet-prepares {
+            statement """
+                A prepared YuNet FP32 artifact exists, its SHA-256 is pinned in models/manifest.json, and inspect reports only ops lege-gpu accepts.
+                """
+            method command
+            command "python3 tools/scene_models/report.py models/artifacts/yunet.prepared.onnx"
+            verified_by [ @raw-autotune.evidence.yunet-lege-gpu-cpu-probe/1 ]
+        }
+    }
+    implements [ @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs ]
+    supersedes [ @raw-autotune.work.scene-model-pack/1 ]
+}
+
+record raw-autotune.work.scene-perception-default-lege-gpu/1 : work {
+    title "Default lege-gpu scene inference with Linux RTX 4060"
+    state completed
+    intent """
+        Make lege-gpu an unconditional dependency of raw-autotune, remove compile-time semantic gates, expose a generic GPU execution method from lege-gpu's prepared ONNX session, and prefer the shared hardware adapter for scene inference. Verify the Linux RTX 4060 runs both prepared scene graphs without CPU fallback and that semantic collection remains pixel-identical to the feature-off render.
+        """
+    acceptance {
+        check default-build {
+            statement """
+                Default and --no-default-features release builds include the scene integration.
+                """
+            method command
+            command "cargo check --all-targets --release && cargo check --all-targets --release --no-default-features"
+            verified_by [ @raw-autotune.evidence.default-lege-gpu-build-20260813/1 ]
+        }
+        check linux-4060 {
+            statement """
+                A real RAW semantic run on Linux records the RTX 4060 Vulkan backend for both models with no fallback.
+                """
+            method command
+            command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 cargo run --release -- raw/raw_3rd_batch/_DSC1289.ARW --output .agent/scratch/scene-gpu-4060-20260813 --format png --sidecar --no-summary --overwrite --jobs 1 --semantic"
+            verified_by [ @raw-autotune.evidence.scene-rtx4060-vulkan-20260813/1 ]
+        }
+        check observational-only {
+            statement """
+                The RTX 4060 semantic run produces the same PNG bytes as the feature-off baseline.
+                """
+            method command
+            command "sha256sum .agent/scratch/scene-infra-gate-20260813/off/_DSC1289_auto.png .agent/scratch/scene-gpu-4060-20260813/_DSC1289_auto.png"
+            verified_by [ @raw-autotune.evidence.scene-rtx4060-pixel-identity-20260813/1 ]
+        }
+    }
+    implements [ @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1 ]
+}
+
+record raw-autotune.work.scene-perception-infra/1 : work {
+    title "Scene perception infrastructure, no render change"
+    state completed
+    scope [
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/pipeline.rs",
+        path "src/preview.rs",
+        path "src/scene.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Extract one processing core shared by CLI and API. Add SemanticProxy, SceneEvidence, RegionMasks, RegionStats, and model provenance. Build a fixed 512-letterboxed neutral sRGB proxy after chroma denoise and before local WB. Split preview RGB decode from exposure-oracle eligibility. Run optional lege-gpu inference behind --semantic; dump proxy and mask overlays. Inference must not change JPEG/TIFF/PNG bytes.
+        """
+    note """
+        Implemented the observational scene-perception core shared by CLI and API: fixed 512-letterboxed neutral sRGB RAW proxy after chroma denoise and before local WB; split embedded preview RGB decode from exposure-oracle eligibility; optional lege-gpu CPU inference for the prepared Cityscapes segmenter and YuNet behind --semantic; model SHA-256/preprocessing provenance, raw class scores, RegionMasks/RegionStats/SceneEvidence, and proxy/mask stage dumps. Semantic evidence remains structurally unable to feed analysis or rendering.
+        """
+    acceptance {
+        check feature-off-byte-identical {
+            statement """
+                With the semantic feature off or --semantic unset, output matches a pre-change dry-run summary field-for-field except elapsed_ms.
+                """
+            method command
+            command "cargo test --release"
+            verified_by [ @raw-autotune.evidence.scene-perception-validation-20260813/1 ]
+        }
+        check inference-does-not-render {
+            statement """
+                Enabling --semantic records SceneEvidence in the sidecar and does not move output pixels relative to the same run with inference skipped.
+                """
+            method observation
+            verified_by [
+                @raw-autotune.evidence.semantic-inference-is-observational-20260813/1
+            ]
+        }
+        check preview-split {
+            statement """
+                Exposure-oracle eligibility is unchanged; a 256x191 preview can be semantically eligible without becoming an exposure oracle.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.semantic-preview-split-20260813/1 ]
+        }
+    }
+    after [ @raw-autotune.work.lege-gpu-onnx-session, @raw-autotune.work.scene-model-pack ]
+    implements [ @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs ]
 }
 
 record raw-autotune.work.slice-1-diagnostic-dumps-and-clip-state-map/1 : work {

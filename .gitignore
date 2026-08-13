@@ -18,3 +18,10 @@
 # AKR: a rebuildable cache and disposable agent notes.
 .akr/cache/
 .agent/scratch/
+
+# Prepared / upstream scene-model weights. Manifest and license notes stay tracked.
+models/artifacts/
+
+# Python tooling caches are local build products.
+__pycache__/
+*.pyc

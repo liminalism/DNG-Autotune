@@ -61,6 +61,11 @@ pub struct RenderOptions {
     pub highlight_contrast: f32,
     pub highlight_color_ratio_exponent: f32,
     pub chroma_denoise: f32,
+    pub luma_denoise: f32,
+    /// Automatic night tone map scale, 0 to 1. 1.0 applies the edge-aware local
+    /// tone operator to detected low-light frames; 0 disables it. Ignored when
+    /// `hdr` or `local_tone` is set explicitly.
+    pub night_tone: f32,
     pub sharpen: f32,
     pub demosaic: DemosaicMethod,
     pub hot_pixels: f32,
@@ -68,6 +73,10 @@ pub struct RenderOptions {
     pub highlight_method: crate::raw_highlight::HighlightMethod,
     pub full_dng_color: bool,
     pub lens_correction: crate::lens::LensCorrectionMode,
+    /// Collect observational scene evidence without changing returned pixels.
+    pub semantic: bool,
+    /// Directory containing prepared scene_image ONNX graphs.
+    pub semantic_model_dir: std::path::PathBuf,
 }
 
 impl Default for RenderOptions {
@@ -101,6 +110,8 @@ impl RenderOptions {
             highlight_contrast: options.highlight_contrast,
             highlight_color_ratio_exponent: options.highlight_color_ratio_exponent,
             chroma_denoise: options.chroma_denoise,
+            luma_denoise: options.luma_denoise,
+            night_tone: options.night_tone,
             sharpen: options.sharpen,
             demosaic: options.demosaic,
             hot_pixels: options.hot_pixels,
@@ -108,6 +119,8 @@ impl RenderOptions {
             highlight_method: options.highlight_method,
             full_dng_color: options.full_dng_color,
             lens_correction: options.lens_correction,
+            semantic: options.semantic,
+            semantic_model_dir: options.semantic_model_dir.clone(),
         }
     }
 
@@ -159,6 +172,14 @@ impl RenderOptions {
             "chroma_denoise must be between 0 and 2"
         );
         ensure!(
+            self.luma_denoise.is_finite() && (0.0..=2.0).contains(&self.luma_denoise),
+            "luma_denoise must be between 0 and 2"
+        );
+        ensure!(
+            self.night_tone.is_finite() && (0.0..=1.0).contains(&self.night_tone),
+            "night_tone must be between 0 and 1"
+        );
+        ensure!(
             self.sharpen.is_finite() && (0.0..=3.0).contains(&self.sharpen),
             "sharpen must be between 0 and 3"
         );
@@ -194,6 +215,9 @@ pub struct RenderReport {
     pub local_tone: Option<crate::localtone::LocalToneReport>,
     pub hdr: Option<crate::localtone::HdrReport>,
     pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
+    pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene: Option<crate::scene::SceneEvidence>,
     pub sharpen: Option<crate::sharpen::SharpenReport>,
     pub color: ColorReport,
     pub guidance_mode: GuidanceMode,
@@ -277,9 +301,20 @@ pub fn render_file_rgb16(
     let preview_strength = options
         .preview_exposure
         .unwrap_or(crate::preview::AUTO_STRENGTH);
-    let preview = (preview_strength > 0.0)
-        .then(|| crate::preview::read(path))
+    let decoded_preview = (preview_strength > 0.0 || options.semantic)
+        .then(|| crate::preview::read_preview_rgb(path))
         .flatten();
+    let preview_semantic_eligible = decoded_preview
+        .as_ref()
+        .is_some_and(crate::preview::DecodedPreview::semantic_eligible);
+    let preview = (preview_strength > 0.0)
+        .then(|| {
+            decoded_preview
+                .as_ref()
+                .and_then(crate::preview::measure_preview_oracle)
+        })
+        .flatten();
+    drop(decoded_preview);
 
     let mut raw = rawler::decode_file(path)
         .with_context(|| format!("failed to decode {}", path.display()))?;
@@ -335,6 +370,25 @@ pub fn render_file_rgb16(
         noise_floor.as_ref().map(|floor| floor.snr10_ev),
         options.chroma_denoise,
     );
+    let working_to_display = options
+        .working_space
+        .to_display()
+        .filter(|_| options.raw_color_path == RawColorPath::Owned);
+    // One shared perception hook for API and CLI, at the same pipeline
+    // boundary. Its result is report-only and cannot reach the renderer.
+    let scene = if options.semantic {
+        let (_, evidence) = crate::scene::observe(
+            &linear,
+            working_to_display.as_ref(),
+            highlight_uncertainty.as_deref(),
+            noise_floor.as_ref().map(|floor| floor.snr10_ev),
+            preview_semantic_eligible,
+            &options.semantic_model_dir,
+        )?;
+        Some(evidence)
+    } else {
+        None
+    };
     let local_white_balance = (options.local_white_balance > 0.0)
         .then(|| crate::whitebalance::apply(&mut linear, options.local_white_balance))
         .flatten();
@@ -346,6 +400,10 @@ pub fn render_file_rgb16(
             preset: options.preset,
             exposure_bias_ev: options.exposure_bias_ev,
             noise_floor_ev: noise_floor.as_ref().map(|floor| floor.snr1_ev),
+            snr10_ev: noise_floor.as_ref().map(|floor| floor.snr10_ev),
+            iso: shot.as_ref().and_then(|info| info.iso),
+            exposure_time: shot.as_ref().and_then(|info| info.exposure_time),
+            f_number: shot.as_ref().and_then(|info| info.f_number),
             preview: preview.as_ref(),
             preview_strength,
             highlight_contrast: options.highlight_contrast,
@@ -359,6 +417,28 @@ pub fn render_file_rgb16(
         GuidanceMode::Independent
     };
 
+    // Luminance noise reduction after analysis (exposure byte-identical) and
+    // before the tone map and render (so lifted shadows are not grainy).
+    let luma_denoise = crate::luma::apply(
+        &mut linear,
+        noise_floor.as_ref().map(|floor| floor.snr10_ev),
+        options.luma_denoise,
+    );
+
+    // Automatic night tone map, driven by the low-light score, unless the caller
+    // asked for HDR or local tone explicitly.
+    let night_tone_strength = if options.hdr == 0.0 && options.local_tone == 0.0 {
+        (crate::localtone::automatic_night_strength(analysis.low_light_score) * options.night_tone)
+            .clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let hdr_strength = if options.hdr > 0.0 {
+        options.hdr
+    } else {
+        night_tone_strength
+    };
+
     let local_tone = if options.local_tone > 0.0 {
         Some(crate::localtone::build(
             &linear,
@@ -370,10 +450,10 @@ pub fn render_file_rgb16(
         None
     };
     let local_tone_report = local_tone.as_ref().map(|map| map.report().clone());
-    let hdr = if options.hdr > 0.0 {
+    let hdr = if hdr_strength > 0.0 {
         Some(crate::localtone::build_hdr(
             &linear,
-            options.hdr,
+            hdr_strength,
             noise_floor.as_ref().map(|floor| floor.snr1_ev),
             highlight_uncertainty.as_deref(),
         )?)
@@ -387,10 +467,6 @@ pub fn render_file_rgb16(
         (None, Some(map)) => Some(map),
         (None, None) => None,
     };
-    let working_to_display = options
-        .working_space
-        .to_display()
-        .filter(|_| options.raw_color_path == RawColorPath::Owned);
     let mut rendered = crate::tone::render(
         &linear,
         &parameters,
@@ -427,6 +503,8 @@ pub fn render_file_rgb16(
             local_tone: local_tone_report,
             hdr: hdr_report,
             chroma_denoise,
+            luma_denoise,
+            scene,
             sharpen,
             color,
             guidance_mode,

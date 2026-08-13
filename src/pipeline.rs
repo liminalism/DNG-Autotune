@@ -177,9 +177,15 @@ fn dump_stage(
 /// working space" caveat is simply false under `--raw-color-path owned
 /// --working-space rec2020`, and a limitations list that lies in one
 /// configuration is worse than none.
-fn limitations(options: &RunOptions, color: &ColorReport) -> Vec<String> {
-    let mut limitations =
-        vec!["global analysis only; no face, subject, scene, or depth model".to_string()];
+fn limitations(options: &RunOptions, color: &ColorReport, luma_denoised: bool) -> Vec<String> {
+    let mut limitations = if options.semantic {
+        vec![
+            "scene inference is observational only; no semantic evidence changes rendering, and no depth model is available"
+                .to_string(),
+        ]
+    } else {
+        vec!["global analysis only; no face, subject, scene, or depth model".to_string()]
+    };
 
     match options.raw_color_path {
         RawColorPath::Rawler => limitations.push(
@@ -227,10 +233,18 @@ fn limitations(options: &RunOptions, color: &ColorReport) -> Vec<String> {
         });
     }
     limitations.push("no camera-specific DCP creative rendering table".to_string());
+    // Luma noise is reduced only on frames noisy enough for the luminance
+    // denoiser to engage; the disclaimer is dropped for exactly those frames and
+    // kept verbatim otherwise, so a clean frame's limitations list is unchanged.
     if color.highlight_reconstruction.is_none() {
-        limitations
-            .push("no dedicated highlight reconstruction; luma noise is not reduced".to_string());
-    } else {
+        if luma_denoised {
+            limitations.push("no dedicated highlight reconstruction".to_string());
+        } else {
+            limitations.push(
+                "no dedicated highlight reconstruction; luma noise is not reduced".to_string(),
+            );
+        }
+    } else if !luma_denoised {
         limitations.push("luma noise is not reduced".to_string());
     }
 
@@ -310,6 +324,8 @@ fn process_job_inner(
             local_tone: None,
             hdr: None,
             chroma_denoise: None,
+            luma_denoise: None,
+            scene: None,
             sharpen: None,
             reference: None,
             color: None,
@@ -355,9 +371,20 @@ fn process_job_inner(
     // immediately: peak memory then becomes the larger of the two stages rather
     // than their sum. A full-size preview decodes to about 150 MB, which is well
     // under rawler's own develop peak, so this costs nothing at the peak.
-    let preview = (preview_strength > 0.0)
-        .then(|| crate::preview::read(&job.input))
+    let decoded_preview = (preview_strength > 0.0 || options.semantic)
+        .then(|| crate::preview::read_preview_rgb(&job.input))
         .flatten();
+    let preview_semantic_eligible = decoded_preview
+        .as_ref()
+        .is_some_and(crate::preview::DecodedPreview::semantic_eligible);
+    let preview = (preview_strength > 0.0)
+        .then(|| {
+            decoded_preview
+                .as_ref()
+                .and_then(crate::preview::measure_preview_oracle)
+        })
+        .flatten();
+    drop(decoded_preview);
     if let Some(oracle) = &preview {
         eprintln!(
             "PREV  {}: {}x{} {:?} | key {:+.2} EV",
@@ -574,6 +601,46 @@ fn process_job_inner(
         );
     }
 
+    // Perception observes the neutral, chroma-denoised scene before local white
+    // balance. It is intentionally report-only: no value from SceneEvidence is
+    // accepted by analysis, tone, or rendering in this slice.
+    let scene = if options.semantic {
+        let (proxy, evidence) = crate::scene::observe(
+            &linear,
+            working_to_display.as_ref(),
+            highlight_uncertainty.as_deref(),
+            noise_floor.as_ref().map(|floor| floor.snr10_ev),
+            preview_semantic_eligible,
+            &options.semantic_model_dir,
+        )?;
+        if let Some(directory) = &options.dump_stages
+            && let Err(error) = crate::scene::dump(directory, &job.input, &proxy, &evidence.masks)
+        {
+            eprintln!(
+                "DUMP  {}: semantic diagnostics failed: {error:#}",
+                job.input.display()
+            );
+        }
+        eprintln!(
+            "SCENE {}: {} model(s), {} region(s){}",
+            job.input.display(),
+            evidence.models.len(),
+            evidence
+                .regions
+                .iter()
+                .filter(|region| region.area_fraction > 0.0)
+                .count(),
+            if evidence.inference_errors.is_empty() {
+                String::new()
+            } else {
+                format!(" | {} inference error(s)", evidence.inference_errors.len())
+            }
+        );
+        Some(evidence)
+    } else {
+        None
+    };
+
     // Applied to developed scene-linear RGB, on top of the camera's as-shot
     // white balance: this corrects the residual local cast that a single
     // global illuminant cannot.
@@ -604,8 +671,10 @@ fn process_job_inner(
         );
     }
 
-    let linear = linear;
-
+    // `linear` stays mutable through analysis on purpose: the luminance denoiser
+    // below edits it *after* the exposure decision is taken, so that decision is
+    // byte-identical to a run without denoise, while the tone map and render see
+    // the cleaned luminance.
     let (analysis, mut parameters) = analyze::analyze(
         &linear,
         &analyze::AnalysisInputs {
@@ -613,6 +682,10 @@ fn process_job_inner(
             preset: options.preset,
             exposure_bias_ev: options.exposure_bias_ev,
             noise_floor_ev: noise_floor.as_ref().map(|floor| floor.snr1_ev),
+            snr10_ev: noise_floor.as_ref().map(|floor| floor.snr10_ev),
+            iso: shot.as_ref().and_then(|info| info.iso),
+            exposure_time: shot.as_ref().and_then(|info| info.exposure_time),
+            f_number: shot.as_ref().and_then(|info| info.f_number),
             preview: preview.as_ref(),
             preview_strength,
             highlight_contrast: options.highlight_contrast,
@@ -656,6 +729,54 @@ fn process_job_inner(
         );
     }
 
+    // Luminance noise reduction. Placed after analysis so the exposure decision
+    // is byte-identical to a run without it, and before the tone map and render
+    // so the shadows the night tone map lifts are not grainy. Scaled by the same
+    // SNR=10 crossing the chroma denoiser uses; `None` and byte-identical on
+    // clean frames.
+    let luma_denoise = crate::luma::apply(
+        &mut linear,
+        noise_floor.as_ref().map(|floor| floor.snr10_ev),
+        options.luma_denoise,
+    );
+    if let Some(report) = &luma_denoise {
+        eprintln!(
+            "LUMA  {}: strength {:.2} | radius {} px | SNR=10 at {:+.2} EV | mean correction {:.4} EV",
+            job.input.display(),
+            report.strength,
+            report.radius,
+            report.snr10_ev,
+            report.mean_abs_correction_ev,
+        );
+    }
+    let linear = linear;
+
+    // Automatic night tone map. When the raw statistics read the frame as a
+    // genuine low-light/night capture and the user has not asked for HDR or
+    // local tone explicitly, apply the edge-aware single-frame operator at a
+    // strength driven by the low-light score: it compresses bright light sources
+    // and locally lifts shadows without the global exposure being raised. Inert
+    // (and byte-identical) on daytime frames, where the score is ~0.
+    let night_tone_strength = if options.hdr == 0.0 && options.local_tone == 0.0 {
+        (crate::localtone::automatic_night_strength(analysis.low_light_score) * options.night_tone)
+            .clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let hdr_strength = if options.hdr > 0.0 {
+        options.hdr
+    } else {
+        night_tone_strength
+    };
+    if night_tone_strength > 0.0 {
+        eprintln!(
+            "NIGHT {}: low_light_score {:.2} -> night tone strength {:.2}",
+            job.input.display(),
+            analysis.low_light_score,
+            night_tone_strength,
+        );
+    }
+
     let local_tone = if options.local_tone > 0.0 {
         let map = crate::localtone::build(
             &linear,
@@ -679,10 +800,10 @@ fn process_job_inner(
     };
     let local_tone_report = local_tone.as_ref().map(|map| map.report().clone());
 
-    let hdr = if options.hdr > 0.0 {
+    let hdr = if hdr_strength > 0.0 {
         let map = crate::localtone::build_hdr(
             &linear,
-            options.hdr,
+            hdr_strength,
             noise_floor.as_ref().map(|floor| floor.snr1_ev),
             highlight_uncertainty.as_deref(),
         )?;
@@ -752,6 +873,8 @@ fn process_job_inner(
             local_tone: local_tone_report,
             hdr: hdr_report,
             chroma_denoise,
+            luma_denoise: luma_denoise.clone(),
+            scene,
             sharpen: None,
             reference,
             color: Some(color),
@@ -858,7 +981,7 @@ fn process_job_inner(
 
     if options.write_sidecar {
         let sidecar = Sidecar {
-            schema_version: crate::types::REPORT_SCHEMA_VERSION,
+            schema_version: crate::types::report_schema_version(options.semantic),
             application: "raw-autotune".to_string(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             automatic_profile_version: RunOptions::AUTO_PROFILE_VERSION.to_string(),
@@ -878,6 +1001,8 @@ fn process_job_inner(
             local_tone: local_tone_report.clone(),
             hdr: hdr_report.clone(),
             chroma_denoise: chroma_denoise.clone(),
+            luma_denoise: luma_denoise.clone(),
+            scene: scene.clone(),
             sharpen: sharpen.clone(),
             preview: preview.clone(),
             reference: reference.clone(),
@@ -886,7 +1011,7 @@ fn process_job_inner(
             controller_version: crate::types::CONTROLLER_VERSION.to_string(),
             analysis: analysis.clone(),
             parameters: parameters.clone(),
-            limitations: limitations(options, &color),
+            limitations: limitations(options, &color, luma_denoise.is_some()),
         };
         output::save_sidecar(&paths.sidecar, &sidecar)?;
     }
@@ -911,6 +1036,8 @@ fn process_job_inner(
         local_tone: local_tone_report,
         hdr: hdr_report,
         chroma_denoise,
+        luma_denoise,
+        scene,
         sharpen,
         reference,
         color: Some(color),

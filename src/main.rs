@@ -237,6 +237,7 @@ fn run_pipeline(
     let mut luminance_entropy = Vec::new();
     let mut average_gradient = Vec::new();
     let mut snr10 = Vec::new();
+    let mut low_light = Vec::new();
     let mut pooled_groups: BTreeMap<String, usize> = BTreeMap::new();
     let mut reference_pairs = 0_usize;
     let mut reference_center_weighted_key_ev = Vec::new();
@@ -287,6 +288,8 @@ fn run_pipeline(
                     local_tone: report.local_tone,
                     hdr: report.hdr,
                     chroma_denoise: report.chroma_denoise,
+                    luma_denoise: report.luma_denoise,
+                    scene: report.scene,
                     sharpen: report.sharpen,
                     reference: report.reference,
                     color: report.color,
@@ -324,6 +327,9 @@ fn run_pipeline(
                 }
                 if let Some(estimate) = &report.noise {
                     snr10.push(estimate.snr10_ev);
+                }
+                if let Some(stats) = &report.analysis {
+                    low_light.push(stats.low_light_score);
                 }
                 if let Some(floor) = &report.noise_floor
                     && floor.pooled
@@ -414,6 +420,8 @@ fn run_pipeline(
                     local_tone: report.local_tone,
                     hdr: report.hdr,
                     chroma_denoise: report.chroma_denoise,
+                    luma_denoise: report.luma_denoise,
+                    scene: report.scene,
                     sharpen: report.sharpen,
                     reference: report.reference,
                     color: report.color,
@@ -441,6 +449,8 @@ fn run_pipeline(
                     local_tone: None,
                     hdr: None,
                     chroma_denoise: None,
+                    luma_denoise: None,
+                    scene: None,
                     sharpen: None,
                     reference: None,
                     color: None,
@@ -580,7 +590,7 @@ fn run_pipeline(
 
     if let Some(path) = &options.summary_path {
         let summary = types::BatchSummary {
-            schema_version: types::REPORT_SCHEMA_VERSION,
+            schema_version: types::report_schema_version(options.semantic),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             automatic_profile_version: types::RunOptions::AUTO_PROFILE_VERSION.to_string(),
             preset: options.preset,
@@ -599,6 +609,7 @@ fn run_pipeline(
             luminance_entropy: types::Distribution::from_samples(luminance_entropy),
             average_gradient: types::Distribution::from_samples(average_gradient),
             snr10_ev: types::Distribution::from_samples(snr10),
+            low_light_score: types::Distribution::from_samples(low_light),
             reference_pairs,
             reference_center_weighted_key_ev_delta: types::Distribution::from_samples(
                 reference_center_weighted_key_ev,

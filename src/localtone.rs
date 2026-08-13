@@ -475,6 +475,28 @@ const HDR_HIGHLIGHT_LIMIT_EV: f32 = 0.9;
 /// synthesised colour, so HDR never re-exposes an invented sky (Slice 6 gate).
 const HDR_UNCERTAINTY_GATE: f32 = 0.85;
 
+/// Full strength for the automatic HDR-at-night map.
+///
+/// Matches the manual 0.85 validated against the night corpus: strong enough to
+/// compress sky gradients and lift foreground shadows back to their original
+/// night-time contrast (offsetting the flattening effect of raw's linear light
+/// collection), but slightly short of 1.0 to leave room for the user to push it
+/// harder if needed.
+const HDR_AUTOMATIC_MAX_STRENGTH: f32 = 0.85;
+
+/// Strength for the automatic HDR-at-night map, driven by the low-light score.
+///
+/// Continuous rather than binary, so two frames a hair apart in low-light
+/// characteristics do not render visibly differently. Ramps in only after a
+/// score of 0.2 — a frame must be unambiguously dark and noisy before the night
+/// operator starts rewriting light sources.
+pub fn automatic_night_strength(low_light_score: f32) -> f32 {
+    let mut t = (low_light_score - 0.2) / 0.8;
+    t = t.clamp(0.0, 1.0);
+    let s = t * t * (3.0 - 2.0 * t); // smoothstep
+    s * HDR_AUTOMATIC_MAX_STRENGTH
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HdrReport {
     pub strength: f32,

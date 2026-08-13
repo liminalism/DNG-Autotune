@@ -89,6 +89,11 @@ pub const AUTO_STRENGTH: f32 = 1.0;
 /// asked is "was this meant to be viewed", which is a question about the image,
 /// not about its ratio to the sensor.
 const MIN_PREVIEW_PIXELS: usize = 250_000;
+/// Smallest decoded RGB image useful to the optional global semantic models.
+/// Kept separate from `MIN_PREVIEW_PIXELS`: a 256x191 thumbnail is informative
+/// about broad content even though it is not trustworthy enough to steer
+/// exposure.
+const MIN_SEMANTIC_PREVIEW_PIXELS: usize = 32 * 32;
 /// Largest preview accepted, as a guard against a corrupt directory asking for a
 /// huge allocation.
 const MAX_PREVIEW_PIXELS: usize = 80_000_000;
@@ -124,6 +129,26 @@ pub struct PreviewOracle {
     pub p50_display_ev: f32,
     pub p95_display_ev: f32,
     pub sampled_pixels: usize,
+}
+
+/// Decoded embedded rendering before any decision about how it may be used.
+///
+/// Aligned segmentation still uses the RAW-derived semantic proxy; this image
+/// is only eligible for later global classification because embedded previews
+/// may have a different crop, orientation, or lens correction.
+#[derive(Debug, Clone)]
+pub struct DecodedPreview {
+    pub rgb: image::RgbImage,
+    pub source: PreviewSource,
+}
+
+impl DecodedPreview {
+    pub fn semantic_eligible(&self) -> bool {
+        let area = self.rgb.width() as usize * self.rgb.height() as usize;
+        (MIN_SEMANTIC_PREVIEW_PIXELS..=MAX_PREVIEW_PIXELS).contains(&area)
+            && self.rgb.width() >= 32
+            && self.rgb.height() >= 32
+    }
 }
 
 /// A preview candidate found in the directory, before its bytes are read.
@@ -364,11 +389,24 @@ fn measure(rgb: &image::RgbImage) -> Option<PreviewOracle> {
     })
 }
 
+/// Measure a decoded preview for exposure use. Size is an oracle policy here,
+/// not a decode policy, so small semantic thumbnails remain available to their
+/// separate consumer.
+pub fn measure_preview_oracle(preview: &DecodedPreview) -> Option<PreviewOracle> {
+    let area = preview.rgb.width() as usize * preview.rgb.height() as usize;
+    if !(MIN_PREVIEW_PIXELS..=MAX_PREVIEW_PIXELS).contains(&area) {
+        return None;
+    }
+    let mut oracle = measure(&preview.rgb)?;
+    oracle.source = preview.source;
+    Some(oracle)
+}
+
 /// Read and measure the embedded preview, or `None` when there is not a usable one.
 ///
 /// Best effort throughout: a file that develops must never fail because its
 /// preview is missing, auxiliary, or corrupt.
-pub fn read(path: &Path) -> Option<PreviewOracle> {
+pub fn read_preview_rgb(path: &Path) -> Option<DecodedPreview> {
     let file = File::open(path).ok()?;
     let mut reader = BufReader::new(file);
     let tiff = GenericTiffReader::new(&mut reader, 0, 0, None, &[TAG_SUB_IFDS]).ok()?;
@@ -383,7 +421,7 @@ pub fn read(path: &Path) -> Option<PreviewOracle> {
         .filter(|candidate| {
             // Undeclared size (area 0) is checked after decoding instead.
             let declared_ok = candidate.area() == 0
-                || (MIN_PREVIEW_PIXELS..=MAX_PREVIEW_PIXELS).contains(&candidate.area());
+                || (MIN_SEMANTIC_PREVIEW_PIXELS..=MAX_PREVIEW_PIXELS).contains(&candidate.area());
             declared_ok && candidate.length > 0
         })
         .collect();
@@ -439,13 +477,23 @@ pub fn read(path: &Path) -> Option<PreviewOracle> {
 
     // Undeclared sizes are bounds-checked here instead.
     let decoded_area = (rgb.width() as usize).saturating_mul(rgb.height() as usize);
-    if !(MIN_PREVIEW_PIXELS..=MAX_PREVIEW_PIXELS).contains(&decoded_area) {
+    if !(MIN_SEMANTIC_PREVIEW_PIXELS..=MAX_PREVIEW_PIXELS).contains(&decoded_area) {
         return None;
     }
+    Some(DecodedPreview {
+        rgb,
+        source: candidate.source,
+    })
+}
 
-    let mut oracle = measure(&rgb)?;
-    oracle.source = candidate.source;
-    Some(oracle)
+/// Read and measure the embedded preview for exposure use.
+///
+/// Compatibility wrapper for existing callers. New code that may also need
+/// semantic eligibility should call [`read_preview_rgb`] once and then
+/// [`measure_preview_oracle`] so the JPEG is not decoded twice.
+pub fn read(path: &Path) -> Option<PreviewOracle> {
+    let preview = read_preview_rgb(path)?;
+    measure_preview_oracle(&preview)
 }
 
 #[cfg(test)]
@@ -528,6 +576,22 @@ mod tests {
             MIN_PREVIEW_PIXELS < smallest_rendering,
             "{MIN_PREVIEW_PIXELS} would reject a {smallest_rendering}-pixel preview"
         );
+    }
+
+    #[test]
+    fn small_preview_is_semantic_but_not_an_exposure_oracle() {
+        let preview = DecodedPreview {
+            rgb: RgbImage::from_fn(256, 191, |x, _| {
+                if x < 128 {
+                    Rgb([32, 64, 96])
+                } else {
+                    Rgb([224, 192, 160])
+                }
+            }),
+            source: PreviewSource::JpegStrip,
+        };
+        assert!(preview.semantic_eligible());
+        assert!(measure_preview_oracle(&preview).is_none());
     }
 
     /// Full strength is the measured default; a partial one would be invented.

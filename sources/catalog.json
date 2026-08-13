@@ -1,0 +1,14 @@
+[
+  {
+    "added_at": "2026-08-13",
+    "availability": "full",
+    "byte_len": 34715,
+    "content_hash": "sha256:30691c2ae292c41eb4518e1fe9708d0b9c792fec748104c552c555e9304a067d",
+    "id": "scenedetection",
+    "media_type": "text/markdown",
+    "origin": "external",
+    "path": "sources/external/scenedetection--30691c2a.md",
+    "scope": "src/**",
+    "title": "Scene detection architecture"
+  }
+]

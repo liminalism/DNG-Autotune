@@ -196,6 +196,15 @@ pub struct Cli {
     #[arg(long, value_name = "DIR")]
     pub dump_stages: Option<PathBuf>,
 
+    /// Run optional scene perception and record masks/region evidence without
+    /// changing exposure, tone, colour, or output pixels.
+    #[arg(long)]
+    pub semantic: bool,
+
+    /// Directory containing prepared scene_image ONNX graphs.
+    #[arg(long, value_name = "DIR", requires = "semantic")]
+    pub semantic_model_dir: Option<PathBuf>,
+
     /// Do not copy the source EXIF or embed an sRGB ICC profile in the output.
     /// The pixels are unaffected either way; this only strips the tags, which
     /// leaves a photo library with no capture date, camera or lens to show.
@@ -238,6 +247,24 @@ pub struct Cli {
     /// automatic decision, which is inert on clean frames; 0 disables it.
     #[arg(long, value_name = "SCALE", default_value_t = 1.0)]
     pub chroma_denoise: f32,
+
+    /// Multiply the automatic luma-noise-reduction strength. 1.0 is the
+    /// automatic decision, which is inert on clean frames; 0 disables it. The
+    /// luminance denoiser only engages on frames noisy enough to need it
+    /// (roughly ISO 1600 and up), so a clean frame renders identically either
+    /// way.
+    #[arg(long, value_name = "SCALE", default_value_t = 1.0)]
+    pub luma_denoise: f32,
+
+    /// Multiply the automatic night tone map, 0 to 1. 1.0 is the automatic
+    /// decision: an edge-aware single-frame local tone map is applied only to
+    /// frames the raw statistics detect as low-light/night, compressing bright
+    /// light sources and locally lifting shadows without globally raising the
+    /// exposure. 0 disables it, leaving every frame byte-identical to a run
+    /// without the feature. Ignored when --hdr or --local-tone is set
+    /// explicitly, which take precedence.
+    #[arg(long, value_name = "SCALE", default_value_t = 1.0)]
+    pub night_tone: f32,
 
     /// Multiply the automatic output-sharpening amount. 1.0 is the automatic
     /// decision, which fades out on noisy frames; 0 disables it.
@@ -382,6 +409,14 @@ impl Cli {
             "--chroma-denoise must be between 0 and 2"
         );
         ensure!(
+            self.luma_denoise.is_finite() && (0.0..=2.0).contains(&self.luma_denoise),
+            "--luma-denoise must be between 0 and 2"
+        );
+        ensure!(
+            self.night_tone.is_finite() && (0.0..=1.0).contains(&self.night_tone),
+            "--night-tone must be between 0 and 1"
+        );
+        ensure!(
             self.sharpen.is_finite() && (0.0..=3.0).contains(&self.sharpen),
             "--sharpen must be between 0 and 3"
         );
@@ -483,6 +518,10 @@ impl Cli {
         options.working_space = self.working_space;
         options.sub_black = self.sub_black;
         options.dump_stages = self.dump_stages;
+        options.semantic = self.semantic;
+        if let Some(directory) = self.semantic_model_dir {
+            options.semantic_model_dir = directory;
+        }
         options.write_metadata = !self.no_metadata;
         options.noise_scan = self.noise_scan;
         options.noise_profile = self.noise_profile;
@@ -493,6 +532,8 @@ impl Cli {
         options.highlight_contrast = self.highlight_contrast;
         options.highlight_color_ratio_exponent = self.highlight_color_ratio_exponent;
         options.chroma_denoise = self.chroma_denoise;
+        options.luma_denoise = self.luma_denoise;
+        options.night_tone = self.night_tone;
         options.sharpen = self.sharpen;
         options.demosaic = self.demosaic;
         options.hot_pixels = self.hot_pixels;

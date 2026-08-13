@@ -2,6 +2,18 @@
 
 ## Unreleased — a standalone front-end
 
+### Scene-model pack (perception, no render change)
+
+`tools/scene_models/` fetches and rewrites the first perception graphs for
+`lege-gpu` instead of ONNX Runtime. YuNet FP32 prepares as a `scene_image`
+NCHW graph (Conv/Relu/MaxPool/Resize nearest only) and runs on
+`lege-gpu::vision::OnnxSession`, preferring its shared wgpu executor with the
+CPU reference retained as fallback. MobileOne-S0 and the Cityscapes /
+COCO-VOC LR-ASPP candidates are exported the same way. Weights stay in
+`models/artifacts/` (gitignored); hashes and licenses live in
+`models/manifest.json`. `--semantic` records observational masks, scores, and
+model provenance without changing rendered pixels.
+
 ### Harmonic highlight reconstruction is now automatic
 
 The visually accepted harmonic estimator is now the unattended highlight path

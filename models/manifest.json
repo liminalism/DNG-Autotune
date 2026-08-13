@@ -1,0 +1,91 @@
+{
+  "schema": 1,
+  "artifacts_dir": "models/artifacts",
+  "scene_input_name": "scene_image",
+  "proxy": {
+    "long_side": 512,
+    "letterbox": true,
+    "letterbox_value": 0,
+    "tone": "fixed-neutral-analysis",
+    "transfer": "srgb"
+  },
+  "upstream": {
+    "yunet_2023mar": {
+      "filename": "face_detection_yunet_2023mar.onnx",
+      "url": "https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx",
+      "license": "MIT",
+      "role": "face-detector",
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
+    },
+    "mobileone_s0": {
+      "filename": "mobileone_s0.pth.tar",
+      "url": "https://docs-assets.developer.apple.com/ml-research/datasets/mobileone/mobileone_s0.pth.tar",
+      "license": "Apple Sample Code License — audit before redistribution",
+      "role": "classifier-backbone",
+      "sha256": "74080c64f108a15d9c73129f5ae8f8315981c8dc31e111e74b3ae36c7aea2033"
+    }
+  },
+  "prepared": {
+    "yunet": {
+      "filename": "yunet.prepared.onnx",
+      "role": "face-detector",
+      "source": "yunet_2023mar",
+      "license": "MIT",
+      "input": [1, 3, 512, 512],
+      "preprocess": {
+        "color": "bgr",
+        "scale": 1.0,
+        "mean": [0.0, 0.0, 0.0],
+        "std": [1.0, 1.0, 1.0],
+        "range": "0-255"
+      },
+      "decode": "yunet-facedetectoryn",
+      "sha256": "5208df8ab9e42b7a390a94db146ca8476268f7ceab6a7e13e58882705bacc8ac"
+    },
+    "mobileone_s0": {
+      "filename": "mobileone_s0.prepared.onnx",
+      "role": "imagenet-backbone",
+      "license": "Apple Sample Code License — audit before redistribution",
+      "input": [1, 3, 224, 224],
+      "preprocess": {
+        "color": "rgb",
+        "scale": 0.00392156862745098,
+        "mean": [0.485, 0.456, 0.406],
+        "std": [0.229, 0.224, 0.225]
+      },
+      "outputs": "imagenet-1000-logits",
+      "note": "Not a SceneScores model. Kept as the slice-5 backbone.",
+      "sha256": "be99b9ee4c74b2f12d4849d518bd70874f83e2aae95a7c406e194ab813efef1d"
+    },
+    "lraspp_mnv3_cityscapes": {
+      "filename": "lraspp_mnv3_cityscapes.prepared.onnx",
+      "role": "segmenter-preferred",
+      "source_url": "https://github.com/ekzhang/fastseg",
+      "license": "MIT",
+      "taxonomy": "cityscapes",
+      "input": [1, 3, 512, 512],
+      "preprocess": {
+        "color": "rgb",
+        "scale": 0.00392156862745098,
+        "mean": [0.485, 0.456, 0.406],
+        "std": [0.229, 0.224, 0.225]
+      },
+      "sha256": "07d0be7557827636c8f2a60eeb8598d0cbf4834ee7479ec79b88f1acd4351505"
+    },
+    "lraspp_mnv3_coco": {
+      "filename": "lraspp_mnv3_coco.prepared.onnx",
+      "role": "segmenter-fallback",
+      "source_url": "https://pytorch.org/vision/stable/models/lraspp.html",
+      "license": "BSD-3-Clause (torchvision weights)",
+      "taxonomy": "coco_voc",
+      "input": [1, 3, 512, 512],
+      "preprocess": {
+        "color": "rgb",
+        "scale": 0.00392156862745098,
+        "mean": [0.485, 0.456, 0.406],
+        "std": [0.229, 0.224, 0.225]
+      },
+      "sha256": ""
+    }
+  }
+}

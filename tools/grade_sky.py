@@ -29,9 +29,10 @@ Usage
                               raw-autotune-output/sweep/hc1.20 \\
                               raw-autotune-output/sweep/hc1.40
 
-Each RENDERED_DIR is matched to the reference by filename stem, so
-`_DSC1283_auto.jpg` pairs with `_DSC1283.JPG`. Frames without a pair are
-skipped and counted.
+Each RENDERED_DIR is searched recursively and matched to the reference by
+filename stem, so `_DSC1283_auto.jpg` pairs with `_DSC1283.JPG` even when a
+normal recursive render placed it below an input-folder child directory.
+Frames without a pair are skipped and counted.
 
 Requires only Pillow and numpy.
 """
@@ -145,11 +146,23 @@ def stem_of(rendered: Path) -> str:
     return stem.lower()
 
 
+def rendered_frames(rendered_dir: Path) -> list[Path]:
+    """Return finished JPEGs below an output directory in stable order.
+
+    `raw-autotune --recursive` preserves the input directory structure below
+    its output root.  Looking only at `iterdir()` silently yields no pairs for
+    that ordinary invocation, so the grader must follow that layout too.
+    """
+    return sorted(
+        path
+        for path in rendered_dir.rglob("*")
+        if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg"}
+    )
+
+
 def grade(rendered_dir: Path, index: dict[str, Path]) -> tuple[list[dict], int]:
     rows, unpaired = [], 0
-    for path in sorted(rendered_dir.iterdir()):
-        if path.suffix.lower() not in {".jpg", ".jpeg"}:
-            continue
+    for path in rendered_frames(rendered_dir):
         match = index.get(stem_of(path))
         if match is None:
             unpaired += 1

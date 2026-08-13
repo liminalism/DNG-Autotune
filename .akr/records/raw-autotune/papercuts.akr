@@ -236,6 +236,18 @@ record raw-autotune.papercut.grade-sky-py-reported-zero-pairs-on-a-normal/1 : pa
     created_at 2026-08-08
 }
 
+record raw-autotune.papercut.i-tried-to-pass-several-exact-test-name-filters/1 : papercut {
+    title "I tried to pass several exact test-name filters to one `cargo test`…"
+    state verified
+    statement """
+        I tried to pass several exact test-name filters to one `cargo test` invocation; Cargo accepts only one positional TESTNAME filter, so the focused low-light tests had to be rerun using their shared module/name scope.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    about "cargo"
+    author "codex"
+    created_at 2026-08-13
+}
+
 record raw-autotune.papercut.imagemagick-compare-returns-exit-status-1-when/1 : papercut {
     title "ImageMagick compare returns exit status 1 when images differ even…"
     state verified
@@ -292,6 +304,39 @@ record raw-autotune.papercut.knowledge-search-and-knowledge-start-via-the/1 : pa
     created_at 2026-08-07
 }
 
+record raw-autotune.papercut.mcp-akr-tools-knowledge-search-knowledge/1 : papercut {
+    title "MCP akr tools knowledge_search/knowledge_context returned 'unsupported…"
+    state verified
+    statement """
+        MCP akr tools knowledge_search/knowledge_context returned 'unsupported call' from the akr MCP server (knowledge_start worked), so I fell back to the akr CLI. The two names may not be wired in this MCP build.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    author "fugu"
+    created_at 2026-08-10
+}
+
+record raw-autotune.papercut.naming-tools-scene-models-inspect-py-shadowed/1 : papercut {
+    title "Naming tools/scene_models/inspect.py shadowed the stdlib inspect…"
+    state verified
+    statement """
+        Naming tools/scene_models/inspect.py shadowed the stdlib inspect module: running prepare.py as a script put that directory on sys.path, so import onnx died inside typing_extensions. Renamed the script to report.py.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    author "grok"
+    created_at 2026-08-13
+}
+
+record raw-autotune.papercut.pdftotext-poppler-not-installed-on-this-windows/1 : papercut {
+    title "pdftotext/poppler not installed on this Windows host though AGENTS/user…"
+    state verified
+    statement """
+        pdftotext/poppler not installed on this Windows host though AGENTS/user workflow assumes it; used Python PyMuPDF (fitz) to extract text and render equation pages instead.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    author "fugu"
+    created_at 2026-08-10
+}
+
 record raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp/1 : papercut {
     title "Re-running stage dumps into an explicit `/tmp` diagnostic directory was…"
     state verified
@@ -301,6 +346,17 @@ record raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp/1 : pap
     observed_at git:ff74d3b248f65ea98bde93578a3b95c80a647181
     author "codex"
     created_at 2026-08-08
+}
+
+record raw-autotune.papercut.rtx-4060-wgpu-on-linux-is-currently-unusable/1 : papercut {
+    title "RTX 4060 wgpu on Linux is currently unusable; scene inference stays on…"
+    state verified
+    statement """
+        RTX 4060 wgpu on Linux is currently unusable; scene inference stays on lege-gpu run_cpu. Added WGPU_PREFER_INTEGRATED and WGPU_ADAPTER_SKIP so a later GPU path can use the Intel iGPU and skip the 4060.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    author "grok"
+    created_at 2026-08-13
 }
 
 record raw-autotune.papercut.running-several-read-only-akr-search-commands/1 : papercut {
@@ -359,6 +415,17 @@ record raw-autotune.papercut.the-first-focused-release-test-compile-exceeded/1 :
     created_at 2026-08-10
 }
 
+record raw-autotune.papercut.the-first-standalone-python-regression-test/1 : papercut {
+    title "The first standalone Python regression test imported its sibling as a…"
+    state verified
+    statement """
+        The first standalone Python regression test imported its sibling as a top-level module, but unittest discovery runs from the repository root and omits tools/ from sys.path; load the script by its explicit file path so either invocation works.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    author "codex"
+    created_at 2026-08-13
+}
+
 record raw-autotune.papercut.the-full-batch-process-stopped-at-the-execution/1 : papercut {
     title "The full batch process stopped at the execution harness's ~30-second…"
     state verified
@@ -393,6 +460,17 @@ record raw-autotune.papercut.the-knowledge-context-mcp-connector-returned/1 : pa
     created_at 2026-08-09
 }
 
+record raw-autotune.papercut.the-low-light-analysis-only-pass-used-highlight/1 : papercut {
+    title "The low-light analysis-only pass used `--highlight-reconstruction 0`,…"
+    state verified
+    statement """
+        The low-light analysis-only pass used `--highlight-reconstruction 0`, but validation rejected it because the default harmonic method requires strength 1 even though reconstruction was disabled. The workaround is the non-obvious pair `--highlight-method current --highlight-reconstruction 0`; zero strength could plausibly bypass the method constraint.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    author "codex"
+    created_at 2026-08-13
+}
+
 record raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near/1 : papercut {
     title "The unit tests that pinned the da23c5f near-white anchor rule were kept…"
     state verified
@@ -413,6 +491,17 @@ record raw-autotune.papercut.updating-a-decision-record-initially-failed/1 : pap
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
     author "codex"
     created_at 2026-08-10
+}
+
+record raw-autotune.papercut.while-auditing-low-light-false-positives-dry/1 : papercut {
+    title "While auditing low-light false positives, --dry-run still ran harmonic…"
+    state verified
+    statement """
+        While auditing low-light false positives, --dry-run still ran harmonic highlight transport and other downstream processing even though only AnalysisStats was needed; the 376-frame pass projected to roughly 15 minutes and had to be replaced with summary-led sampling. A detector/analysis-only fast path would make controller calibration much cheaper.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    author "codex"
+    created_at 2026-08-13
 }
 
 record raw-autotune.papercut.while-locating-hdr-sky-local-tone-and/1 : papercut {
@@ -448,6 +537,18 @@ record raw-autotune.papercut.while-recording-the-visual-rejection-two-apply/1 : 
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
     author "codex"
     created_at 2026-08-10
+}
+
+record raw-autotune.papercut.while-running-the-focused-scene-and-preview/1 : papercut {
+    title "While running the focused scene and preview tests, `cargo test`…"
+    state verified
+    statement """
+        While running the focused scene and preview tests, `cargo test` rejected two positional test filters; Cargo accepts only one filter, so the validation had to be rerun with a single shared filter or as separate invocations.
+        """
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    about "cargo"
+    author "gpt-5-codex"
+    created_at 2026-08-13
 }
 
 record raw-autotune.papercut.while-running-three-targeted-rust-tests-i/1 : papercut {

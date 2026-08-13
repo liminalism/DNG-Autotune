@@ -34,6 +34,78 @@ fn classify_tonality(key_score: f32, dynamic_range_ev: f32) -> TonalClass {
     }
 }
 
+/// Hermite smoothstep on `[0, 1]`, clamped outside.
+#[inline]
+fn smoothstep(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// Exposure value normalized to ISO 100, derived only from capture metadata.
+///
+/// This is a physical ambient-light cue, not scene recognition. A deliberately
+/// underexposed daylight frame can be dark and noisy in the raw data, but its
+/// short shutter and stopped-down aperture still give it a high EV100. Night
+/// captures in the paired corpus are at or below about 4.3 EV100, while the
+/// hostile high-ISO daylight negatives start at 9 EV100.
+fn capture_ev100(
+    exposure_time: Option<f32>,
+    f_number: Option<f32>,
+    iso: Option<u32>,
+) -> Option<f32> {
+    let exposure_time = exposure_time.filter(|value| value.is_finite() && *value > 0.0)?;
+    let f_number = f_number.filter(|value| value.is_finite() && *value > 0.0)?;
+    let iso = iso.filter(|value| *value > 0)? as f32;
+    let ev100 = (f_number * f_number / exposure_time).log2() - (iso / 100.0).log2();
+    ev100.is_finite().then_some(ev100)
+}
+
+/// How much a frame looks like a genuine low-light/night capture, 0 to 1.
+///
+/// The shape-based [`classify_tonality`] cannot answer this: a night scene with
+/// a few bright lights reads as `Normal` or `HighDynamicRange`, and a dark
+/// subject shot in daylight reads as dark without being low-light. So the score
+/// is the product of three independent cues a genuine night capture shares:
+///
+/// * *darkness* — how far the scene median sits below middle grey (`p50_ev`),
+///   ramping in from -1 EV to -3 EV. `p50_ev` is measured before the automatic
+///   exposure lifts anything, so it reflects where the light actually was.
+/// * *noise* — how hard the sensor was pushed, taken as the larger of the SNR=10
+///   crossing (a measured property of this frame) and the ISO metadata.
+/// * *ambient light* — EV100 derived from shutter, aperture and ISO. It is fully
+///   open through 5 EV, fades smoothly, and is zero from 8 EV upward. This
+///   rejects a dark raw caused by 1/1600 s at f/18 in daylight without needing
+///   to know whether the pixels contain a waterfall, a person or a sky.
+///
+/// Multiplying them means a frame must be dark, noisy, and exposed under low
+/// ambient light to score high, so a bright scene at maximum ISO and a dark,
+/// high-dynamic-range daytime frame both score low — the cases that darkness or
+/// ISO alone confuse.
+fn low_light_score(
+    p50_ev: f32,
+    snr10_ev: Option<f32>,
+    iso: Option<u32>,
+    capture_ev100: Option<f32>,
+) -> f32 {
+    let darkness = smoothstep((-1.0 - p50_ev) / 2.0);
+    let noise_from_snr = snr10_ev
+        .filter(|value| value.is_finite())
+        .map(|snr10| smoothstep((snr10 + 4.0) / 3.5))
+        .unwrap_or(0.0);
+    let noise_from_iso = iso
+        .filter(|iso| *iso > 0)
+        .map(|iso| smoothstep(((iso as f32).log2() - 1600.0f32.log2()) / 3.0))
+        .unwrap_or(0.0);
+    let noise = noise_from_snr.max(noise_from_iso);
+    let ambient_light = capture_ev100
+        .filter(|value| value.is_finite())
+        .map(|ev100| 1.0 - smoothstep((ev100 - 5.0) / 3.0))
+        // Missing exposure metadata must not disable an otherwise reliable
+        // darkness-and-noise decision.
+        .unwrap_or(1.0);
+    (darkness * noise * ambient_light).clamp(0.0, 1.0)
+}
+
 /// Derive the tone curve from the measured statistics and a chosen exposure.
 ///
 /// Split out of [`analyze`] so the preview oracle can re-solve it: the oracle's
@@ -250,6 +322,16 @@ pub struct AnalysisInputs<'a> {
     pub exposure_bias_ev: f32,
     /// Scene EV below which the sensor delivers no usable signal.
     pub noise_floor_ev: Option<f32>,
+    /// Scene EV at which SNR falls to 10, from [`crate::noise`]. Feeds the
+    /// low-light score only; does not affect any existing tone parameter.
+    pub snr10_ev: Option<f32>,
+    /// ISO from EXIF, a metadata noise cue and an input to capture EV100.
+    pub iso: Option<u32>,
+    /// Exposure time in seconds, used with aperture and ISO to reject dark raw
+    /// values produced by short daylight exposures.
+    pub exposure_time: Option<f32>,
+    /// Aperture as an f-number, used only for the physical EV100 night gate.
+    pub f_number: Option<f32>,
     /// The camera's own rendering of this capture, when one could be read.
     pub preview: Option<&'a crate::preview::PreviewOracle>,
     /// How far to move from the controller's target toward the oracle's, 0 to 1.
@@ -267,6 +349,10 @@ impl AnalysisInputs<'_> {
             preset,
             exposure_bias_ev,
             noise_floor_ev: None,
+            snr10_ev: None,
+            iso: None,
+            exposure_time: None,
+            f_number: None,
             preview: None,
             preview_strength: 0.0,
             highlight_contrast: 1.0,
@@ -396,6 +482,7 @@ pub fn analyze(
     let mut exposure_ev =
         (target_median_ev - center_weighted_key_ev + exposure_bias_ev).clamp(-5.0, 5.0);
 
+    let capture_ev100 = capture_ev100(inputs.exposure_time, inputs.f_number, inputs.iso);
     let mut stats = AnalysisStats {
         sampled_pixels: valid,
         sample_stride: stride,
@@ -415,6 +502,8 @@ pub fn analyze(
         clipped_2_fraction: clipped_2 as f32 / valid as f32,
         clipped_3_fraction: clipped_3 as f32 / valid as f32,
         mean_chroma: (chroma_sum / valid as f64) as f32,
+        capture_ev100,
+        low_light_score: low_light_score(p50, inputs.snr10_ev, inputs.iso, capture_ev100),
     };
 
     let mut params = derive_params(
@@ -479,6 +568,48 @@ mod tests {
 
     fn constant_image(value: f32) -> LinearImage {
         LinearImage::new(64, 64, vec![[value; 3]; 64 * 64]).unwrap()
+    }
+
+    #[test]
+    fn night_capture_stays_above_the_automatic_tone_threshold() {
+        // `_DSC1309`: the weakest-scoring positive in the night corpus.
+        let ev100 = capture_ev100(Some(1.0 / 160.0), Some(2.8), Some(6400));
+        assert!(ev100.unwrap() < 5.0);
+        let score = low_light_score(-4.0766478, Some(-2.0345316), Some(6400), ev100);
+        assert!(
+            score > 0.7,
+            "weakest night positive fell below the useful range: {score}"
+        );
+    }
+
+    #[test]
+    fn short_stopped_down_daylight_exposure_is_not_night() {
+        // `_DSC1277`: ISO 8000 and a raw median near -5 EV used to score 0.87,
+        // despite being an ordinary daylight waterfall shot. Its 1/1600 s,
+        // f/18 capture metadata is the unambiguous physical counter-signal.
+        let ev100 = capture_ev100(Some(1.0 / 1600.0), Some(18.0), Some(8000));
+        assert!(ev100.unwrap() > 12.0);
+        let score = low_light_score(-4.9708223, Some(-1.3921179), Some(8000), ev100);
+        assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn daylight_gate_rejects_even_maximum_iso_noise() {
+        let score = low_light_score(-6.0, Some(2.0), Some(65_535), Some(9.0));
+        assert_eq!(score, 0.0);
+    }
+
+    #[test]
+    fn missing_exposure_metadata_preserves_darkness_and_noise_fallback() {
+        let score = low_light_score(-4.0, Some(-1.0), Some(12_800), None);
+        assert_eq!(score, 1.0);
+    }
+
+    #[test]
+    fn capture_ev100_rejects_invalid_metadata() {
+        assert_eq!(capture_ev100(Some(0.0), Some(2.8), Some(6400)), None);
+        assert_eq!(capture_ev100(Some(0.1), Some(f32::NAN), Some(6400)), None);
+        assert_eq!(capture_ev100(Some(0.1), Some(2.8), Some(0)), None);
     }
 
     /// A bright preview with nothing in the raw statistics to back it up is

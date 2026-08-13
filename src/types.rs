@@ -42,7 +42,23 @@ pub const MID_GRAY: f32 = 0.18;
 ///   compression-aware highlight color-ratio exponent.
 /// 18 identifies the highlight estimator and records pre-demosaic spatial
 ///   reconstruction, fit, connected-region, knee and solver counters.
-pub const REPORT_SCHEMA_VERSION: u32 = 18;
+/// 19 adds `analysis.low_light_score`, its optional physical
+///   `analysis.capture_ev100` input, and the optional `luma_denoise` block,
+///   present only when the frame was noisy enough for the luminance denoiser to
+///   run. `luma_denoise` and `capture_ev100` are omitted when absent.
+pub const REPORT_SCHEMA_VERSION: u32 = 19;
+/// Schema 20 is emitted only when semantic evidence is requested. Keeping the
+/// feature-off report at 19 makes the observational feature genuinely absent
+/// from legacy dry-run summaries rather than changing their version alone.
+pub const SEMANTIC_REPORT_SCHEMA_VERSION: u32 = 20;
+
+pub const fn report_schema_version(semantic: bool) -> u32 {
+    if semantic {
+        SEMANTIC_REPORT_SCHEMA_VERSION
+    } else {
+        REPORT_SCHEMA_VERSION
+    }
+}
 
 /// Name for the exposure controller's current behaviour, frozen at the colour
 /// path's correctness boundary.
@@ -239,6 +255,10 @@ pub struct RunOptions {
     pub sub_black: crate::rescale::SubBlack,
     /// Where to write per-stage scene-linear dumps, when asked for.
     pub dump_stages: Option<PathBuf>,
+    /// Collect scene evidence without allowing it to influence rendering.
+    pub semantic: bool,
+    /// Directory containing prepared scene_image ONNX graphs.
+    pub semantic_model_dir: PathBuf,
     /// Copy the source EXIF into the output and embed the sRGB ICC profile.
     /// On by default: `docs/PLAN.md` criterion 2 counts this as the product,
     /// not polish, because a photo library with no capture metadata sorts an
@@ -262,6 +282,15 @@ pub struct RunOptions {
     pub highlight_color_ratio_exponent: f32,
     /// Multiplier on the automatic chroma-denoise strength; 1.0 is automatic.
     pub chroma_denoise: f32,
+    /// Multiplier on the automatic luma-denoise strength; 1.0 is automatic, 0
+    /// disables it. Like `chroma_denoise` it is inert on clean frames.
+    pub luma_denoise: f32,
+    /// Multiplier on the automatic night tone map (edge-aware local tone applied
+    /// automatically to detected low-light frames), 0 to 1. 1.0 is the automatic
+    /// decision; 0 disables it, which leaves every frame byte-identical to a run
+    /// without this feature. Ignored when `--hdr` or `--local-tone` is set
+    /// explicitly, which take precedence.
+    pub night_tone: f32,
     /// Multiplier on the automatic output-sharpening amount; 1.0 is automatic.
     pub sharpen: f32,
     /// Bayer demosaic policy. `Auto` resolves per frame from pre-demosaic
@@ -286,7 +315,7 @@ pub struct RunOptions {
 }
 
 impl RunOptions {
-    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v4";
+    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v5";
 
     /// The unattended archive profile shared by the flag CLI and the minimal
     /// interactive front-end. Callers change only explicit user overrides.
@@ -313,6 +342,8 @@ impl RunOptions {
             working_space: crate::color::WorkingSpace::Srgb,
             sub_black: crate::rescale::SubBlack::Preserve,
             dump_stages: None,
+            semantic: false,
+            semantic_model_dir: PathBuf::from(crate::scene::DEFAULT_MODEL_DIR),
             write_metadata: true,
             noise_scan: None,
             noise_profile: None,
@@ -323,6 +354,8 @@ impl RunOptions {
             highlight_contrast: 1.0,
             highlight_color_ratio_exponent: 1.0,
             chroma_denoise: 1.0,
+            luma_denoise: 1.0,
+            night_tone: 1.0,
             sharpen: 1.0,
             demosaic: crate::demosaic::DemosaicMethod::Auto,
             hot_pixels: 0.5,
@@ -473,6 +506,17 @@ pub struct AnalysisStats {
     /// Fraction with all 3 channels clipped.
     pub clipped_3_fraction: f32,
     pub mean_chroma: f32,
+    /// Exposure value normalized to ISO 100, derived from shutter, aperture and
+    /// ISO when all three are available. This is the physical ambient-light
+    /// gate for `low_light_score`, not semantic scene detection.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_ev100: Option<f32>,
+    /// How much this frame looks like a genuine low-light/night capture, 0 to 1.
+    /// Fuses scene median darkness (`p50_ev`), sensor noise (`snr10_ev`/ISO),
+    /// and capture EV100: a frame scores high only when it is dark, noisy, and
+    /// was exposed under low ambient light. Drives the automatic night tone map;
+    /// recorded on every frame.
+    pub low_light_score: f32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -556,6 +600,13 @@ pub struct Sidecar {
     /// Chroma noise reduction, when the frame was noisy enough to need it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
+    /// Luminance noise reduction, when the frame was noisy enough to need it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
+    /// Optional observational scene evidence. Omitted entirely unless semantic
+    /// inference was requested.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene: Option<crate::scene::SceneEvidence>,
     /// Output sharpening, when the frame was clean enough to take it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sharpen: Option<crate::sharpen::SharpenReport>,
@@ -641,6 +692,10 @@ pub struct ProcessReport {
     pub hdr: Option<crate::localtone::HdrReport>,
     /// Chroma noise reduction, when one was applied.
     pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
+    /// Luminance noise reduction, when one was applied.
+    pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
+    /// Scene evidence when optional inference was requested.
+    pub scene: Option<crate::scene::SceneEvidence>,
     /// Output sharpening, when one was applied.
     pub sharpen: Option<crate::sharpen::SharpenReport>,
     /// The camera's own JPEG of this capture, measured against ours.
@@ -680,6 +735,10 @@ pub struct SummaryEntry {
     pub hdr: Option<crate::localtone::HdrReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chroma_denoise: Option<crate::chroma::ChromaDenoiseReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene: Option<crate::scene::SceneEvidence>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sharpen: Option<crate::sharpen::SharpenReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -761,6 +820,8 @@ pub struct BatchSummary {
     pub average_gradient: Option<Distribution>,
     /// Distribution of the per-file SNR=10 crossing, in scene EV.
     pub snr10_ev: Option<Distribution>,
+    /// Distribution of the per-file `analysis.low_light_score`, 0 to 1.
+    pub low_light_score: Option<Distribution>,
     /// How many files `--reference` managed to pair with a camera JPEG.
     pub reference_pairs: usize,
     /// Ours minus the camera's, over the paired files. The exposure difference
