@@ -1103,6 +1103,57 @@ record raw-autotune.evidence.slice-6-uncertainty-gated-chroma-verify/1 : evidenc
         """
 }
 
+record raw-autotune.evidence.spatial-aq-contract-audit/1 : evidence {
+    title "SpatialAqMap contains normalized per-class confidence and encoder-neutral uses; no HEVC QP, JPEG XL HfMul, lambda, or quantizer-step values cross the API boundary."
+    state verified
+    result pass
+    method observation
+    observed_at git:a7fedcb3396501e26f6c09b2ba9baf5e8a6de7be
+    artifact "src/encoder_hints.rs"
+    summary """
+        SpatialAqMap contains normalized per-class confidence and encoder-neutral uses; no HEVC QP, JPEG XL HfMul, lambda, or quantizer-step values cross the API boundary.
+        """
+}
+
+record raw-autotune.evidence.spatial-aq-full-suite/1 : evidence {
+    title "All 338 library tests and all integration/example targets passed; clippy passed with warnings denied for raw-autotune (dependency dead-code warnings remain informational)."
+    state verified
+    result pass
+    method command
+    observed_at git:a7fedcb3396501e26f6c09b2ba9baf5e8a6de7be
+    command "cargo test --all-targets && cargo clippy --all-targets -- -D warnings"
+    artifact "src/encoder_hints.rs"
+    summary """
+        All 338 library tests and all integration/example targets passed; clippy passed with warnings denied for raw-autotune (dependency dead-code warnings remain informational).
+        """
+}
+
+record raw-autotune.evidence.spatial-aq-grid-tests/1 : evidence {
+    title "Six encoder-hints tests passed, including 8x8, 16x16, and 32x32 grid dimensions, source-coordinate confidence placement, unclipped-sky evidence, and invalid geometry handling."
+    state verified
+    result pass
+    method command
+    observed_at git:a7fedcb3396501e26f6c09b2ba9baf5e8a6de7be
+    command "cargo test encoder_hints"
+    artifact "src/encoder_hints.rs"
+    summary """
+        Six encoder-hints tests passed, including 8x8, 16x16, and 32x32 grid dimensions, source-coordinate confidence placement, unclipped-sky evidence, and invalid geometry handling.
+        """
+}
+
+record raw-autotune.evidence.spatial-aq-live-4060/1 : evidence {
+    title "Linux Vulkan selected the NVIDIA RTX 4060 and emitted a 188x125 HEVC-ready grid with distinct sky, vegetation, and structure layers; sky had 1,829 cells at confidence >=0.5."
+    state verified
+    result pass
+    method command
+    observed_at git:a7fedcb3396501e26f6c09b2ba9baf5e8a6de7be
+    command "target/release/examples/semantic-aq raw/raw_3rd_batch/_DSC1283.ARW 32"
+    artifact "examples/semantic-aq.rs"
+    summary """
+        Linux Vulkan selected the NVIDIA RTX 4060 and emitted a 188x125 HEVC-ready grid with distinct sky, vegetation, and structure layers; sky had 1,829 cells at confidence >=0.5.
+        """
+}
+
 record raw-autotune.evidence.transport-area-ramp-20260809/1 : evidence {
     title "Continuous area support removes the transport's region-edge ring"
     state verified

@@ -274,6 +274,24 @@ impl RenderReport {
             .as_ref()
             .and_then(|scene| self.encoder_hints.confidence_at_source(scene, kind, x, y))
     }
+
+    /// Resample selected semantic evidence to an encoder's native AQ grid.
+    ///
+    /// Pass `(8, 8)` for JPEG XL's current atom grid, or `(16, 16)` / `(32, 32)`
+    /// for bpg-rs HEVC quantization groups. Values remain normalized semantic
+    /// confidence; the receiving encoder chooses its own quantizer response.
+    pub fn encoder_spatial_aq_map(
+        &self,
+        cell_width: u32,
+        cell_height: u32,
+    ) -> Result<crate::encoder_hints::SpatialAqMap, crate::encoder_hints::SpatialAqError> {
+        let scene = self
+            .scene
+            .as_ref()
+            .ok_or(crate::encoder_hints::SpatialAqError::SceneEvidenceUnavailable)?;
+        self.encoder_hints
+            .spatial_aq_map(scene, cell_width, cell_height)
+    }
 }
 
 /// Self-describing packed image ready to hand to another crate.

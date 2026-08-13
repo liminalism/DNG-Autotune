@@ -7,8 +7,11 @@
 use crate::scene::{RegionKind, SceneEvidence};
 use crate::types::AnalysisStats;
 use serde::Serialize;
+use std::error::Error;
+use std::fmt;
 
-pub const ENCODER_HINTS_SCHEMA_VERSION: u32 = 1;
+pub const ENCODER_HINTS_SCHEMA_VERSION: u32 = 2;
+pub const SPATIAL_AQ_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -27,9 +30,103 @@ pub enum GrainHint {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RegionEncodingUse {
+    /// Smooth, low-activity gradients where an activity-only AQ model can cause
+    /// visible banding by spending too few bits.
+    SmoothGradientRetention,
     HighlightHeadroom,
+    /// Fine stochastic detail. The encoder decides whether its masking model can
+    /// quantize this more strongly or whether the requested quality should retain it.
     TextureRetention,
+    /// Persistent edges and man-made detail that should not be treated as noise.
+    StructuralDetailRetention,
 }
+
+/// Geometry of an encoder-requested raster grid in rendered/source coordinates.
+///
+/// Cells start at `(0, 0)`. The final row and column may cover fewer source
+/// pixels than `cell_width`/`cell_height`. `grid_width` is also the raster stride.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SpatialAqGrid {
+    pub source_width: u32,
+    pub source_height: u32,
+    pub cell_width: u32,
+    pub cell_height: u32,
+    pub grid_width: u32,
+    pub grid_height: u32,
+}
+
+/// One semantic confidence plane resampled to an encoder-selected grid.
+///
+/// Confidence is normalized to `0.0..=1.0`, in row-major order. The semantic
+/// class and its possible uses remain explicit: raw-autotune provides evidence;
+/// the encoder remains responsible for choosing direction, strength, and rate
+/// compensation in its own quantizer units.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SpatialAqLayer {
+    pub kind: RegionKind,
+    pub uses: Vec<RegionEncodingUse>,
+    pub confidence: Vec<f32>,
+}
+
+/// Codec-neutral semantic evidence for spatial adaptive quantization.
+///
+/// This deliberately contains no QP offsets, lambda multipliers, quantizer-step
+/// adjustments, or codec block identifiers. HEVC callers can request their
+/// 16/32-pixel QG grid; JPEG XL callers can request its 8-pixel atom grid.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct SpatialAqMap {
+    pub schema_version: u32,
+    pub grid: SpatialAqGrid,
+    pub layers: Vec<SpatialAqLayer>,
+}
+
+impl SpatialAqMap {
+    pub fn layer(&self, kind: RegionKind) -> Option<&SpatialAqLayer> {
+        self.layers.iter().find(|layer| layer.kind == kind)
+    }
+
+    /// Build a scalar evidence plane for one encoder-neutral use by taking the
+    /// strongest contributing semantic confidence at each cell.
+    pub fn confidence_for_use(&self, usage: RegionEncodingUse) -> Vec<f32> {
+        let len = (self.grid.grid_width as usize).saturating_mul(self.grid.grid_height as usize);
+        let mut result = vec![0.0f32; len];
+        for layer in self
+            .layers
+            .iter()
+            .filter(|layer| layer.uses.contains(&usage))
+        {
+            for (result, &confidence) in result.iter_mut().zip(&layer.confidence) {
+                *result = result.max(confidence);
+            }
+        }
+        result
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpatialAqError {
+    SceneEvidenceUnavailable,
+    ZeroCellDimension,
+    DimensionOverflow,
+    InconsistentSceneGeometry,
+}
+
+impl fmt::Display for SpatialAqError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SceneEvidenceUnavailable => f.write_str("semantic scene evidence is unavailable"),
+            Self::ZeroCellDimension => f.write_str("spatial AQ cell dimensions must be non-zero"),
+            Self::DimensionOverflow => {
+                f.write_str("spatial AQ dimensions exceed the supported range")
+            }
+            Self::InconsistentSceneGeometry => {
+                f.write_str("scene confidence planes do not match the semantic proxy")
+            }
+        }
+    }
+}
+
+impl Error for SpatialAqError {}
 
 /// A stable reference to a dense confidence plane held by `SceneEvidence`.
 ///
@@ -95,18 +192,21 @@ impl EncoderProfileHints {
                 continue;
             }
             let uses = match region.kind {
-                RegionKind::Sky
-                    if region.mean_confidence >= 0.75
-                        && region.clipped_fraction.unwrap_or(0.0) >= 0.10 =>
-                {
-                    hints.minimum_bit_depth = Some(10);
-                    if !hints.reasons.contains(&"confident_clipped_sky") {
+                RegionKind::Sky if region.mean_confidence >= 0.75 => {
+                    let mut uses = vec![RegionEncodingUse::SmoothGradientRetention];
+                    if region.clipped_fraction.unwrap_or(0.0) >= 0.10 {
+                        hints.minimum_bit_depth = Some(10);
                         hints.reasons.push("confident_clipped_sky");
+                        uses.push(RegionEncodingUse::HighlightHeadroom);
                     }
-                    vec![RegionEncodingUse::HighlightHeadroom]
+                    uses
                 }
                 RegionKind::Vegetation | RegionKind::BuildingOrInterior => {
-                    vec![RegionEncodingUse::TextureRetention]
+                    if region.kind == RegionKind::Vegetation {
+                        vec![RegionEncodingUse::TextureRetention]
+                    } else {
+                        vec![RegionEncodingUse::StructuralDetailRetention]
+                    }
                 }
                 // Face/person ROI is intentionally excluded until a validated
                 // corpus supports it. The current corpus has no face and one
@@ -213,6 +313,129 @@ impl EncoderProfileHints {
         let bottom = sample(x0, y1) + (sample(x1, y1) - sample(x0, y1)) * fx;
         Some(top + (bottom - top) * fy)
     }
+
+    /// Resample every selected semantic layer to a caller-selected block grid.
+    ///
+    /// Each output value is the area-weighted mean confidence over that source
+    /// cell, evaluated in the model proxy without counting letterbox pixels.
+    /// This is preferable to center sampling for small codec blocks near a
+    /// semantic boundary and makes partial edge cells deterministic.
+    pub fn spatial_aq_map(
+        &self,
+        scene: &SceneEvidence,
+        cell_width: u32,
+        cell_height: u32,
+    ) -> Result<SpatialAqMap, SpatialAqError> {
+        if cell_width == 0 || cell_height == 0 {
+            return Err(SpatialAqError::ZeroCellDimension);
+        }
+        let source_width = u32::try_from(scene.proxy.source_width)
+            .map_err(|_| SpatialAqError::DimensionOverflow)?;
+        let source_height = u32::try_from(scene.proxy.source_height)
+            .map_err(|_| SpatialAqError::DimensionOverflow)?;
+        if source_width == 0
+            || source_height == 0
+            || scene.proxy.content_width == 0
+            || scene.proxy.content_height == 0
+        {
+            return Err(SpatialAqError::InconsistentSceneGeometry);
+        }
+        let grid_width = source_width.div_ceil(cell_width);
+        let grid_height = source_height.div_ceil(cell_height);
+        let cell_count = usize::try_from(u64::from(grid_width) * u64::from(grid_height))
+            .map_err(|_| SpatialAqError::DimensionOverflow)?;
+        let grid = SpatialAqGrid {
+            source_width,
+            source_height,
+            cell_width,
+            cell_height,
+            grid_width,
+            grid_height,
+        };
+
+        let mut layers = Vec::with_capacity(self.regions.len());
+        for hint in &self.regions {
+            let mask = scene
+                .masks
+                .masks
+                .iter()
+                .find(|mask| mask.kind == hint.kind)
+                .ok_or(SpatialAqError::InconsistentSceneGeometry)?;
+            if mask.width != scene.proxy.width
+                || mask.height != scene.proxy.height
+                || mask.confidence.len() != mask.width.saturating_mul(mask.height)
+                || hint.source_width != scene.proxy.source_width
+                || hint.source_height != scene.proxy.source_height
+            {
+                return Err(SpatialAqError::InconsistentSceneGeometry);
+            }
+
+            let mut confidence = Vec::with_capacity(cell_count);
+            for gy in 0..grid_height {
+                let y0 = gy * cell_height;
+                let y1 = (y0 + cell_height).min(source_height);
+                for gx in 0..grid_width {
+                    let x0 = gx * cell_width;
+                    let x1 = (x0 + cell_width).min(source_width);
+                    confidence.push(mean_confidence_for_source_rect(scene, mask, x0, y0, x1, y1));
+                }
+            }
+            layers.push(SpatialAqLayer {
+                kind: hint.kind,
+                uses: hint.uses.clone(),
+                confidence,
+            });
+        }
+
+        Ok(SpatialAqMap {
+            schema_version: SPATIAL_AQ_SCHEMA_VERSION,
+            grid,
+            layers,
+        })
+    }
+}
+
+fn mean_confidence_for_source_rect(
+    scene: &SceneEvidence,
+    mask: &crate::scene::RegionMask,
+    x0: u32,
+    y0: u32,
+    x1: u32,
+    y1: u32,
+) -> f32 {
+    let proxy = &scene.proxy;
+    let px0 = proxy.content_x as f64
+        + f64::from(x0) * proxy.content_width as f64 / proxy.source_width as f64;
+    let px1 = proxy.content_x as f64
+        + f64::from(x1) * proxy.content_width as f64 / proxy.source_width as f64;
+    let py0 = proxy.content_y as f64
+        + f64::from(y0) * proxy.content_height as f64 / proxy.source_height as f64;
+    let py1 = proxy.content_y as f64
+        + f64::from(y1) * proxy.content_height as f64 / proxy.source_height as f64;
+    let sx0 = px0.floor().max(proxy.content_x as f64) as usize;
+    let sx1 = px1
+        .ceil()
+        .min((proxy.content_x + proxy.content_width) as f64) as usize;
+    let sy0 = py0.floor().max(proxy.content_y as f64) as usize;
+    let sy1 = py1
+        .ceil()
+        .min((proxy.content_y + proxy.content_height) as f64) as usize;
+    let mut weighted = 0.0f64;
+    let mut area = 0.0f64;
+    for sy in sy0..sy1 {
+        let overlap_y = (py1.min((sy + 1) as f64) - py0.max(sy as f64)).max(0.0);
+        for sx in sx0..sx1 {
+            let overlap_x = (px1.min((sx + 1) as f64) - px0.max(sx as f64)).max(0.0);
+            let weight = overlap_x * overlap_y;
+            weighted += f64::from(mask.confidence[sy * mask.width + sx]) * weight;
+            area += weight;
+        }
+    }
+    if area > 0.0 {
+        (weighted / area / 255.0) as f32
+    } else {
+        0.0
+    }
 }
 
 #[cfg(test)]
@@ -259,7 +482,7 @@ mod tests {
                 content_y: 0,
                 content_width: 2,
                 content_height: 1,
-                rendering: "test".into(),
+                rendering: "test",
             },
             embedded_preview_semantic_eligible: false,
             models: Vec::new(),
@@ -326,11 +549,52 @@ mod tests {
         }
     }
 
+    fn grid_scene() -> SceneEvidence {
+        let mut scene = scene();
+        scene.proxy = SemanticProxyInfo {
+            width: 4,
+            height: 4,
+            source_width: 64,
+            source_height: 32,
+            content_x: 0,
+            content_y: 1,
+            content_width: 4,
+            content_height: 2,
+            rendering: "test",
+        };
+        scene.regions[0].clipped_fraction = Some(0.0);
+        scene.masks = RegionMasks {
+            width: 4,
+            height: 4,
+            masks: [RegionKind::Sky, RegionKind::Vegetation, RegionKind::Person]
+                .into_iter()
+                .map(|kind| {
+                    let row = match kind {
+                        RegionKind::Sky => [255, 255, 0, 0],
+                        RegionKind::Vegetation => [0, 0, 255, 255],
+                        _ => [255; 4],
+                    };
+                    let mut confidence = vec![0; 16];
+                    confidence[4..8].copy_from_slice(&row);
+                    confidence[8..12].copy_from_slice(&row);
+                    RegionMask {
+                        kind,
+                        width: 4,
+                        height: 4,
+                        threshold: 0.5,
+                        confidence,
+                    }
+                })
+                .collect(),
+        };
+        scene
+    }
+
     #[test]
     fn semantic_and_raw_signals_produce_profile_and_spatial_hints() {
         let scene = scene();
         let hints = EncoderProfileHints::derive(&analysis(0.8), Some(&scene));
-        assert_eq!(hints.schema_version, 1);
+        assert_eq!(hints.schema_version, 2);
         assert_eq!(hints.minimum_bit_depth, Some(10));
         assert_eq!(hints.grain, GrainHint::Preserve);
         assert_eq!(hints.chroma_sampling_preference.len(), 2);
@@ -361,6 +625,57 @@ mod tests {
     }
 
     #[test]
+    fn unclipped_sky_still_exports_gradient_evidence() {
+        let scene = grid_scene();
+        let hints = EncoderProfileHints::derive(&analysis(0.2), Some(&scene));
+        let sky = hints
+            .regions
+            .iter()
+            .find(|region| region.kind == RegionKind::Sky)
+            .expect("confident sky is useful to AQ even when unclipped");
+        assert!(
+            sky.uses
+                .contains(&RegionEncodingUse::SmoothGradientRetention)
+        );
+        assert!(!sky.uses.contains(&RegionEncodingUse::HighlightHeadroom));
+        assert_eq!(hints.minimum_bit_depth, None);
+    }
+
+    #[test]
+    fn spatial_aq_map_matches_jpeg_xl_and_hevc_grid_shapes() {
+        let scene = grid_scene();
+        let hints = EncoderProfileHints::derive(&analysis(0.2), Some(&scene));
+
+        for (cell, expected_width, expected_height) in [(8, 8, 4), (16, 4, 2), (32, 2, 1)] {
+            let aq = hints.spatial_aq_map(&scene, cell, cell).unwrap();
+            assert_eq!(aq.schema_version, SPATIAL_AQ_SCHEMA_VERSION);
+            assert_eq!(aq.grid.grid_width, expected_width);
+            assert_eq!(aq.grid.grid_height, expected_height);
+            assert_eq!(
+                aq.layer(RegionKind::Sky).unwrap().confidence.len(),
+                (expected_width * expected_height) as usize
+            );
+        }
+
+        let hevc = hints.spatial_aq_map(&scene, 32, 32).unwrap();
+        assert_eq!(hevc.layer(RegionKind::Sky).unwrap().confidence, [1.0, 0.0]);
+        assert_eq!(
+            hevc.confidence_for_use(RegionEncodingUse::TextureRetention),
+            [0.0, 1.0]
+        );
+    }
+
+    #[test]
+    fn spatial_aq_rejects_zero_sized_cells() {
+        let scene = grid_scene();
+        let hints = EncoderProfileHints::derive(&analysis(0.2), Some(&scene));
+        assert_eq!(
+            hints.spatial_aq_map(&scene, 0, 8),
+            Err(SpatialAqError::ZeroCellDimension)
+        );
+    }
+
+    #[test]
     fn analysis_only_never_invents_semantic_roi() {
         let hints = EncoderProfileHints::derive(&analysis(0.2), None);
         assert!(hints.regions.is_empty());
@@ -373,7 +688,7 @@ mod tests {
         let scene = scene();
         let hints = EncoderProfileHints::derive(&analysis(0.2), Some(&scene));
         let document = serde_json::to_value(&hints).unwrap();
-        assert_eq!(document["schema_version"], 1);
+        assert_eq!(document["schema_version"], 2);
         assert_eq!(document["regions"][0]["mask_width"], 2);
         assert_eq!(
             document["regions"][0]["coordinate_space"],

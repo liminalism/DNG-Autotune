@@ -1605,6 +1605,44 @@ record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 : work {
     }
 }
 
+record raw-autotune.work.spatial-semantic-aq-api/1 : work {
+    title "Expose codec-neutral spatial semantic AQ evidence"
+    state completed
+    scope [ path "src/api.rs", path "src/encoder_hints.rs" ]
+    intent """
+        Let downstream encoders combine semantic region confidence with their own codec-specific activity, rate, and quantizer models on an encoder-chosen spatial grid.
+        """
+    note """
+        Implemented a versioned in-memory map with area-weighted source-coordinate resampling, class-specific normalized confidence, encoder-neutral uses, and an inspection example. The live Linux run selected the RTX 4060 Vulkan adapter and produced native 8x8 and 32x32 maps.
+        """
+    acceptance {
+        check codec-grid {
+            statement """
+                The in-memory API resamples semantic confidence into caller-selected 8x8, 16x16, and 32x32 source-coordinate grids with explicit dimensions and raster layout.
+                """
+            method command
+            command "cargo test encoder_hints"
+            verified_by [ @raw-autotune.evidence.spatial-aq-grid-tests/1 ]
+        }
+        check separate-evidence-policy {
+            statement """
+                The public contract preserves semantic class and encoder-neutral intent while containing no codec-specific QP or quantizer values.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.spatial-aq-contract-audit/1 ]
+        }
+        check sky-gradient-independent-of-clipping {
+            statement """
+                Confident sky exports gradient/banding evidence even when unclipped, while highlight-headroom remains conditional on measured clipping.
+                """
+            method command
+            command "cargo test encoder_hints"
+            verified_by [ @raw-autotune.evidence.spatial-aq-grid-tests/1 ]
+        }
+    }
+    depends_on [ @raw-autotune.work.encoder-profile-hints-api/1 ]
+}
+
 record raw-autotune.work.success-criteria/1 : work {
     title "Success Criteria"
     state proposed
