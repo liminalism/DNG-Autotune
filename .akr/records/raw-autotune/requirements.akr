@@ -19,23 +19,18 @@ record raw-autotune.requirement.constraints-and-non-goals/1 : requirement {
 }
 
 record raw-autotune.requirement.slice-5-continuous-log-chromaticity/1 : requirement {
-    title "Slice 5 — Continuous log-chromaticity reconstruction (Phase B.5)"
+    title "Slice 5 — Joint raw-domain log-chromaticity reconstruction (Phase B.5)"
     state proposed
     scope [ all ]
     statement """
-        - **Owns:** `src/highlight.rs` (major), optionally new `src/guided.rs`.
-        - **Does:** implement `u=log(R+eps/G+eps)`, `v=log(B+eps/G+eps)` confidence-weighted edge-aware filtered `q`, solve `s*` over trusted channels, synthesize clipped channels toward `s* q` with `x'_i >= x_i` lower bound, continuous per-channel blend `(1-c_i)x_i + c_i x̂_i`, second confidence for prior reliability with smooth neutralization toward neutral deep inside 3-clipped components. Collapse the two `near_white` special cases in current `highlight.rs:194` into the one continuous path. Preserve `strength` as uniform scale, `0` = skip module.
-        - **Depends on:** Slice 4; validated by Slice 2 synthetic suite (must turn the synthetic ramp from fail to pass).
+        - **Owns:** the newer raw-domain harmonic path in `src/raw_highlight.rs`, its integration in `src/color.rs`, and the production-path decision in `src/highlight.rs`; synthetic gates belong in `src/synthetic.rs` and the renderer attribution in `src/tone.rs`.
+        - **Architecture:** retain the existing harmonic/pyramid estimator for luminance and spatial detail, but make one estimator own chromaticity across the complete connected component spanning one-channel- and two-channel-clipped Bayer quads. Do not hand chromaticity from raw harmonic reconstruction to a second post-demosaic `(u'v')` transport model on only the two-channel side.
+        - **Estimator:** preserve continuous per-channel clip confidence and use trust `t_c=(1-c_c)^2` without a `0.5` validity/application threshold. Solve one edge-aware two-dimensional log-chromaticity field per affected component using all pairwise constraints `log(R/G)`, `log(B/G)`, and `log(R/B)` with weights `t_Rt_G`, `t_Bt_G`, and `t_Rt_B`. Use harmonic output only as a weak initialization/emergency prior; no frame-average chromaticity.
+        - **Recomposition:** form `q=[exp(u),1,exp(v)]`, fit one scalar intensity from trusted white-balanced channels, enforce measured sensor floors, and apply the prediction continuously per CFA site as `x' = x + strength * c * max(0, x_hat-x)`. Confidence zero and strength zero must be exact no-ops; measured channels remain lower bounds and are never darkened. Deep fully clipped cores may use a smooth neutral fallback only when no local channel or component-boundary evidence exists.
+        - **Integration:** remove final authority from binary `valid` topology, `keep_unfitted_partial_cells()`, and the confidence `< 0.5` skip in `apply_prediction()`. Keep those only for initialization/compatibility where necessary. Disable `transport_spatial_chromaticity()` for `HighlightMethod::Harmonic` production output; retain it only as an internal ablation. Do not globally weaken the tone shoulder or extend post-demosaic transport into the one-channel fringe.
+        - **Validation:** update the synthetic sky gate to report `0↔1`, `1↔2`, and `2↔3` transitions separately, with `1↔2` as the critical gate. Add an `_DSC1289`-like smooth Bayer-quad fixture using white balance approximately `[2.3632812, 1.0, 1.8085938]`, broad one-/two-channel clipped cohorts, and optional foliage/sky occlusion. Require `1↔2` boundary OKLab chroma p90 divided by nearby same-state p90 to be `<= 1.25` at highlight-post and after-tone-curve, while preserving no-darkening, zero-confidence/zero-strength no-op, hue/occluder, luminance/peak-recovery, jobs-1/jobs-8 determinism, corpus, and memory gates.
+        - **Status:** proposed design only; it is not verified or promoted until the source implementation, synthetic measurements, archived `_DSC1289` render comparison, and regression gates pass.
         """
-    source {
-        kind legacy
-        path ".agents/plans/2026-08-07-white-blowout-testing-apparatus.md"
-        excerpt """
-            - **Owns:** `src/highlight.rs` (major), optionally new `src/guided.rs`.
-            - **Does:** implement `u=log(R+eps/G+eps)`, `v=log(B+eps/G+eps)` confidence-weighted edge-aware filtered `q`, solve `s*` over trusted channels, synthesize clipped channels toward `s* q` with `x'_i >= x_i` lower bound, continuous per-channel blend `(1-c_i)x_i + c_i x̂_i`, second confidence for prior reliability with smooth neutralization toward neutral deep inside 3-clipped components. Collapse the two `near_white` special cases in current `highlight.rs:194` into the one continuous path. Preserve `strength` as uniform scale, `0` = skip module.
-            - **Depends on:** Slice 4; validated by Slice 2 synthetic suite (must turn the synthetic ramp from fail to pass).
-            """
-    }
 }
 
 record raw-autotune.requirement.slice-7-perceptual-gamut-compressor-phase-c-7/1 : requirement {

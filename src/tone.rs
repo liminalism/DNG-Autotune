@@ -745,6 +745,25 @@ pub(crate) fn dump_gamut_diagnostics(
     }
 }
 
+/// Write the exact encoded buffer that the pipeline is about to hand to the
+/// output writer. This is deliberately separate from `gamut-post`: output
+/// sharpening is a later stage, so the post-sharpen checkpoint is the only
+/// diagnostic that can be byte-identical to a default CLI output.
+pub(crate) fn dump_final_diagnostic(rendered: &Rgb16Image, dump_dir: &std::path::Path, stem: &str) {
+    let res: anyhow::Result<()> = (|| {
+        let p = dump_dir.join(format!("{stem}-final.png"));
+        if let Some(parent) = p.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        rendered.save(&p)?;
+        eprintln!("DUMP  final: {}", p.display());
+        Ok(())
+    })();
+    if let Err(e) = res {
+        eprintln!("DUMP  final diagnostic failed for {stem}: {e}");
+    }
+}
+
 /// Batch sRGB encode: linear `[0, 1]` values straight to `u16`, in chunks run
 /// across the rayon pool, each chunk SIMD-dispatched by `linear_srgb`. This is
 /// where the per-pixel `powf`/rayon-bridge cost in `render_pixel_local` moved
@@ -858,6 +877,42 @@ mod tests {
         let paper_mid =
             render_pixel_stages(midtone, &paper_params, &paper_lut, 1.0, 0.0, None).gamut_pre;
         assert_eq!(plain_mid, paper_mid, "uncompressed midtones must be exact");
+    }
+
+    /// The last diagnostic checkpoint is the renderer's output, not a second
+    /// approximation of it.  Keep this assertion on the encoded u16 buffer so
+    /// a future change cannot make `gamut-post` look equivalent while differing
+    /// at values that the lossless stage dump still preserves.
+    #[test]
+    fn final_checkpoint_is_byte_identical_to_render_output() {
+        let image = LinearImage::new(
+            3,
+            2,
+            vec![
+                [0.10, 0.30, 1.20],
+                [2.00, 0.20, 0.10],
+                [0.40, 0.60, 0.20],
+                [-0.10, 0.40, 0.90],
+                [0.80, 1.10, 2.50],
+                [MID_GRAY; 3],
+            ],
+        )
+        .unwrap();
+        let params = ToneParams {
+            highlight_desaturation: 0.16,
+            saturation: 1.22,
+            ..parameters_protected()
+        };
+        let uncertainty = vec![0.0, 0.25, 0.5, 0.75, 1.0, 0.0];
+        let checkpoints = render_checkpoints(&image, &params, Some(&uncertainty), None);
+        let rendered = render(&image, &params, None, Some(&uncertainty), None);
+        let gamut_post: Vec<f32> = checkpoints
+            .iter()
+            .flat_map(|stage| stage.gamut_post)
+            .collect();
+        let checkpoint_output = encode_srgb_u16(&gamut_post);
+
+        assert_eq!(rendered.as_raw(), checkpoint_output.as_slice());
     }
 
     /// The per-pixel reconstruction-uncertainty map, not a display-brightness

@@ -24,7 +24,6 @@ const HARMONIC_POLISH_SWEEPS: usize = 60;
 const DIRECT_SOLVE_MAX_UNKNOWNS: usize = 1 << 14;
 const MAX_AFFINE_EXTRAPOLATION_SPANS: f32 = 3.0;
 const HIGH_GAIN_COLOR_SLOPE: f32 = 2.5;
-const CHROMA_ENVELOPE_TOLERANCE: f32 = 0.015;
 const GUIDE_K: f32 = 0.15;
 const WEIGHT_FLOOR: f32 = 1.0e-4;
 const KNEE_LOW: f32 = 0.80;
@@ -68,6 +67,14 @@ impl HighlightMethod {
     }
 }
 
+/// Parameters that define one pre-demosaic reconstruction pass.
+#[derive(Debug, Clone, Copy)]
+pub struct ReconstructionOptions {
+    pub white_balance: [f32; 3],
+    pub strength: f32,
+    pub method: HighlightMethod,
+}
+
 /// What a pre-demosaic estimator did before its counters are folded into the
 /// public highlight report.
 #[derive(Debug, Default, Clone, Serialize)]
@@ -89,6 +96,11 @@ struct Grid {
     height: usize,
     value: Vec<[f32; 3]>,
     floor: Vec<[f32; 3]>,
+    confidence: Vec<[f32; 3]>,
+    trust: Vec<[f32; 3]>,
+    // Compatibility topology for the older luminance initializer. Final
+    // chromaticity and application authority is continuous; it never reads
+    // this thresholded view.
     valid: Vec<[bool; 3]>,
 }
 
@@ -161,9 +173,10 @@ fn build_grid(
     let grid_height = height.div_ceil(2);
     let mut sum = vec![[0.0_f32; 3]; grid_width * grid_height];
     let mut floor = vec![[0.0_f32; 3]; grid_width * grid_height];
-    let mut trusted_sum = vec![[0.0_f32; 3]; grid_width * grid_height];
+    let mut weighted_sum = vec![[0.0_f32; 3]; grid_width * grid_height];
+    let mut confidence_sum = vec![[0.0_f32; 3]; grid_width * grid_height];
+    let mut trust_sum = vec![[0.0_f32; 3]; grid_width * grid_height];
     let mut count = vec![[0_u8; 3]; grid_width * grid_height];
-    let mut trusted_count = vec![[0_u8; 3]; grid_width * grid_height];
 
     for y in 0..height {
         for x in 0..width {
@@ -173,25 +186,33 @@ fn build_grid(
             };
             let cell = (y / 2) * grid_width + x / 2;
             let value = samples[source];
+            let clip = confidence_at(samples, confidence, source);
+            let trust = (1.0 - clip).powi(2);
             sum[cell][c] += value;
             floor[cell][c] = floor[cell][c].max(value);
+            weighted_sum[cell][c] += value * trust;
+            confidence_sum[cell][c] += clip;
+            trust_sum[cell][c] += trust;
             count[cell][c] += 1;
-            if confidence_at(samples, confidence, source) < VALID_CONFIDENCE_MAX {
-                trusted_sum[cell][c] += value;
-                trusted_count[cell][c] += 1;
-            }
         }
     }
 
     let mut value = vec![[0.0_f32; 3]; grid_width * grid_height];
+    let mut grid_confidence = vec![[0.0_f32; 3]; grid_width * grid_height];
+    let mut trust = vec![[0.0_f32; 3]; grid_width * grid_height];
     let mut valid = vec![[false; 3]; grid_width * grid_height];
     for i in 0..value.len() {
         for c in 0..3 {
-            if trusted_count[i][c] > 0 {
-                value[i][c] = trusted_sum[i][c] / f32::from(trusted_count[i][c]);
-                valid[i][c] = true;
-            } else if count[i][c] > 0 {
-                value[i][c] = sum[i][c] / f32::from(count[i][c]);
+            if count[i][c] > 0 {
+                let n = f32::from(count[i][c]);
+                grid_confidence[i][c] = confidence_sum[i][c] / n;
+                trust[i][c] = trust_sum[i][c] / n;
+                value[i][c] = if trust_sum[i][c] > EPSILON {
+                    weighted_sum[i][c] / trust_sum[i][c]
+                } else {
+                    sum[i][c] / n
+                };
+                valid[i][c] = grid_confidence[i][c] < VALID_CONFIDENCE_MAX;
             }
         }
     }
@@ -201,6 +222,8 @@ fn build_grid(
         height: grid_height,
         value,
         floor,
+        confidence: grid_confidence,
+        trust,
         valid,
     }
 }
@@ -329,7 +352,14 @@ fn knee_reference_line(grid: &Grid, target: usize, guide: usize) -> Option<LineF
 /// Infer a raise-only inverse for a smooth sensor shoulder. Hard-clipped sites
 /// are deliberately excluded; this stage may recover roll-off but cannot
 /// manufacture information beyond the white level.
-fn apply_sensor_knee(samples: &mut [f32], width: usize, height: usize, cfa: &CFA) -> usize {
+fn apply_sensor_knee(
+    samples: &mut [f32],
+    confidence: Option<&[f32]>,
+    strength: f32,
+    width: usize,
+    height: usize,
+    cfa: &CFA,
+) -> usize {
     let original = samples.to_vec();
     let grid = build_grid(&original, None, width, height, cfa);
     let mut lifts = [[0.0_f32; KNEE_BINS]; 3];
@@ -399,8 +429,10 @@ fn apply_sensor_knee(samples: &mut [f32], width: usize, height: usize, cfa: &CFA
                 .min(KNEE_BINS - 1);
             if accepted[c][bin] {
                 let corrected = value + lifts[c][bin];
-                if corrected > samples[i] {
-                    samples[i] = corrected;
+                let authority = strength * confidence_at(&original, confidence, i);
+                let applied = value + authority * (corrected - value).max(0.0);
+                if applied > samples[i] {
+                    samples[i] = applied;
                     corrected_sites += 1;
                 }
             }
@@ -469,10 +501,11 @@ fn pyramid_prediction(grid: &Grid, levels: &[PyramidLevel]) -> Vec<[f32; 3]> {
 }
 
 fn regions(grid: &Grid) -> Vec<Region> {
+    let affected = |i: usize| grid.confidence[i].iter().any(|&c| c > 0.0);
     let mut seen = vec![false; grid.value.len()];
     let mut output = Vec::new();
     for seed in 0..grid.value.len() {
-        if seen[seed] || grid.valid[seed] == [true; 3] {
+        if seen[seed] || !affected(seed) {
             continue;
         }
         seen[seed] = true;
@@ -494,7 +527,7 @@ fn regions(grid: &Grid) -> Vec<Region> {
                         continue;
                     }
                     let n = ny as usize * grid.width + nx as usize;
-                    if grid.valid[n] == [true; 3] {
+                    if !affected(n) {
                         touches_boundary = true;
                     } else if !seen[n] {
                         seen[n] = true;
@@ -728,6 +761,67 @@ fn best_fits(grid: &Grid, region: &Region) -> [Option<LineFit>; 3] {
     })
 }
 
+/// Continuous confidence for the harmonic path's per-channel luminance
+/// extrapolation. Unlike `best_fits`, this never turns a channel into a
+/// valid/invalid vote: every sample contributes with the same pairwise trust
+/// used by the joint chromaticity solve.
+fn continuous_luminance_support(grid: &Grid, region: &Region) -> [f32; 3] {
+    let mut min_x = grid.width;
+    let mut min_y = grid.height;
+    let mut max_x = 0_usize;
+    let mut max_y = 0_usize;
+    for &i in &region.cells {
+        let x = i % grid.width;
+        let y = i / grid.width;
+        min_x = min_x.min(x);
+        min_y = min_y.min(y);
+        max_x = max_x.max(x);
+        max_y = max_y.max(y);
+    }
+    const PAD: usize = 16;
+    min_x = min_x.saturating_sub(PAD);
+    min_y = min_y.saturating_sub(PAD);
+    max_x = (max_x + PAD).min(grid.width - 1);
+    max_y = (max_y + PAD).min(grid.height - 1);
+    std::array::from_fn(|target| {
+        (0..3)
+            .filter(|&guide| guide != target)
+            .map(|guide| {
+                let mut sum_w = 0.0_f64;
+                let mut sum_x = 0.0_f64;
+                let mut sum_y = 0.0_f64;
+                let mut sum_xx = 0.0_f64;
+                let mut sum_yy = 0.0_f64;
+                let mut sum_xy = 0.0_f64;
+                for y in min_y..=max_y {
+                    for x in min_x..=max_x {
+                        let i = y * grid.width + x;
+                        let weight = f64::from(grid.trust[i][target] * grid.trust[i][guide]);
+                        let x = f64::from(grid.value[i][guide]);
+                        let y = f64::from(grid.value[i][target]);
+                        sum_w += weight;
+                        sum_x += weight * x;
+                        sum_y += weight * y;
+                        sum_xx += weight * x * x;
+                        sum_yy += weight * y * y;
+                        sum_xy += weight * x * y;
+                    }
+                }
+                if sum_w <= f64::from(EPSILON) {
+                    return 0.0;
+                }
+                let var_x = sum_xx - sum_x * sum_x / sum_w;
+                let var_y = sum_yy - sum_y * sum_y / sum_w;
+                if var_x <= 1.0e-12 || var_y <= 1.0e-12 {
+                    return 0.0;
+                }
+                let covariance = sum_xy - sum_x * sum_y / sum_w;
+                (covariance * covariance / (var_x * var_y)).clamp(0.0, 1.0) as f32
+            })
+            .fold(0.0_f32, f32::max)
+    })
+}
+
 fn depth_map(grid: &Grid, region: &Region) -> Vec<f32> {
     let mut depth = vec![f32::INFINITY; grid.value.len()];
     let mut queue = VecDeque::new();
@@ -763,7 +857,7 @@ fn fully_clipped_components(grid: &Grid, region: &Region) -> Vec<Region> {
     let mut seen = vec![false; grid.value.len()];
     let mut cores = Vec::new();
     for &seed in &region.cells {
-        if seen[seed] || grid.valid[seed] != [false; 3] {
+        if seen[seed] || grid.confidence[seed].iter().any(|&c| c < 1.0 - EPSILON) {
             continue;
         }
         seen[seed] = true;
@@ -785,7 +879,7 @@ fn fully_clipped_components(grid: &Grid, region: &Region) -> Vec<Region> {
                         continue;
                     }
                     let n = ny as usize * grid.width + nx as usize;
-                    if !in_region[n] || grid.valid[n] != [false; 3] {
+                    if !in_region[n] || grid.confidence[n].iter().any(|&c| c < 1.0 - EPSILON) {
                         boundary = true;
                     } else if !seen[n] {
                         seen[n] = true;
@@ -914,138 +1008,6 @@ fn usable_white_balance(white_balance: [f32; 3]) -> [f32; 3] {
     })
 }
 
-fn chromaticity(pixel: [f32; 3], white_balance: [f32; 3]) -> Option<[f32; 2]> {
-    let balanced = std::array::from_fn::<_, 3, _>(|c| pixel[c].max(0.0) * white_balance[c]);
-    let sum = balanced.iter().sum::<f32>();
-    (sum > EPSILON && sum.is_finite()).then_some([balanced[0] / sum, balanced[2] / sum])
-}
-
-#[inline]
-fn chroma_cross(origin: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
-    (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0])
-}
-
-fn chroma_hull(mut points: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
-    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
-    points.dedup_by(|a, b| (a[0] - b[0]).abs() < 1.0e-6 && (a[1] - b[1]).abs() < 1.0e-6);
-    if points.len() <= 2 {
-        return points;
-    }
-    let mut lower = Vec::with_capacity(points.len());
-    for &point in &points {
-        while lower.len() >= 2
-            && chroma_cross(lower[lower.len() - 2], lower[lower.len() - 1], point) <= 0.0
-        {
-            lower.pop();
-        }
-        lower.push(point);
-    }
-    let mut upper = Vec::with_capacity(points.len());
-    for &point in points.iter().rev() {
-        while upper.len() >= 2
-            && chroma_cross(upper[upper.len() - 2], upper[upper.len() - 1], point) <= 0.0
-        {
-            upper.pop();
-        }
-        upper.push(point);
-    }
-    lower.pop();
-    upper.pop();
-    lower.extend(upper);
-    lower
-}
-
-fn closest_on_segment(point: [f32; 2], a: [f32; 2], b: [f32; 2]) -> [f32; 2] {
-    let edge = [b[0] - a[0], b[1] - a[1]];
-    let length_squared = edge[0] * edge[0] + edge[1] * edge[1];
-    if length_squared <= EPSILON {
-        return a;
-    }
-    let t = (((point[0] - a[0]) * edge[0] + (point[1] - a[1]) * edge[1]) / length_squared)
-        .clamp(0.0, 1.0);
-    [a[0] + t * edge[0], a[1] + t * edge[1]]
-}
-
-fn nearest_chroma_envelope(point: [f32; 2], hull: &[[f32; 2]]) -> ([f32; 2], f32) {
-    if hull.len() >= 3
-        && (0..hull.len())
-            .all(|i| chroma_cross(hull[i], hull[(i + 1) % hull.len()], point) >= -1.0e-6)
-    {
-        return (point, 0.0);
-    }
-    let mut nearest = hull[0];
-    let mut distance_squared = f32::INFINITY;
-    let edges = if hull.len() == 1 { 1 } else { hull.len() };
-    for i in 0..edges {
-        let candidate = closest_on_segment(point, hull[i], hull[(i + 1) % hull.len()]);
-        let squared = (point[0] - candidate[0]).powi(2) + (point[1] - candidate[1]).powi(2);
-        if squared < distance_squared {
-            nearest = candidate;
-            distance_squared = squared;
-        }
-    }
-    (nearest, distance_squared.sqrt())
-}
-
-fn constrain_region_chromaticity(
-    grid: &Grid,
-    region: &Region,
-    current: &mut [[f32; 3]],
-    white_balance: [f32; 3],
-) {
-    let white_balance = usable_white_balance(white_balance);
-    let hull = chroma_hull(
-        region
-            .boundary
-            .iter()
-            .filter_map(|&i| chromaticity(grid.value[i], white_balance))
-            .collect(),
-    );
-    if hull.is_empty() {
-        return;
-    }
-    for &i in &region.cells {
-        if grid.valid[i] == [false; 3] || grid.valid[i] == [true; 3] {
-            continue;
-        }
-        let Some(point) = chromaticity(current[i], white_balance) else {
-            continue;
-        };
-        let (nearest, distance) = nearest_chroma_envelope(point, &hull);
-        if distance <= CHROMA_ENVELOPE_TOLERANCE {
-            continue;
-        }
-        let keep = CHROMA_ENVELOPE_TOLERANCE / distance;
-        let limited = [
-            nearest[0] + keep * (point[0] - nearest[0]),
-            nearest[1] + keep * (point[1] - nearest[1]),
-        ];
-        let proportions = [
-            limited[0],
-            (1.0 - limited[0] - limited[1]).max(0.0),
-            limited[1],
-        ];
-        let mut numerator = 0.0_f32;
-        let mut denominator = 0.0_f32;
-        for c in 0..3 {
-            if grid.valid[i][c] {
-                let measured = current[i][c] * white_balance[c];
-                numerator += measured * proportions[c];
-                denominator += proportions[c] * proportions[c];
-            }
-        }
-        if denominator <= EPSILON {
-            continue;
-        }
-        let scale = numerator / denominator;
-        for c in 0..3 {
-            if !grid.valid[i][c] {
-                current[i][c] = (scale * proportions[c] / white_balance[c]).max(grid.floor[i][c]);
-            }
-        }
-    }
-}
-
 /// Solve the pinned harmonic system directly for a bounded region.  Only the
 /// lower triangle is assembled, and all arithmetic handed to the sparse
 /// factorization is f64.  Obstacle projection is applied when the solution is
@@ -1163,28 +1125,6 @@ fn solve_region_direct(
     true
 }
 
-fn keep_unfitted_partial_cells(
-    grid: &Grid,
-    region: &Region,
-    fits: [Option<LineFit>; 3],
-    current: &mut [[f32; 3]],
-) {
-    for &i in &region.cells {
-        if grid.valid[i] == [false; 3] {
-            continue;
-        }
-        for (target, fit) in fits.iter().enumerate() {
-            if !grid.valid[i][target] && fit.is_none() {
-                // A partially clipped coloured highlight still has a measured
-                // hue. Without a trusted line, its saturated sample is the
-                // only defensible lower bound; a spatial guess would import a
-                // neighbour's colour.
-                current[i][target] = grid.floor[i][target];
-            }
-        }
-    }
-}
-
 fn apply_luminance_domes(grid: &Grid, cores: &[Region], current: &mut [[f32; 3]]) {
     for core in cores {
         let depth = depth_map(grid, core);
@@ -1205,9 +1145,10 @@ fn harmonic_prediction(
     grid: &Grid,
     pyramid: &[[f32; 3]],
     all_regions: &[Region],
-    white_balance: [f32; 3],
-) -> (Vec<[f32; 3]>, f32, usize, usize) {
+    _white_balance: [f32; 3],
+) -> (Vec<[f32; 3]>, Vec<[f32; 3]>, f32, usize, usize) {
     let mut current = pyramid.to_vec();
+    let mut luminance_support = vec![[1.0_f32; 3]; grid.value.len()];
     let mut fit_quality_sum = 0.0_f64;
     let mut fit_count = 0_usize;
     let mut full_cores = 0_usize;
@@ -1215,6 +1156,13 @@ fn harmonic_prediction(
 
     for region in all_regions {
         let fits = best_fits(grid, region);
+        let continuous_support = continuous_luminance_support(grid, region);
+        for &i in &region.cells {
+            let fully_clipped_fallback = grid.confidence[i].iter().product::<f32>();
+            for (target, support) in continuous_support.iter().copied().enumerate() {
+                luminance_support[i][target] = support.max(fully_clipped_fallback);
+            }
+        }
         for fit in fits.iter().flatten() {
             fit_quality_sum += f64::from(fit.r2);
             fit_count += 1;
@@ -1224,8 +1172,6 @@ fn harmonic_prediction(
 
         if solve_region_direct(grid, region, fits, &mut current) {
             apply_luminance_domes(grid, &cores, &mut current);
-            constrain_region_chromaticity(grid, region, &mut current, white_balance);
-            keep_unfitted_partial_cells(grid, region, fits, &mut current);
             continue;
         }
         solver_fallbacks += 1;
@@ -1280,8 +1226,6 @@ fn harmonic_prediction(
             std::mem::swap(&mut current, &mut next);
         }
         apply_luminance_domes(grid, &cores, &mut current);
-        constrain_region_chromaticity(grid, region, &mut current, white_balance);
-        keep_unfitted_partial_cells(grid, region, fits, &mut current);
     }
 
     let mean_fit = if fit_count == 0 {
@@ -1289,12 +1233,240 @@ fn harmonic_prediction(
     } else {
         (fit_quality_sum / fit_count as f64) as f32
     };
-    (current, mean_fit, full_cores, solver_fallbacks)
+    (
+        current,
+        luminance_support,
+        mean_fit,
+        full_cores,
+        solver_fallbacks,
+    )
+}
+
+#[inline]
+fn log_chromaticity(pixel: [f32; 3], white_balance: [f32; 3]) -> [f32; 2] {
+    let balanced =
+        std::array::from_fn::<_, 3, _>(|c| (pixel[c].max(EPSILON) * white_balance[c]).max(EPSILON));
+    [
+        (balanced[0] / balanced[1]).ln(),
+        (balanced[2] / balanced[1]).ln(),
+    ]
+}
+
+/// Give one continuous raw-domain estimator authority over chromaticity for a
+/// complete affected component. The older affine/harmonic result supplies
+/// luminance, spatial detail, and a weak initialization only. Pairwise sensor
+/// evidence remains continuous through `t_c=(1-c_c)^2`, including the R/B
+/// constraint that survives when green is clipped.
+fn joint_log_chromaticity(
+    grid: &Grid,
+    all_regions: &[Region],
+    luminance_prediction: &[[f32; 3]],
+    luminance_support: &[[f32; 3]],
+    white_balance: [f32; 3],
+) -> Vec<[f32; 3]> {
+    const SWEEPS: usize = 160;
+    const DATA_WEIGHT: f32 = 12.0;
+    const PRIOR_WEIGHT: f32 = 0.02;
+
+    let white_balance = usable_white_balance(white_balance);
+    let initial_uv: Vec<[f32; 2]> = luminance_prediction
+        .iter()
+        .map(|&pixel| log_chromaticity(pixel, white_balance))
+        .collect();
+    let mut current_uv = initial_uv.clone();
+    let mut next_uv = current_uv.clone();
+    let guide: Vec<f32> = luminance_prediction
+        .iter()
+        .map(|pixel| {
+            (pixel[0] * white_balance[0]
+                + pixel[1] * white_balance[1]
+                + pixel[2] * white_balance[2])
+                / 3.0
+        })
+        .collect();
+
+    for region in all_regions {
+        for _ in 0..SWEEPS {
+            let mut max_delta = 0.0_f32;
+            for &i in &region.cells {
+                let x = i % grid.width;
+                let y = i / grid.width;
+                let observed = log_chromaticity(grid.value[i], white_balance);
+                let trust = grid.trust[i];
+                let w_rg = DATA_WEIGHT * trust[0] * trust[1];
+                let w_bg = DATA_WEIGHT * trust[2] * trust[1];
+                let w_rb = DATA_WEIGHT * trust[0] * trust[2];
+
+                let mut a = PRIOR_WEIGHT + w_rg + w_rb;
+                let mut d = PRIOR_WEIGHT + w_bg + w_rb;
+                let off = -w_rb;
+                let mut rhs_u = PRIOR_WEIGHT * initial_uv[i][0]
+                    + w_rg * observed[0]
+                    + w_rb * (observed[0] - observed[1]);
+                let mut rhs_v = PRIOR_WEIGHT * initial_uv[i][1] + w_bg * observed[1]
+                    - w_rb * (observed[0] - observed[1]);
+
+                let guide_scale = guide[i].abs().max(0.05);
+                for (dx, dy) in [(1_isize, 0_isize), (-1, 0), (0, 1), (0, -1)] {
+                    let nx = mirror(x as isize + dx, grid.width);
+                    let ny = mirror(y as isize + dy, grid.height);
+                    let n = ny * grid.width + nx;
+                    if n == i {
+                        continue;
+                    }
+                    let delta = (guide[i] - guide[n]).abs();
+                    let neighbor_observed = log_chromaticity(grid.value[n], white_balance);
+                    let ratios = [
+                        (
+                            observed[0],
+                            neighbor_observed[0],
+                            trust[0] * trust[1],
+                            grid.trust[n][0] * grid.trust[n][1],
+                        ),
+                        (
+                            observed[1],
+                            neighbor_observed[1],
+                            trust[2] * trust[1],
+                            grid.trust[n][2] * grid.trust[n][1],
+                        ),
+                        (
+                            observed[0] - observed[1],
+                            neighbor_observed[0] - neighbor_observed[1],
+                            trust[0] * trust[2],
+                            grid.trust[n][0] * grid.trust[n][2],
+                        ),
+                    ];
+                    let mut chroma_delta = 0.0_f32;
+                    let mut chroma_mass = 0.0_f32;
+                    for (here, there, here_weight, there_weight) in ratios {
+                        let evidence = (here_weight * there_weight).sqrt();
+                        chroma_delta += evidence * (here - there).abs();
+                        chroma_mass += evidence;
+                    }
+                    let chroma_affinity = if chroma_mass > EPSILON {
+                        (-(chroma_delta / chroma_mass / 0.20).powi(2)).exp()
+                    } else {
+                        // Different saturated colours can have no common
+                        // trusted pair (for example R-clipped beside
+                        // G-clipped). In that case the harmonic initializer is
+                        // only an edge detector: a large chroma edge blocks
+                        // coupling, while the much smaller clip-state bias on
+                        // a smooth sky still passes through.
+                        let initial_delta = (initial_uv[i][0] - initial_uv[n][0])
+                            .hypot(initial_uv[i][1] - initial_uv[n][1]);
+                        (-(initial_delta / 0.50).powi(2)).exp()
+                    };
+                    let spatial = ((-(delta / (GUIDE_K * guide_scale)).powi(2)).exp()
+                        * chroma_affinity)
+                        .max(WEIGHT_FLOOR);
+                    a += spatial;
+                    d += spatial;
+                    rhs_u += spatial * current_uv[n][0];
+                    rhs_v += spatial * current_uv[n][1];
+                }
+
+                let determinant = a * d - off * off;
+                if determinant <= EPSILON || !determinant.is_finite() {
+                    next_uv[i] = current_uv[i];
+                    continue;
+                }
+                let solved = [
+                    ((rhs_u * d - off * rhs_v) / determinant).clamp(-8.0, 8.0),
+                    ((a * rhs_v - off * rhs_u) / determinant).clamp(-8.0, 8.0),
+                ];
+                max_delta = max_delta
+                    .max((solved[0] - current_uv[i][0]).abs())
+                    .max((solved[1] - current_uv[i][1]).abs());
+                next_uv[i] = solved;
+            }
+            std::mem::swap(&mut current_uv, &mut next_uv);
+            if max_delta < 1.0e-5 {
+                break;
+            }
+        }
+    }
+
+    let mut output = luminance_prediction.to_vec();
+    for region in all_regions {
+        // A component containing several real colours must not let one colour
+        // line become another's missing channel. Measure component
+        // heterogeneity from the same confidence-weighted pairwise evidence;
+        // it only attenuates unsupported lift and never supplies a colour.
+        let mut moments = [[0.0_f64; 3]; 3];
+        for &i in &region.cells {
+            let uv = log_chromaticity(grid.value[i], white_balance);
+            let ratios = [uv[0], uv[1], uv[0] - uv[1]];
+            let weights = [
+                grid.trust[i][0] * grid.trust[i][1],
+                grid.trust[i][2] * grid.trust[i][1],
+                grid.trust[i][0] * grid.trust[i][2],
+            ];
+            for pair in 0..3 {
+                let w = f64::from(weights[pair]);
+                let value = f64::from(ratios[pair]);
+                moments[pair][0] += w;
+                moments[pair][1] += w * value;
+                moments[pair][2] += w * value * value;
+            }
+        }
+        let chroma_std = moments
+            .iter()
+            .filter(|m| m[0] > f64::from(EPSILON))
+            .map(|m| {
+                let mean = m[1] / m[0];
+                (m[2] / m[0] - mean * mean).max(0.0).sqrt() as f32
+            })
+            .fold(0.0_f32, f32::max);
+        let component_coherence = (-(chroma_std / 0.35).powi(2)).exp();
+        for &i in &region.cells {
+            let q = [current_uv[i][0].exp(), 1.0, current_uv[i][1].exp()];
+            let observed = std::array::from_fn::<_, 3, _>(|c| grid.value[i][c] * white_balance[c]);
+            let harmonic =
+                std::array::from_fn::<_, 3, _>(|c| luminance_prediction[i][c] * white_balance[c]);
+            let trusted_numerator = (0..3)
+                .map(|c| grid.trust[i][c] * q[c] * observed[c])
+                .sum::<f32>();
+            let trusted_denominator = (0..3).map(|c| grid.trust[i][c] * q[c] * q[c]).sum::<f32>();
+            // Preserve the harmonic path's white-balanced mean luminance when
+            // chromaticity changes. This is the explicit luma/chroma ownership
+            // split: the joint solve may rotate q, but it cannot independently
+            // manufacture a brighter spatial field.
+            let harmonic_scalar = harmonic.iter().sum::<f32>() / q.iter().sum::<f32>().max(EPSILON);
+            let scalar = if trusted_denominator > EPSILON {
+                let trusted_scalar = trusted_numerator / trusted_denominator;
+                let trusted_mass = grid.trust[i].iter().sum::<f32>();
+                let authority = trusted_mass / (trusted_mass + 0.05);
+                (authority * trusted_scalar + (1.0 - authority) * harmonic_scalar)
+                    .min(1.2 * harmonic_scalar)
+            } else {
+                // Only a fully clipped core with no pairwise evidence reaches
+                // this path. The harmonic luma field is a smooth neutral-safe
+                // fallback; boundary chromaticity still arrives spatially.
+                harmonic_scalar
+            };
+            // The harmonic/pyramid estimator owns the spatial-luminance
+            // envelope. Joint chromaticity may redistribute a requested lift,
+            // but must not turn that weak colour prior into extra peak energy.
+            let luminance_envelope = (0..3)
+                .map(|c| harmonic[c] / q[c].max(EPSILON))
+                .fold(f32::INFINITY, f32::min);
+            let scalar = scalar.min(luminance_envelope);
+            for c in 0..3 {
+                let predicted = (scalar * q[c] / white_balance[c]).max(grid.floor[i][c]);
+                output[i][c] = grid.floor[i][c]
+                    + component_coherence
+                        * luminance_support[i][c]
+                        * (predicted - grid.floor[i][c]).max(0.0);
+            }
+        }
+    }
+    output
 }
 
 struct ApplyContext<'a> {
     original: &'a [f32],
     confidence: Option<&'a [f32]>,
+    strength: f32,
     width: usize,
     height: usize,
     cfa: &'a CFA,
@@ -1311,14 +1483,16 @@ fn apply_prediction(
     for y in 0..context.height {
         for x in 0..context.width {
             let i = y * context.width + x;
-            if confidence_at(context.original, context.confidence, i) < VALID_CONFIDENCE_MAX {
+            let confidence = confidence_at(context.original, context.confidence, i);
+            if confidence == 0.0 || context.strength == 0.0 {
                 continue;
             }
             let Some(c) = channel(context.cfa.cfa_color_at(y, x)) else {
                 continue;
             };
             let cell = (y / 2) * context.grid_width + x / 2;
-            let target = prediction[cell][c].max(context.original[i]);
+            let lift = (prediction[cell][c] - context.original[i]).max(0.0);
+            let target = context.original[i] + context.strength * confidence * lift;
             if target > samples[i] {
                 max_lift = max_lift.max(target - samples[i]);
                 samples[i] = target;
@@ -1336,9 +1510,13 @@ pub fn reconstruct_cfa(
     height: usize,
     cfa: &CFA,
     confidence: Option<&[f32]>,
-    white_balance: [f32; 3],
-    method: HighlightMethod,
+    options: ReconstructionOptions,
 ) -> Result<RawHighlightReport> {
+    let ReconstructionOptions {
+        white_balance,
+        strength,
+        method,
+    } = options;
     ensure!(
         method.is_spatial(),
         "current highlight reconstruction is post-demosaic"
@@ -1352,19 +1530,23 @@ pub fn reconstruct_cfa(
         "CFA buffer length does not match its dimensions"
     );
     let confidence = confidence.filter(|map| map.len() == samples.len());
+    let strength = strength.clamp(0.0, 1.0);
     let original = samples.to_vec();
     let clipped_cfa_sites = (0..samples.len())
         .filter(|&i| confidence_at(&original, confidence, i) >= VALID_CONFIDENCE_MAX)
         .count();
-    if clipped_cfa_sites == 0 {
+    let has_reconstruction_authority =
+        (0..samples.len()).any(|i| confidence_at(&original, confidence, i) > 0.0);
+    if !has_reconstruction_authority || strength == 0.0 {
         return Ok(RawHighlightReport {
             method,
+            clipped_cfa_sites,
             ..RawHighlightReport::default()
         });
     }
 
     let knee_corrected_sites = if method == HighlightMethod::Harmonic {
-        apply_sensor_knee(samples, width, height, cfa)
+        apply_sensor_knee(samples, confidence, strength, width, height, cfa)
     } else {
         0
     };
@@ -1375,8 +1557,10 @@ pub fn reconstruct_cfa(
     let (prediction, mean_fit_quality, fully_clipped_cores, solver_fallbacks) = match method {
         HighlightMethod::RawPyramid => (pyramid_prediction, 0.0, 0, 0),
         HighlightMethod::Harmonic => {
-            let (prediction, fit, cores, fallbacks) =
+            let (luminance, support, fit, cores, fallbacks) =
                 harmonic_prediction(&grid, &pyramid_prediction, &all_regions, white_balance);
+            let prediction =
+                joint_log_chromaticity(&grid, &all_regions, &luminance, &support, white_balance);
             (prediction, fit, cores, fallbacks)
         }
         HighlightMethod::Current => unreachable!("checked above"),
@@ -1387,6 +1571,7 @@ pub fn reconstruct_cfa(
         ApplyContext {
             original: &original,
             confidence,
+            strength,
             width,
             height,
             cfa,
@@ -1445,8 +1630,11 @@ mod tests {
                 height,
                 &rggb(),
                 None,
-                [1.0; 3],
-                method,
+                ReconstructionOptions {
+                    white_balance: [1.0; 3],
+                    strength: 1.0,
+                    method,
+                },
             )
             .expect("valid CFA");
             assert_eq!(candidate, source);
@@ -1471,8 +1659,11 @@ mod tests {
                 height,
                 &rggb(),
                 None,
-                [1.0; 3],
-                method,
+                ReconstructionOptions {
+                    white_balance: [1.0; 3],
+                    strength: 1.0,
+                    method,
+                },
             )
             .expect("valid CFA");
             for i in 0..candidate.len() {
@@ -1483,6 +1674,58 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn zero_confidence_and_zero_strength_are_exact_no_ops() {
+        let width = 16;
+        let height = 16;
+        let source = vec![1.0_f32; width * height];
+        for (confidence, strength) in [
+            (vec![0.0; source.len()], 1.0),
+            (vec![1.0; source.len()], 0.0),
+        ] {
+            let mut candidate = source.clone();
+            reconstruct_cfa(
+                &mut candidate,
+                width,
+                height,
+                &rggb(),
+                Some(&confidence),
+                ReconstructionOptions {
+                    white_balance: [2.3632812, 1.0, 1.8085938],
+                    strength,
+                    method: HighlightMethod::Harmonic,
+                },
+            )
+            .unwrap();
+            assert_eq!(candidate, source);
+        }
+    }
+
+    #[test]
+    fn prediction_application_is_continuous_in_confidence_and_strength() {
+        let width = 2;
+        let height = 2;
+        let original = vec![1.0_f32; width * height];
+        let confidence = vec![0.0, 0.25, 0.5, 1.0];
+        let mut candidate = original.clone();
+        let (changed, max_lift) = apply_prediction(
+            &mut candidate,
+            &[[2.0; 3]],
+            ApplyContext {
+                original: &original,
+                confidence: Some(&confidence),
+                strength: 0.5,
+                width,
+                height,
+                cfa: &rggb(),
+                grid_width: 1,
+            },
+        );
+        assert_eq!(candidate, vec![1.0, 1.125, 1.25, 1.5]);
+        assert_eq!(changed, 3);
+        assert_eq!(max_lift, 0.5);
     }
 
     #[test]
@@ -1504,8 +1747,11 @@ mod tests {
             height,
             &rggb(),
             None,
-            [1.0; 3],
-            HighlightMethod::Harmonic,
+            ReconstructionOptions {
+                white_balance: [1.0; 3],
+                strength: 1.0,
+                method: HighlightMethod::Harmonic,
+            },
         )
         .unwrap();
         let second_report = reconstruct_cfa(
@@ -1514,8 +1760,11 @@ mod tests {
             height,
             &rggb(),
             None,
-            [1.0; 3],
-            HighlightMethod::Harmonic,
+            ReconstructionOptions {
+                white_balance: [1.0; 3],
+                strength: 1.0,
+                method: HighlightMethod::Harmonic,
+            },
         )
         .unwrap();
         assert_eq!(first, second);
@@ -1545,6 +1794,14 @@ mod tests {
             height: 1,
             floor: value.clone(),
             value,
+            confidence: valid
+                .iter()
+                .map(|channels| channels.map(|v| if v { 0.0 } else { 1.0 }))
+                .collect(),
+            trust: valid
+                .iter()
+                .map(|channels| channels.map(|v| if v { 1.0 } else { 0.0 }))
+                .collect(),
             valid,
         };
         let region = Region {
@@ -1582,33 +1839,6 @@ mod tests {
     }
 
     #[test]
-    fn partial_reconstruction_cannot_invent_chroma_beyond_its_measured_boundary() {
-        let boundary = [0.30, 0.60, 1.00];
-        let value = vec![boundary, boundary, boundary, [1.0, 0.60, 1.00]];
-        let grid = Grid {
-            width: 4,
-            height: 1,
-            floor: value.clone(),
-            value,
-            valid: vec![[true; 3], [true; 3], [true; 3], [false, true, true]],
-        };
-        let region = Region {
-            cells: vec![3],
-            boundary: vec![0, 1, 2],
-        };
-        let mut current = vec![boundary, boundary, boundary, [2.4, 0.60, 1.00]];
-        constrain_region_chromaticity(&grid, &region, &mut current, [1.0; 3]);
-        assert_eq!(current[3][1], 0.60, "measured green moved");
-        assert_eq!(current[3][2], 1.00, "measured blue moved");
-        assert!(
-            current[3][0] < 1.2,
-            "unsupported magenta lift survived: {:?}",
-            current[3]
-        );
-        assert!(current[3][0] >= grid.floor[3][0]);
-    }
-
-    #[test]
     fn analytic_sensor_knee_is_inverted_without_touching_hard_clip() {
         let width = 512;
         let height = 128;
@@ -1625,7 +1855,15 @@ mod tests {
         };
         let mut captured: Vec<f32> = truth.iter().copied().map(shoulder).collect();
         let before_knee = captured.clone();
-        let corrected = apply_sensor_knee(&mut captured, width, height, &rggb());
+        let confidence = vec![1.0; captured.len()];
+        let corrected = apply_sensor_knee(
+            &mut captured,
+            Some(&confidence),
+            1.0,
+            width,
+            height,
+            &rggb(),
+        );
         assert!(corrected > 0, "the verified knee should engage");
         let mut squared = 0.0_f64;
         let mut count = 0_usize;
@@ -1684,8 +1922,11 @@ mod tests {
             height,
             &cfa,
             Some(&confidence),
-            [1.0; 3],
-            HighlightMethod::Harmonic,
+            ReconstructionOptions {
+                white_balance: [1.0; 3],
+                strength: 1.0,
+                method: HighlightMethod::Harmonic,
+            },
         )
         .unwrap();
         let candidate = crate::demosaic::demosaic_bayer(

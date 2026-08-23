@@ -5,8 +5,7 @@ build {
     tool "akr 0.3.1"
     grammar "0.1"
     vocabulary "0.2"
-    commit git:ea15c3266d1c6e1eddf4e1ff40083ed8a151c507
-    source_graph "sha256:cb82ec6c0dca64b7509a24831c1e33e8388e5ee15882d4d579e69717912fa4c0"
+    source_graph "sha256:b6751391b55f0119fe8a67ba1cce9f380c2730a9aa56aab082ad86034a03ab89"
 }
 
 source ".akr/project.akr" {
@@ -25,13 +24,13 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:500e2491410d00b23cfc4f09b7d88a7daf75fbd665acfce19e077b2b28031ef9"
-    records 90
+    hash "sha256:445bfee5fcf2fe90fa021fa93cffb4c892a02b76309971a854950d06ad3c32a6"
+    records 111
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
-    hash "sha256:00b53489a74b129a14024c7f33b887c5a1bd9ff1b5b346b29aafb8c3a3653d20"
-    records 52
+    hash "sha256:162225794bf71fcbb25446f42cfbb6e5acfaf2cebe70f44abc1274a0e9208bf5"
+    records 54
 }
 
 source ".akr/records/raw-autotune/policies.akr" {
@@ -40,13 +39,13 @@ source ".akr/records/raw-autotune/policies.akr" {
 }
 
 source ".akr/records/raw-autotune/requirements.akr" {
-    hash "sha256:d267be7ee96d6649e4ae15c4af005dc584b8767730ec2f4429ae439e71412313"
+    hash "sha256:42532fc31dfce1fbc1b4da789822e3d30aee92bfb5abaec3e64b45486d011e17"
     records 3
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:bb2f510923d697512c0477328fb6d8e58d8f704c9c8020a4985ace8efa082948"
-    records 44
+    hash "sha256:0ef7a9181a6a9b9cb1e82b62c3773a1d2941e9ffb22f835954870ee1bc5e7451"
+    records 47
 }
 
 resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
@@ -495,9 +494,84 @@ seal @raw-autotune.evidence.semantic-sky-mask-tests/1 {
     hash "sha256:4edf5b9a653fa958b900bf54e0be73a0b46d612c216785815960068fddc6d2ab"
 }
 
+seal @raw-autotune.evidence.sky-clippy-20260816/1 {
+    state verified
+    hash "sha256:8e3be57b06c5fda134a7634487c53d7818d769e020132c1779ae85b43a38114f"
+}
+
+seal @raw-autotune.evidence.sky-clippy-20260816-r2/1 {
+    state verified
+    hash "sha256:9342241022999557a699e4b4785cd07e5318e89b2d99648a8b690b318932d901"
+}
+
+seal @raw-autotune.evidence.sky-corpus-dry-run-20260816/1 {
+    state verified
+    hash "sha256:d7cc7f03462158ea2c541e9f21dc0431abf3aceb0e5410a0a8af2a0cca17d50b"
+}
+
+seal @raw-autotune.evidence.sky-corpus-dry-run-20260816-r2/1 {
+    state verified
+    hash "sha256:43c5da0d200ea75771d3cc8f731cbb96952014598be4c1fc466d3da9a189646f"
+}
+
+seal @raw-autotune.evidence.sky-final-output-20260816/1 {
+    state verified
+    hash "sha256:1eaf8692a09ad4d2f8a544e02c69e50c821affd4f58832f71724354bf463b420"
+}
+
+seal @raw-autotune.evidence.sky-format-20260816/1 {
+    state verified
+    hash "sha256:8269164d9860314c7ff88c08966f7c0babf2c7a7afaa6c80e97a744faf5560c2"
+}
+
+seal @raw-autotune.evidence.sky-format-20260816-r2/1 {
+    state verified
+    hash "sha256:6e7699987b0d137e8f2cbf661961b9ca0c0a9b89d2c45d9c7fade50f41082857"
+}
+
+seal @raw-autotune.evidence.sky-local-tone-hdr-20260816/1 {
+    state verified
+    hash "sha256:33df4df20f792d9e564647de56b0730b26c7eaf02c7c6f17ea75cc7ce7967037"
+}
+
+seal @raw-autotune.evidence.sky-local-tone-hdr-20260816-r2/1 {
+    state verified
+    hash "sha256:b771249facc6770ec9cff6d9afda6dacec2319539a7c603a3e1e3dc72a88d866"
+}
+
+seal @raw-autotune.evidence.sky-output-determinism-20260816/1 {
+    state verified
+    hash "sha256:eafbd2a96e7c909d425f472d913311c060d67d78602d9ff719378ef7d356d967"
+}
+
+seal @raw-autotune.evidence.sky-output-determinism-20260816-r2/1 {
+    state verified
+    hash "sha256:df229ba6775b22ef9a9da990a31ca89ad874888f6aa1dbe68b09dbef22137689"
+}
+
+seal @raw-autotune.evidence.sky-release-tests-20260816/1 {
+    state verified
+    hash "sha256:88326a149d7165af1fb9c2f5dbb8026f5a5695c5f6c17841ac4207d1dd46a7e6"
+}
+
+seal @raw-autotune.evidence.sky-release-tests-20260816-r2/1 {
+    state verified
+    hash "sha256:06e3a355e942cffe72a36834cad97981061bd9d766fb699207b7747e4650d6fc"
+}
+
 seal @raw-autotune.evidence.sky-stage-attribution-20260809/1 {
     state verified
     hash "sha256:2b7e19472a29c1d388dd5d1e44cc5bbbe1fb11e69f7ab7b7e82203be6a07470f"
+}
+
+seal @raw-autotune.evidence.sky-stage-attribution-20260816/1 {
+    state verified
+    hash "sha256:358eac626e549deb07e2e0ef81f15cd1082df0e44fdeaa607152562f1ebf8e8c"
+}
+
+seal @raw-autotune.evidence.sky-stage-attribution-20260816-r2/1 {
+    state verified
+    hash "sha256:d04ccaa4dbeda50857eedd16ee1544f1b3d7fd70435cb848a5f95e8f4d760bd4"
 }
 
 seal @raw-autotune.evidence.slice-1-diagnostic-dumps-verify/1 {
@@ -508,6 +582,36 @@ seal @raw-autotune.evidence.slice-1-diagnostic-dumps-verify/1 {
 seal @raw-autotune.evidence.slice-4-confidence-plumbing-verify/1 {
     state verified
     hash "sha256:d38b92f316cab7dcc2276a4ddee450e2eb5af50cbcf9a2d437b7a1133d00f240"
+}
+
+seal @raw-autotune.evidence.slice-5-all-targets-20260816/1 {
+    state verified
+    hash "sha256:4ef58ddb1a70b99b136f48c99ba084957d0930032d30de0af2172412bce28d30"
+}
+
+seal @raw-autotune.evidence.slice-5-critical-boundary-gate-20260816/1 {
+    state verified
+    hash "sha256:8124aca2aed831dac792e5b4a6b6eefbc061fdd2dbac7c9a735a590ae8196df6"
+}
+
+seal @raw-autotune.evidence.slice-5-dsc1289-archive-boundaries-20260816/1 {
+    state verified
+    hash "sha256:08bf17d19e11310c0dfa5066625554221f2746ef45c73090e4f5fcc258af1997"
+}
+
+seal @raw-autotune.evidence.slice-5-format-and-python-checks-20260816/1 {
+    state verified
+    hash "sha256:58ec11de6ab8108944b428050a7b1aace55f6efb9f5a56c0de4354e0d9401c36"
+}
+
+seal @raw-autotune.evidence.slice-5-joint-estimator-production-ownership-20260816/1 {
+    state verified
+    hash "sha256:e1c0bc365d305bee0fd3c5edeb2f6c1ae8c1a9db7bf92d96b58f22a3cb04dcc3"
+}
+
+seal @raw-autotune.evidence.slice-5-release-corpus-memory-determinism-20260816/1 {
+    state verified
+    hash "sha256:37cd7ca5bbb57c048c85ac997fc7505baa4f965e13ad7e04fd14db7f7bb9fffd"
 }
 
 seal @raw-autotune.evidence.slice-6-uncertainty-gated-chroma-verify/1 {
@@ -770,6 +874,11 @@ seal @raw-autotune.papercut.the-low-light-analysis-only-pass-used-highlight/1 {
     hash "sha256:adeb5807c246de376a1a2d247154e0ad3517435ba28b5ba2b60d2b2a57701840"
 }
 
+seal @raw-autotune.papercut.the-reconstruction-off-ablation-was-initially/1 {
+    state verified
+    hash "sha256:601294aa6f76004924b5371ee841c48eb5d5f6c3f8a6e2481d68052e8d7c0dbe"
+}
+
 seal @raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near/1 {
     state verified
     hash "sha256:c49cc925918066cd6e1085d7148a23598219fad099e7633169f937aa0acffe67"
@@ -788,6 +897,11 @@ seal @raw-autotune.papercut.while-auditing-low-light-false-positives-dry/1 {
 seal @raw-autotune.papercut.while-locating-hdr-sky-local-tone-and/1 {
     state verified
     hash "sha256:1ee0b5fc47cbbd2816d657eee3e68357f29278900a0f111e7d3ad5a9ec2d8974"
+}
+
+seal @raw-autotune.papercut.while-locating-the-archived-dsc1289-source-fff/1 {
+    state verified
+    hash "sha256:5d0f558fce331787f4796e9ae4260ad696d9ae9894b903606bb3b28140049c70"
 }
 
 seal @raw-autotune.papercut.while-proposing-the-follow-on-work-record-a/1 {
@@ -965,6 +1079,11 @@ seal @raw-autotune.work.slice-4-raw-domain-confidence-plumbing-phase-b-4/1 {
     hash "sha256:b3c5d351b62253cf80e24f11a64e45ce19d21fd5876a8e4f70c4a1e144c25f59"
 }
 
+seal @raw-autotune.work.slice-5-joint-raw-log-chromaticity/1 {
+    state completed
+    hash "sha256:d19ba89dd02231b8a4fabd53981a7b1bcfdddd7d2f20bb18a8f84210a1567859"
+}
+
 seal @raw-autotune.work.slice-6-uncertainty-gated-chroma-limiting-phase/1 {
     state completed
     hash "sha256:cce5843f71c170d20e14a7a3284c3e6c538fa4a6f83c83a1c50ccf32673661db"
@@ -976,8 +1095,18 @@ seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/1 {
 }
 
 seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 {
+    state superseded
+    hash "sha256:bd1feb02d7ec6b4e577de2238faf041b2abb2074c50a88762afa675bc08ebd70"
+}
+
+seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/3 {
+    state superseded
+    hash "sha256:bddc57cee0dc6c698417ca3b77d33705786b57e2275e39286d336b5cc4a382ea"
+}
+
+seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/4 {
     state active
-    hash "sha256:1a9b756c4306c65be43069849e4bcff6591bc474674daf45716475f8fc2eee2f"
+    hash "sha256:e6a7e095526f5fcc1c48ca2305f770515a7c1024431e074dde307932516d4971"
 }
 
 seal @raw-autotune.work.spatial-semantic-aq-api/1 {

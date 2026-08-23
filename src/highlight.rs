@@ -872,6 +872,12 @@ pub(crate) fn transport_spatial_chromaticity(
     report
 }
 
+// Keep the post-demosaic transport available to internal ablation tests while
+// making it intentionally unreachable from the Harmonic production path.
+type SpatialChromaAblation =
+    fn(&mut LinearImage, Option<&[[f32; 3]]>, Matrix3) -> SpatialChromaReport;
+const _: SpatialChromaAblation = transport_spatial_chromaticity;
+
 /// One pixel of the rule. Returns the lift applied, in white-balanced units, or
 /// `None` if nothing moved.
 ///

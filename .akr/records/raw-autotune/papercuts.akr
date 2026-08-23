@@ -494,6 +494,18 @@ record raw-autotune.papercut.the-low-light-analysis-only-pass-used-highlight/1 :
     created_at 2026-08-13
 }
 
+record raw-autotune.papercut.the-reconstruction-off-ablation-was-initially/1 : papercut {
+    title "The reconstruction-off ablation was initially rejected because the…"
+    state verified
+    statement """
+        The reconstruction-off ablation was initially rejected because the automatic harmonic method requires full reconstruction strength. The compatible disabled control is `--highlight-method current --highlight-reconstruction 0`; the CLI help/validation could make this pairing more discoverable.
+        """
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    about "raw-autotune CLI"
+    author "codex"
+    created_at 2026-08-16
+}
+
 record raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near/1 : papercut {
     title "The unit tests that pinned the da23c5f near-white anchor rule were kept…"
     state verified
@@ -537,6 +549,18 @@ record raw-autotune.papercut.while-locating-hdr-sky-local-tone-and/1 : papercut 
     about "FFF"
     author "codex"
     created_at 2026-08-09
+}
+
+record raw-autotune.papercut.while-locating-the-archived-dsc1289-source-fff/1 : papercut {
+    title "While locating the archived _DSC1289 source, FFF returned many…"
+    state verified
+    statement """
+        While locating the archived _DSC1289 source, FFF returned many generated renders but not the ignored raw/raw_3rd_batch/_DSC1289.ARW file, so discovery had to fall back to a bounded filesystem find. Showing ignored in-workspace exact-name matches would make archive gates easier to reproduce.
+        """
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    about "FFF"
+    author "codex"
+    created_at 2026-08-16
 }
 
 record raw-autotune.papercut.while-proposing-the-follow-on-work-record-a/1 : papercut {
