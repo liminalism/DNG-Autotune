@@ -176,10 +176,13 @@ pub enum FixtureKind {
     ColoredHighlights,
     FullyClippedCore,
     SensorKnee,
+    /// Smooth Bayer-quad sky geometry calibrated to the archived _DSC1289
+    /// as-shot white balance, with broad one- and two-channel clip cohorts.
+    Dsc1289Smooth,
 }
 
 impl FixtureKind {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::NeutralRamp,
         Self::BlueRamp,
         Self::BlueToNeutralSky,
@@ -189,7 +192,21 @@ impl FixtureKind {
         Self::ColoredHighlights,
         Self::FullyClippedCore,
         Self::SensorKnee,
+        Self::Dsc1289Smooth,
     ];
+}
+
+/// Boundary-to-nearby-same-state OKLab chroma-step measurements for one clip
+/// transition. Arrays containing these are ordered 0↔1, 1↔2, 2↔3.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ClipTransitionMetrics {
+    pub boundary_pairs: usize,
+    pub highlight_post_boundary_p90: f32,
+    pub highlight_post_same_state_p90: f32,
+    pub highlight_post_ratio: f32,
+    pub after_curve_boundary_p90: f32,
+    pub after_curve_same_state_p90: f32,
+    pub after_curve_ratio: f32,
 }
 
 /// Absolute, truth-referenced measures from one complete synthetic render.
@@ -206,9 +223,11 @@ pub struct BenchMetrics {
     pub false_color_fraction: f32,
     pub edge_energy_ratio: f32,
     pub peak_luminance_ratio: f32,
+    pub clip_transitions: [ClipTransitionMetrics; 3],
 }
 
 const BENCH_WB: [f32; 3] = [2.219, 1.0, 1.773];
+const DSC1289_WB: [f32; 3] = [2.3632812, 1.0, 1.8085938];
 const CAMERA_TO_SCENE: crate::color::Matrix3 = [
     [1.08, -0.04, -0.04],
     [-0.03, 1.06, -0.03],
@@ -221,6 +240,7 @@ struct RawFixture {
     height: usize,
     scene: Vec<[f32; 3]>,
     knee: bool,
+    wb: [f32; 3],
 }
 
 #[inline]
@@ -280,6 +300,11 @@ fn fixture(kind: FixtureKind, width: usize, height: usize) -> RawFixture {
                     [dome * 0.92, dome, dome * 0.96]
                 }
                 FixtureKind::SensorKnee => blue.map(|c| c * ramp),
+                FixtureKind::Dsc1289Smooth => {
+                    let vertical = 0.94 + 0.08 * ty;
+                    let smooth = (0.46 + 2.85 * tx) * vertical;
+                    [0.54 * smooth, 0.80 * smooth, smooth]
+                }
             };
             scene.push(pixel);
         }
@@ -289,17 +314,22 @@ fn fixture(kind: FixtureKind, width: usize, height: usize) -> RawFixture {
         height,
         scene,
         knee: kind == FixtureKind::SensorKnee,
+        wb: if kind == FixtureKind::Dsc1289Smooth {
+            DSC1289_WB
+        } else {
+            BENCH_WB
+        },
     }
 }
 
-fn scene_to_camera(scene: [f32; 3]) -> [f32; 3] {
+fn scene_to_camera(scene: [f32; 3], wb: [f32; 3]) -> [f32; 3] {
     let inverse = crate::color::invert3(CAMERA_TO_SCENE).expect("bench matrix is invertible");
     let neutral = matrix_vector(&inverse, scene);
-    std::array::from_fn(|c| neutral[c] / BENCH_WB[c])
+    std::array::from_fn(|c| neutral[c] / wb[c])
 }
 
-fn camera_to_scene(camera: [f32; 3]) -> [f32; 3] {
-    let neutral = std::array::from_fn(|c| camera[c] * BENCH_WB[c]);
+fn camera_to_scene(camera: [f32; 3], wb: [f32; 3]) -> [f32; 3] {
+    let neutral = std::array::from_fn(|c| camera[c] * wb[c]);
     matrix_vector(&CAMERA_TO_SCENE, neutral)
 }
 
@@ -321,7 +351,7 @@ fn sample_rggb(fixture: &RawFixture) -> (Vec<f32>, Vec<f32>, CFA) {
     let mut captured = Vec::with_capacity(fixture.scene.len());
     for y in 0..fixture.height {
         for x in 0..fixture.width {
-            let camera = scene_to_camera(fixture.scene[y * fixture.width + x]);
+            let camera = scene_to_camera(fixture.scene[y * fixture.width + x], fixture.wb);
             let c = match cfa.cfa_color_at(y, x) {
                 CFAColor::RED => 0,
                 CFAColor::GREEN => 1,
@@ -343,7 +373,13 @@ fn full_roi(width: usize, height: usize) -> Rect {
     Rect::new(Point::zero(), Dim2::new(width, height))
 }
 
-fn demosaic_scene(samples: &[f32], width: usize, height: usize, cfa: &CFA) -> LinearImage {
+fn demosaic_scene(
+    samples: &[f32],
+    width: usize,
+    height: usize,
+    cfa: &CFA,
+    wb: [f32; 3],
+) -> LinearImage {
     let camera = crate::demosaic::demosaic_bayer(
         samples,
         width,
@@ -352,7 +388,10 @@ fn demosaic_scene(samples: &[f32], width: usize, height: usize, cfa: &CFA) -> Li
         full_roi(width, height),
         crate::demosaic::DemosaicMethod::Rcd,
     );
-    let scene = camera.into_iter().map(camera_to_scene).collect();
+    let scene = camera
+        .into_iter()
+        .map(|pixel| camera_to_scene(pixel, wb))
+        .collect();
     Image::<SceneLinear>::new(width, height, scene).expect("fixture dimensions are valid")
 }
 
@@ -413,6 +452,101 @@ fn boundary_pairs(width: usize, height: usize, state: &[u8]) -> Vec<(usize, usiz
     pairs
 }
 
+fn clip_transition_metrics(
+    width: usize,
+    height: usize,
+    state: &[u8],
+    highlight_post: &LinearImage,
+    rendered: &[crate::tone::RenderPixelStages],
+) -> [ClipTransitionMetrics; 3] {
+    let mut boundary_post: [Vec<f32>; 3] = std::array::from_fn(|_| Vec::new());
+    let mut boundary_curve: [Vec<f32>; 3] = std::array::from_fn(|_| Vec::new());
+    let mut same_post: [Vec<f32>; 3] = std::array::from_fn(|_| Vec::new());
+    let mut same_curve: [Vec<f32>; 3] = std::array::from_fn(|_| Vec::new());
+    let mut same_pairs: [Vec<(usize, usize)>; 3] = std::array::from_fn(|_| Vec::new());
+    let mut counts = [0_usize; 3];
+
+    for (a, b) in boundary_pairs(width, height, state) {
+        let low = state[a].min(state[b]) as usize;
+        let high = state[a].max(state[b]) as usize;
+        if high != low + 1 || low >= 3 {
+            continue;
+        }
+        counts[low] += 1;
+        boundary_post[low].push(ab_distance(
+            highlight_post.pixels[a],
+            highlight_post.pixels[b],
+        ));
+        boundary_curve[low].push(ab_distance(
+            rendered[a].after_curve,
+            rendered[b].after_curve,
+        ));
+
+        for endpoint in [a, b] {
+            let x = endpoint % width;
+            let y = endpoint / width;
+            for (dx, dy) in [(1_isize, 0_isize), (-1, 0), (0, 1), (0, -1)] {
+                let nx = x as isize + dx;
+                let ny = y as isize + dy;
+                if nx < 0 || ny < 0 || nx >= width as isize || ny >= height as isize {
+                    continue;
+                }
+                let neighbor = ny as usize * width + nx as usize;
+                if state[neighbor] != state[endpoint] {
+                    continue;
+                }
+                same_pairs[low].push((endpoint.min(neighbor), endpoint.max(neighbor)));
+            }
+        }
+    }
+
+    // One same-state pair contributes once. Pushing a distance per boundary
+    // pair an endpoint takes part in counted a pixel's neighbours k times over,
+    // and counted a pair whose members are both endpoints from both
+    // directions -- weighting the baseline toward the transition, where chroma
+    // steps are largest. That baseline is the denominator of the ratios the
+    // gate tests assert on, so the bias read as a smaller contrast than the
+    // frame actually has. Sorting keeps the sample order independent of
+    // traversal order.
+    for transition in 0..3 {
+        same_pairs[transition].sort_unstable();
+        same_pairs[transition].dedup();
+        for &(first, second) in &same_pairs[transition] {
+            same_post[transition].push(ab_distance(
+                highlight_post.pixels[first],
+                highlight_post.pixels[second],
+            ));
+            same_curve[transition].push(ab_distance(
+                rendered[first].after_curve,
+                rendered[second].after_curve,
+            ));
+        }
+    }
+
+    std::array::from_fn(|transition| {
+        let post_boundary = percentile(std::mem::take(&mut boundary_post[transition]), 0.90);
+        let post_same = percentile(std::mem::take(&mut same_post[transition]), 0.90);
+        let curve_boundary = percentile(std::mem::take(&mut boundary_curve[transition]), 0.90);
+        let curve_same = percentile(std::mem::take(&mut same_curve[transition]), 0.90);
+        let ratio = |boundary: f32, same: f32| {
+            if boundary <= 1.0e-6 && same <= 1.0e-6 {
+                0.0
+            } else {
+                boundary / same.max(1.0e-6)
+            }
+        };
+        ClipTransitionMetrics {
+            boundary_pairs: counts[transition],
+            highlight_post_boundary_p90: post_boundary,
+            highlight_post_same_state_p90: post_same,
+            highlight_post_ratio: ratio(post_boundary, post_same),
+            after_curve_boundary_p90: curve_boundary,
+            after_curve_same_state_p90: curve_same,
+            after_curve_ratio: ratio(curve_boundary, curve_same),
+        }
+    })
+}
+
 /// Run one first-principles fixture from analytical scene values through CFA
 /// sampling, clipping, production demosaic/colour conversion, reconstruction,
 /// and the renderer-exact tone checkpoints.
@@ -440,7 +574,7 @@ pub fn evaluate_raw_to_render(
         .map(|c| c.iter().filter(|value| **value >= 0.5).count() as u8)
         .collect();
 
-    let reference = demosaic_scene(&truth_raw, fixture.width, fixture.height, &cfa);
+    let reference = demosaic_scene(&truth_raw, fixture.width, fixture.height, &cfa, fixture.wb);
     let (candidate, uncertainty) = match method {
         crate::raw_highlight::HighlightMethod::Current => {
             let mut camera = crate::demosaic::demosaic_bayer(
@@ -455,12 +589,15 @@ pub fn evaluate_raw_to_render(
                 Image::<CameraRgb>::new(fixture.width, fixture.height, camera).unwrap();
             let (_, uncertainty) = crate::highlight::reconstruct_with_confidence_and_uncertainty(
                 &mut camera_image,
-                BENCH_WB,
+                fixture.wb,
                 1.0,
                 Some(&propagated),
             );
             camera = camera_image.pixels;
-            let scene = camera.into_iter().map(camera_to_scene).collect();
+            let scene = camera
+                .into_iter()
+                .map(|pixel| camera_to_scene(pixel, fixture.wb))
+                .collect();
             (
                 Image::<SceneLinear>::new(fixture.width, fixture.height, scene).unwrap(),
                 uncertainty,
@@ -473,18 +610,15 @@ pub fn evaluate_raw_to_render(
                 fixture.height,
                 &cfa,
                 Some(&confidence),
-                BENCH_WB,
-                spatial,
+                crate::raw_highlight::ReconstructionOptions {
+                    white_balance: fixture.wb,
+                    strength: 1.0,
+                    method: spatial,
+                },
             )
             .expect("synthetic CFA is valid");
-            let mut candidate = demosaic_scene(&captured, fixture.width, fixture.height, &cfa);
-            if matches!(spatial, crate::raw_highlight::HighlightMethod::Harmonic) {
-                let _ = crate::highlight::transport_spatial_chromaticity(
-                    &mut candidate,
-                    Some(&propagated),
-                    crate::color::WorkingSpace::Srgb.to_xyz_d65(),
-                );
-            }
+            let candidate =
+                demosaic_scene(&captured, fixture.width, fixture.height, &cfa, fixture.wb);
             let uncertainty = propagated
                 .iter()
                 .map(|c| (c[0] + c[1] + c[2]) / 3.0)
@@ -633,6 +767,13 @@ pub fn evaluate_raw_to_render(
             .fold(0.0_f32, f32::max)
     };
     let peak_luminance_ratio = peak_luminance(&candidate) / peak_luminance(&reference).max(1.0e-8);
+    let clip_transitions = clip_transition_metrics(
+        fixture.width,
+        fixture.height,
+        &state,
+        &candidate,
+        &candidate_stages,
+    );
 
     BenchMetrics {
         normalized_linear_rmse,
@@ -646,6 +787,7 @@ pub fn evaluate_raw_to_render(
         false_color_fraction,
         edge_energy_ratio,
         peak_luminance_ratio,
+        clip_transitions,
     }
 }
 
@@ -913,7 +1055,37 @@ mod tests {
                 FixtureKind::SensorKnee => {
                     assert!(metrics.final_oklab_rmse <= 0.02, "{metrics:?}");
                 }
+                FixtureKind::Dsc1289Smooth => {
+                    let one_to_two = metrics.clip_transitions[1];
+                    assert!(one_to_two.boundary_pairs > 0, "{metrics:?}");
+                    assert!(one_to_two.highlight_post_ratio <= 1.25, "{metrics:?}");
+                    assert!(one_to_two.after_curve_ratio <= 1.25, "{metrics:?}");
+                    assert!(metrics.normalized_luminance_rmse <= 0.10, "{metrics:?}");
+                }
             }
         }
+    }
+
+    #[test]
+    fn dsc1289_like_fixture_reports_clip_transitions_separately() {
+        let metrics = evaluate_raw_to_render(
+            FixtureKind::Dsc1289Smooth,
+            crate::raw_highlight::HighlightMethod::Harmonic,
+        );
+        eprintln!("_DSC1289-like transitions: {:?}", metrics.clip_transitions);
+        assert!(
+            metrics.clip_transitions[0].boundary_pairs > 0,
+            "{metrics:?}"
+        );
+        assert!(
+            metrics.clip_transitions[1].boundary_pairs > 0,
+            "{metrics:?}"
+        );
+        // _DSC1289 itself has no fully clipped pixels. The 2↔3 slot must still
+        // be reported explicitly, and therefore carries a zero pair count.
+        assert_eq!(metrics.clip_transitions[2].boundary_pairs, 0, "{metrics:?}");
+        let critical = metrics.clip_transitions[1];
+        assert!(critical.highlight_post_ratio <= 1.25, "{metrics:?}");
+        assert!(critical.after_curve_ratio <= 1.25, "{metrics:?}");
     }
 }

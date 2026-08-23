@@ -858,6 +858,112 @@ record raw-autotune.work.residual-purple-sky-external-scope/1 : work {
     }
 }
 
+record raw-autotune.work.resolve-slice-5-open-questions/1 : work {
+    title "Resolve Slice 5 continuous-confidence review questions"
+    state superseded
+    scope [
+        path "CHANGELOG.md",
+        path "docs/STATUS.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Harden the completed Slice 5 joint log-chromaticity estimator at its evidence-free edges without restoring binary final authority: add a measured-boundary safety bound only for collapsed chromaticity systems, make no-fit luminance support require defensible evidence, retain deliberate continuous-confidence/core/grid semantics with regressions, define fractional reconstruction as one blend of the full target while keeping it externally unreachable, and update standing diagnostics.
+        """
+    acceptance {
+        check focused-safety-regressions {
+            statement """
+                Focused raw-highlight and synthetic regressions cover all six code questions and pass.
+                """
+            method command
+        }
+        check full-release-suite {
+            statement """
+                The full release test suite and render-path lint/format gates pass.
+                """
+            method command
+        }
+        check questions-resolved {
+            statement """
+                All seven Slice 5 question records carry durable resolutions supported by observed evidence.
+                """
+            method observation
+        }
+        check standing-verification-current {
+            statement """
+                STATUS documents Harmonic diagnostic ownership and the final stage dump without a stale test count.
+                """
+            method manual
+        }
+    }
+    depends_on [ @raw-autotune.work.slice-5-joint-raw-log-chromaticity ]
+    implements [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}
+
+record raw-autotune.work.resolve-slice-5-open-questions/2 : work {
+    title "Resolve Slice 5 continuous-confidence review questions"
+    state completed
+    scope [
+        path "CHANGELOG.md",
+        path "docs/STATUS.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Harden the completed Slice 5 joint log-chromaticity estimator at its evidence-free edges without restoring binary final authority: add a measured-boundary safety bound only for collapsed chromaticity systems, make no-fit luminance support require defensible evidence, retain deliberate continuous-confidence/core/grid semantics with regressions, define fractional reconstruction as one blend of the full target while keeping it externally unreachable, and update standing diagnostics.
+        """
+    acceptance {
+        check focused-safety-regressions {
+            statement """
+                Focused raw-highlight and synthetic regressions cover all six code questions and pass.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.slice5-question-focused-regressions-20260823/1
+            ]
+        }
+        check full-release-suite {
+            statement """
+                The full release test suite and render-path lint/format gates pass.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.slice5-question-full-suite-20260823/1 ]
+        }
+        check questions-resolved {
+            statement """
+                All seven Slice 5 question records carry durable resolutions supported by observed evidence.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.slice5-question-ledger-resolution-20260823/1 ]
+        }
+        check standing-verification-current {
+            statement """
+                STATUS documents Harmonic diagnostic ownership and the final stage dump without a stale test count.
+                """
+            method manual
+            verified_by [ @raw-autotune.evidence.slice5-question-status-20260823/1 ]
+        }
+    }
+    depends_on [ @raw-autotune.work.slice-5-joint-raw-log-chromaticity ]
+    implements [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+    resolves [
+        @raw-autotune.question.deleted-chroma-hull-clamp,
+        @raw-autotune.question.fully-clipped-core-threshold,
+        @raw-autotune.question.grid-valid-mean-confidence,
+        @raw-autotune.question.prediction-band-below-clip-ramp,
+        @raw-autotune.question.status-doc-standing-verification,
+        @raw-autotune.question.strength-compounding-is-unreachable,
+        @raw-autotune.question.unfitted-partial-cell-floor
+    ]
+    supersedes [ @raw-autotune.work.resolve-slice-5-open-questions/1 ]
+}
+
 record raw-autotune.work.risks-rollback/1 : work {
     title "Risks / Rollback"
     state proposed
@@ -1526,6 +1632,56 @@ record raw-autotune.work.slice-4-raw-domain-confidence-plumbing-phase-b-4/1 : wo
     }
 }
 
+record raw-autotune.work.slice-5-joint-raw-log-chromaticity/1 : work {
+    title "Slice 5 — Integrate joint raw-domain log-chromaticity into harmonic reconstruction"
+    state completed
+    scope [
+        path "src/color.rs",
+        path "src/highlight.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs",
+        path "src/tone.rs",
+        path "tools/**"
+    ]
+    intent """
+        Replace the harmonic path's one-channel/two-channel clip-state estimator handoff with one continuous chromaticity estimator across the entire clipped Bayer component. Keep the existing harmonic and pyramid reconstruction responsible for luminance and spatial detail, but jointly solve chromaticity in Bayer-quad space from continuous channel confidence and all surviving pairwise log ratios: log(R/G), log(B/G), and log(R/B), with trust t_c=(1-c_c)^2. Use edge-aware component coupling, a weak harmonic initialization/prior only, and no frame-average chromaticity.
+
+        Recompose a white-balanced q=[exp(u),1,exp(v)] with a trusted-channel scalar intensity fit, enforce sensor floors, and apply only positive continuous per-site corrections weighted by the channel confidence and reconstruction strength. Confidence zero and strength zero must be exact no-ops; measured channels remain lower bounds and are never darkened. Remove binary valid/confidence-0.5 behavior from final authority, including keep_unfitted_partial_cells() overwrites and apply_prediction() skips. Disable transport_spatial_chromaticity() for Harmonic production output; retain it only as an internal ablation because a second post-demosaic chroma model must not own the two-channel side alone. A smooth neutral fallback is permitted only deep inside fully clipped components with no local or boundary evidence.
+
+        Add a synthetic _DSC1289-like smooth Bayer-quad fixture with white balance approximately [2.3632812, 1.0, 1.8085938], broad one-/two-channel clipped cohorts, and optional sky/foliage occlusion. Report 0↔1, 1↔2, and 2↔3 transitions separately. The critical promotion gate is 1↔2 boundary OKLab chroma p90 divided by nearby same-state p90 <= 1.25 at highlight-post and after-tone-curve, alongside no-darkening, zero-confidence/zero-strength, hue/occluder, luminance/peak-recovery, corpus, memory, and jobs-1/jobs-8 determinism gates. Do not weaken the tone shoulder or extend post-demosaic transport as the fix. This is a proposed, unverified design and must not be promoted until implementation, synthetic measurements, archived _DSC1289 comparison, and regression gates pass.
+        """
+    acceptance {
+        check critical-one-to-two-boundary-gate {
+            statement """
+                The synthetic and archived-frame gates report clip-state transitions separately and keep 1↔2 boundary OKLab chroma p90 divided by nearby same-state p90 at or below 1.25 after highlight-post and after the tone curve.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.slice-5-critical-boundary-gate-20260816/1 ]
+        }
+        check joint-estimator-owns-clip-state-chromaticity {
+            statement """
+                Harmonic production reconstruction uses one continuous confidence-weighted joint log-chromaticity field across one- and two-channel clipped Bayer components, with trusted-channel scalar intensity recovery and no second production chroma estimator.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.slice-5-joint-estimator-production-ownership-20260816/1
+            ]
+        }
+        check raw-reconstruction-regression-gates {
+            statement """
+                The implementation preserves no-darkening, zero-confidence/zero-strength exact no-ops, hue/occluder protection, luminance and peak recovery, corpus, memory, and jobs-1/jobs-8 determinism gates.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.slice-5-release-corpus-memory-determinism-20260816/1
+            ]
+        }
+    }
+    depends_on [ @raw-autotune.work.raw-pyramid-highlight-baseline/1 ]
+    derived_from [ @raw-autotune.evidence.sky-stage-attribution-20260816-r2/1 ]
+    implements [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1 ]
+}
+
 record raw-autotune.work.slice-6-uncertainty-gated-chroma-limiting-phase/1 : work {
     title "Slice 6 — Uncertainty-gated chroma limiting (Phase B.6)"
     state completed
@@ -1566,7 +1722,7 @@ record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/1 : work {
 
 record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 : work {
     title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
-    state active
+    state superseded
     scope [ path "src/localtone.rs", path "src/tone.rs", path "tools/**" ]
     intent """
         Attribute the visible sky failure to an exact pipeline boundary before changing the default render. Keep the existing local-tone and HDR evaluations for scene-luminance compression, but do not use either operator to conceal a colour-estimation discontinuity.
@@ -1603,6 +1759,78 @@ record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 : work {
             - **Depends on:** Slice 7.
             """
     }
+}
+
+record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/3 : work {
+    title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
+    state superseded
+    scope [ path "src/localtone.rs", path "src/tone.rs", path "tools/**" ]
+    intent """
+        Attribute the visible sky failure to an exact pipeline boundary before changing the default render. Keep the existing local-tone and HDR evaluations for scene-luminance compression, but do not use either operator to conceal a colour-estimation discontinuity.
+
+        Add renderer-exact, lossless diagnostic checkpoints after the tone curve, chroma scale, highlight white mix, and gamut compression. The normal render and the final diagnostic checkpoint must share one implementation and remain byte-identical. On `_DSC1289.ARW`, compare the default against reconstruction disabled, `--local-tone 0.35`, and `--hdr 0.5`; measure adjacent OKLab chroma steps across raw clip-state boundaries and within the same clip state.
+
+        The current attribution found that reconstruction introduces clip-cohort plateaus and that the max-channel-weighted tone shoulder is the main discontinuity amplifier. Local tone and HDR do not repair the colour estimate, gamut compression is effectively inactive in the measured sky, and the peak-preserving path toward white reduces rather than creates the boundary. Continue evaluating local tone/HDR only after the reconstruction estimator and its end-to-end ground-truth bench can distinguish recovered detail from invented colour.
+        """
+    note """
+        Current-head evidence is now lossless and renderer-exact. The existing shared checkpoints cover after tone curve, after chroma scale, after highlight white mix (gamut-pre), and after gamut compression (gamut-post); the new encoded-u16 regression test and the --sharpen 0 render comparison establish byte identity between final diagnostic and normal render. On _DSC1289 the first material increase in adjacent OKLab chroma across raw clip-state boundaries is after the tone curve (p90 0.00390 to 0.00451), while chroma changes it to 0.00441 and white mix/gamut reduce it to 0.00344; within-state p90 is 0.00227, 0.00229, 0.00237, and 0.00185. The current harmonic/raw reconstruction path is unchanged across the pre/post snapshots in this ROI, and reconstruction disabled is worse in the camera-grade comparison. Local tone 0.35 and HDR 0.5 adjust luminance modestly but retain the green deficit. No evidence-backed default tone change is indicated; leave the colour-continuity gate open and keep local-tone/HDR evaluation luminance-only.
+        """
+    acceptance {
+        check local-tone-hdr-remain-colour-neutral {
+            statement """
+                Local-tone or HDR promotion is decided on luminance separation and halo behaviour only after highlight colour continuity passes the ground-truth reconstruction gate.
+                """
+            method command
+        }
+        check renderer-exact-stage-attribution {
+            statement """
+                Lossless checkpoints use production renderer exact arithmetic, leave normal output byte-identical, isolate first stage materially amplifies clip-boundary colour steps.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.sky-stage-attribution-20260816/1 ]
+        }
+    }
+    supersedes [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/2 ]
+}
+
+record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/4 : work {
+    title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
+    state active
+    scope [
+        path "src/localtone.rs",
+        path "src/pipeline.rs",
+        path "src/tone.rs",
+        path "tools/**"
+    ]
+    intent """
+        Attribute the visible sky failure to an exact pipeline boundary before changing the default render. Keep the existing local-tone and HDR evaluations for scene-luminance compression, but do not use either operator to conceal a colour-estimation discontinuity.
+
+        Add renderer-exact, lossless diagnostic checkpoints after the tone curve, chroma scale, highlight white mix, and gamut compression. The normal render and the final diagnostic checkpoint must share one implementation and remain byte-identical. On `_DSC1289.ARW`, compare the default against reconstruction disabled, `--local-tone 0.35`, and `--hdr 0.5`; measure adjacent OKLab chroma steps across raw clip-state boundaries and within the same clip state.
+
+        The current attribution found that reconstruction introduces clip-cohort plateaus and that the max-channel-weighted tone shoulder is the main discontinuity amplifier. Local tone and HDR do not repair the colour estimate, gamut compression is effectively inactive in the measured sky, and the peak-preserving path toward white reduces rather than creates the boundary. Continue evaluating local tone/HDR only after the reconstruction estimator and its end-to-end ground-truth bench can distinguish recovered detail from invented colour.
+        """
+    note """
+        Current-head evidence is lossless and renderer-exact. The shared stage checkpoints remain after tone curve, chroma scale, highlight white mix (gamut-pre), and gamut compression (gamut-post); a new final checkpoint is written from the exact post-sharpen RGB16 buffer, so the true default CLI output and final diagnostic have zero encoded-pixel error. On _DSC1289 the first material increase in adjacent OKLab chroma across raw clip-state boundaries is after the tone curve (p90 0.00390 to 0.00451), while chroma changes it to 0.00441 and white mix/gamut reduce it to 0.00344; within-state p90 is 0.00227, 0.00229, 0.00237, and 0.00185. The current harmonic/raw reconstruction path is unchanged across the pre/post snapshots in this ROI, and reconstruction disabled is worse in the camera-grade comparison. Local tone 0.35 and HDR 0.5 adjust luminance modestly but retain the green deficit. No evidence-backed default tone change is indicated; leave the colour-continuity gate open and keep local-tone/HDR evaluation luminance-only.
+        """
+    acceptance {
+        check local-tone-hdr-remain-colour-neutral {
+            statement """
+                Local-tone or HDR promotion is decided on luminance separation and halo behaviour only after highlight colour continuity passes the ground-truth reconstruction gate.
+                """
+            method command
+        }
+        check renderer-exact-stage-attribution {
+            statement """
+                Lossless checkpoints use production renderer exact arithmetic, leave normal output byte-identical, isolate first stage materially amplifies clip-boundary colour steps.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.sky-final-output-20260816/1,
+                @raw-autotune.evidence.sky-stage-attribution-20260816-r2/1
+            ]
+        }
+    }
+    supersedes [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/3 ]
 }
 
 record raw-autotune.work.spatial-semantic-aq-api/1 : work {

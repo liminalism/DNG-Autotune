@@ -1033,6 +1033,15 @@ fn process_job_inner(
     }
     let rendered = rendered;
 
+    if let Some(dir) = &options.dump_stages {
+        let stem = job
+            .input
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "unnamed".to_string());
+        crate::tone::dump_final_diagnostic(&rendered, dir, &stem);
+    }
+
     // Measure before handing the buffer to the encoder, which consumes it.
     let output_stats = crate::metrics::OutputStats::measure(&rendered);
     if let Some(report) = &mut reference {

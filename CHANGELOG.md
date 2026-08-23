@@ -2,6 +2,113 @@
 
 ## Unreleased — a standalone front-end
 
+### Joint raw-domain log-chromaticity reconstruction
+
+One estimator now owns chromaticity across the complete connected component
+spanning one-channel- and two-channel-clipped Bayer quads. Chromaticity is no
+longer handed from raw harmonic reconstruction to a second post-demosaic
+`(u'v')` transport model on only the two-channel side, which was the source of
+the visible `1<->2` clip-state discontinuity in skies;
+`transport_spatial_chromaticity` is retained only as an internal ablation.
+`joint_log_chromaticity` solves one edge-aware two-dimensional field per
+affected component from all three pairwise constraints `log(R/G)`, `log(B/G)`
+and `log(R/B)`, weighted by continuous trust `t_c=(1-c_c)^2`, with the harmonic
+result demoted to a weak initialization prior. Measured channels remain lower
+bounds, and confidence `0` and strength `0` remain exact no-ops.
+
+Measured on `_DSC1289`: rendered output moves by 0.286% RMSE against the
+previous estimator, and connected regions rise from 268 to 399 at an unchanged
+623,593 clipped CFA sites. Peak RSS on a 24 MP frame at `--jobs 1` rises from
+~992 MB to ~1324 MB, so `HighlightMethod::Harmonic`'s batch-planner reserve
+moves from 48 to 64 bytes per pixel; the previous value would have let the
+memory gate admit roughly 1.3 GB of unaccounted footprint at `--jobs 4`.
+
+Follow-up review hardens only the joint estimator's evidence-free edges. A cell
+with neither pairwise data nor meaningful neighbour coupling is bounded by its
+component's measured log-chromaticity envelope, and an unfitted partial channel
+cannot import unsupported luminance. Continuous application below the former
+0.5 confidence gate remains intentional. Fractional spatial strength, though
+still rejected by the public CLI/API, is now defined internally as one blend of
+the complete full-strength knee-plus-spatial target instead of compounding the
+strength across both stages.
+
+### Joint chromaticity solve: same output, 42% less wall clock
+
+`joint_log_chromaticity`'s Jacobi sweep recomputed roughly thirty
+transcendentals per cell on every one of up to `SWEEPS` (160) passes — five
+`log_chromaticity` calls and four `exp`/`sqrt` groups — although only
+`current_uv[n]` varies between sweeps. The observed chromaticities, trust
+products, matrix entries and spatial weights are now computed once per region
+into a `CellSystem` and reused, with accumulation order preserved. That pass
+writes nothing and regions are connected components, so it also parallelises;
+`with_min_len(256)` keeps small regions sequential.
+
+`continuous_luminance_support` scanned each region's padded bounding box six
+times (3 targets x 2 guides), but its weight is symmetric in `(target, guide)`
+and `covariance^2 / (var_x * var_y)` is invariant under swapping x and y, so
+three of the six scans computed a bit-identical `f32`. It now evaluates each
+unordered pair once.
+
+`solve_region_direct` gated on `region.cells.len()` before checking the
+per-channel unknown count. Since `regions()`' `affected` predicate widened,
+regions carry many trusted cells that are not unknowns, so a region whose
+system fits comfortably could be pushed into the 300-sweep iterative fallback
+on padding alone. The guard now bounds the widest per-channel unknown count,
+which is what the constant names. `reconstruct_cfa` also made two separate full
+passes over 24 M samples to compute two counts from the same per-sample
+confidence; they are fused into one.
+
+Measured on `_DSC1289` at `--jobs 1`: 35.56 s to 20.75 s wall clock, peak RSS
+1,324,112 KB to 1,334,208 KB (the per-region `CellSystem` transient, +0.4%, so
+the 64 bytes/pixel reserve still holds). The rendered JPEG is byte-identical
+(same MD5) and the summary sidecar is identical apart from the output path —
+including `solver_fallbacks`, so no region changed solver path on this frame.
+The direct-solve change can still move output on a frame with a region under
+the unknown cap but over the cell cap; that did not occur here.
+
+### Corrections to the joint chromaticity estimator
+
+Review of the above found three defects, fixed here.
+
+The Jacobi sweep published each region's result by swapping the whole
+`current`/`next` buffers, while writing only the current region's cells. A
+finished region therefore read back as either its converged or its
+one-sweep-stale field, decided by the parity of the sweep counts that later,
+unrelated regions happened to take — regions that share no 4-neighbour with it
+and cannot legitimately affect it. The sweep now copies back only its own
+cells. `joint_chromaticity_does_not_depend_on_the_order_of_other_regions` is
+the regression: its two-blob fixture converges in 82 and 75 sweeps, and the
+odd count makes the old code fail on reversed region order.
+
+`apply_sensor_knee` scaled its lift by clip confidence, which is exactly `0`
+below `CLIP_RAMP_LOW` (0.92) while the stage's own range starts at `KNEE_LOW`
+(0.80) — so the correction that exists to invert a smooth sensor shoulder was
+disabled across most of that shoulder and applied at a fraction of an analytic
+inverse above it (0.44 at raw 0.95). Confidence is now honoured as a veto on an
+explicit per-site zero, not as a scale; `accepted[c][bin]` remains the evidence
+gate and `strength` the only continuous scale. On the knee fixture the old
+behaviour gives an inverse RMSE of 0.041 against the stage's 0.003 gate; the
+existing test had been passing an all-ones confidence map, which forced full
+authority and hid it. The stage was inert on the Sony corpus either way, since
+`KNEE_MIN_VOTES` rejects the fit on a hard-clip sensor.
+
+`clip_transition_metrics` pushed a pixel's same-state neighbour distances once
+per boundary pair that pixel took part in, and counted a pair whose members
+were both endpoints from both directions. That weighted the same-state baseline
+toward the transition, where chroma steps are largest, inflating the
+denominator of the `<= 1.25` ratios the sky gates assert on. Same-state pairs
+are now deduplicated before the percentile.
+
+Two tests that named behaviour they did not reach were rewritten.
+`zero_confidence_and_zero_strength_are_exact_no_ops` fed a flat buffer, which
+tripped `reconstruct_cfa`'s early return in both of its cases, so it proved
+only that the early return works; it now runs on a clipping ramp that
+demonstrably moves at full strength and asserts the per-pixel invariant against
+a mixed confidence map. The final-checkpoint test never called
+`dump_final_diagnostic`; the dump path is now asserted against the file the
+function actually writes, and the older assertion is renamed to what it
+covers.
+
 ### Scene-model pack (perception, no render change)
 
 `tools/scene_models/` fetches and rewrites the first perception graphs for

@@ -605,7 +605,7 @@ mod tests {
         assert_eq!(pyramid - current, pixels * 24);
         assert_eq!(
             harmonic_profile - current,
-            pixels * (PROFILE_EXTRA_BYTES_PER_PIXEL + 48)
+            pixels * (PROFILE_EXTRA_BYTES_PER_PIXEL + 64)
         );
     }
 }
