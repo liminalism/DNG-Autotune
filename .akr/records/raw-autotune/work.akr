@@ -858,6 +858,112 @@ record raw-autotune.work.residual-purple-sky-external-scope/1 : work {
     }
 }
 
+record raw-autotune.work.resolve-slice-5-open-questions/1 : work {
+    title "Resolve Slice 5 continuous-confidence review questions"
+    state superseded
+    scope [
+        path "CHANGELOG.md",
+        path "docs/STATUS.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Harden the completed Slice 5 joint log-chromaticity estimator at its evidence-free edges without restoring binary final authority: add a measured-boundary safety bound only for collapsed chromaticity systems, make no-fit luminance support require defensible evidence, retain deliberate continuous-confidence/core/grid semantics with regressions, define fractional reconstruction as one blend of the full target while keeping it externally unreachable, and update standing diagnostics.
+        """
+    acceptance {
+        check focused-safety-regressions {
+            statement """
+                Focused raw-highlight and synthetic regressions cover all six code questions and pass.
+                """
+            method command
+        }
+        check full-release-suite {
+            statement """
+                The full release test suite and render-path lint/format gates pass.
+                """
+            method command
+        }
+        check questions-resolved {
+            statement """
+                All seven Slice 5 question records carry durable resolutions supported by observed evidence.
+                """
+            method observation
+        }
+        check standing-verification-current {
+            statement """
+                STATUS documents Harmonic diagnostic ownership and the final stage dump without a stale test count.
+                """
+            method manual
+        }
+    }
+    depends_on [ @raw-autotune.work.slice-5-joint-raw-log-chromaticity ]
+    implements [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}
+
+record raw-autotune.work.resolve-slice-5-open-questions/2 : work {
+    title "Resolve Slice 5 continuous-confidence review questions"
+    state completed
+    scope [
+        path "CHANGELOG.md",
+        path "docs/STATUS.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/raw_highlight.rs",
+        path "src/synthetic.rs"
+    ]
+    intent """
+        Harden the completed Slice 5 joint log-chromaticity estimator at its evidence-free edges without restoring binary final authority: add a measured-boundary safety bound only for collapsed chromaticity systems, make no-fit luminance support require defensible evidence, retain deliberate continuous-confidence/core/grid semantics with regressions, define fractional reconstruction as one blend of the full target while keeping it externally unreachable, and update standing diagnostics.
+        """
+    acceptance {
+        check focused-safety-regressions {
+            statement """
+                Focused raw-highlight and synthetic regressions cover all six code questions and pass.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.slice5-question-focused-regressions-20260823/1
+            ]
+        }
+        check full-release-suite {
+            statement """
+                The full release test suite and render-path lint/format gates pass.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.slice5-question-full-suite-20260823/1 ]
+        }
+        check questions-resolved {
+            statement """
+                All seven Slice 5 question records carry durable resolutions supported by observed evidence.
+                """
+            method observation
+            verified_by [ @raw-autotune.evidence.slice5-question-ledger-resolution-20260823/1 ]
+        }
+        check standing-verification-current {
+            statement """
+                STATUS documents Harmonic diagnostic ownership and the final stage dump without a stale test count.
+                """
+            method manual
+            verified_by [ @raw-autotune.evidence.slice5-question-status-20260823/1 ]
+        }
+    }
+    depends_on [ @raw-autotune.work.slice-5-joint-raw-log-chromaticity ]
+    implements [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+    resolves [
+        @raw-autotune.question.deleted-chroma-hull-clamp,
+        @raw-autotune.question.fully-clipped-core-threshold,
+        @raw-autotune.question.grid-valid-mean-confidence,
+        @raw-autotune.question.prediction-band-below-clip-ramp,
+        @raw-autotune.question.status-doc-standing-verification,
+        @raw-autotune.question.strength-compounding-is-unreachable,
+        @raw-autotune.question.unfitted-partial-cell-floor
+    ]
+    supersedes [ @raw-autotune.work.resolve-slice-5-open-questions/1 ]
+}
+
 record raw-autotune.work.risks-rollback/1 : work {
     title "Risks / Rollback"
     state proposed

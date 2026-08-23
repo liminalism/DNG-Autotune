@@ -218,6 +218,12 @@ fn build_grid(
                 } else {
                     sum[i][c] / n
                 };
+                // This threshold is compatibility topology for the older
+                // pyramid/line-fit luminance initializer. The joint chroma
+                // solve and final per-site application use continuous trust
+                // and confidence instead. Mean confidence deliberately keeps
+                // a Bayer quad with one clean and one clipped green from being
+                // treated as wholly measured.
                 valid[i][c] = grid_confidence[i][c] < VALID_CONFIDENCE_MAX;
             }
         }
@@ -361,7 +367,6 @@ fn knee_reference_line(grid: &Grid, target: usize, guide: usize) -> Option<LineF
 fn apply_sensor_knee(
     samples: &mut [f32],
     confidence: Option<&[f32]>,
-    strength: f32,
     width: usize,
     height: usize,
     cfa: &CFA,
@@ -445,9 +450,8 @@ fn apply_sensor_knee(
                     continue;
                 }
                 let corrected = value + lifts[c][bin];
-                let applied = value + strength * (corrected - value).max(0.0);
-                if applied > samples[i] {
-                    samples[i] = applied;
+                if corrected > samples[i] {
+                    samples[i] = corrected;
                     corrected_sites += 1;
                 }
             }
@@ -874,6 +878,10 @@ fn fully_clipped_components(grid: &Grid, region: &Region) -> Vec<Region> {
     let mut seen = vec![false; grid.value.len()];
     let mut cores = Vec::new();
     for &seed in &region.cells {
+        // Domes are reserved for hard-clipped cores with no surviving local
+        // evidence. A soft sensor shoulder (even above the old 0.5 binary
+        // threshold) remains ordinary harmonic territory and must not gain an
+        // extrapolated peak merely because continuous confidence is non-zero.
         if seen[seed] || grid.confidence[seed].iter().any(|&c| c < 1.0 - EPSILON) {
             continue;
         }
@@ -1191,9 +1199,23 @@ fn harmonic_prediction(
         let fits = best_fits(grid, region);
         let continuous_support = continuous_luminance_support(grid, region);
         for &i in &region.cells {
-            let fully_clipped_fallback = grid.confidence[i].iter().product::<f32>();
+            let fully_clipped_fallback = if grid.confidence[i]
+                .iter()
+                .all(|&confidence| confidence >= 1.0 - EPSILON)
+            {
+                1.0
+            } else {
+                0.0
+            };
             for (target, support) in continuous_support.iter().copied().enumerate() {
-                luminance_support[i][target] = support.max(fully_clipped_fallback);
+                // Continuous attenuation replaces the deleted hard overwrite,
+                // but it still needs defensible colour-line evidence. When no
+                // fit clears the established sample/conditioning/R² gates, a
+                // partial cell receives no neighbour-imported lift and lands
+                // at its sensor floor through recomposition. Only a genuinely
+                // fully clipped core may use the smooth neutral fallback.
+                let supported = if fits[target].is_some() { support } else { 0.0 };
+                luminance_support[i][target] = supported.max(fully_clipped_fallback);
             }
         }
         for fit in fits.iter().flatten() {
@@ -1285,6 +1307,73 @@ fn log_chromaticity(pixel: [f32; 3], white_balance: [f32; 3]) -> [f32; 2] {
     ]
 }
 
+#[inline]
+fn chroma_cross(origin: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
+    (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0])
+}
+
+fn chroma_hull(mut points: Vec<[f32; 2]>) -> Vec<[f32; 2]> {
+    points.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+    points.dedup_by(|a, b| (a[0] - b[0]).abs() < 1.0e-6 && (a[1] - b[1]).abs() < 1.0e-6);
+    if points.len() <= 2 {
+        return points;
+    }
+    let mut lower = Vec::with_capacity(points.len());
+    for &point in &points {
+        while lower.len() >= 2
+            && chroma_cross(lower[lower.len() - 2], lower[lower.len() - 1], point) <= 0.0
+        {
+            lower.pop();
+        }
+        lower.push(point);
+    }
+    let mut upper = Vec::with_capacity(points.len());
+    for &point in points.iter().rev() {
+        while upper.len() >= 2
+            && chroma_cross(upper[upper.len() - 2], upper[upper.len() - 1], point) <= 0.0
+        {
+            upper.pop();
+        }
+        upper.push(point);
+    }
+    lower.pop();
+    upper.pop();
+    lower.extend(upper);
+    lower
+}
+
+fn closest_on_segment(point: [f32; 2], a: [f32; 2], b: [f32; 2]) -> [f32; 2] {
+    let edge = [b[0] - a[0], b[1] - a[1]];
+    let length_squared = edge[0] * edge[0] + edge[1] * edge[1];
+    if length_squared <= EPSILON {
+        return a;
+    }
+    let t = (((point[0] - a[0]) * edge[0] + (point[1] - a[1]) * edge[1]) / length_squared)
+        .clamp(0.0, 1.0);
+    [a[0] + t * edge[0], a[1] + t * edge[1]]
+}
+
+fn nearest_chroma_envelope(point: [f32; 2], hull: &[[f32; 2]]) -> [f32; 2] {
+    if hull.len() >= 3
+        && (0..hull.len())
+            .all(|i| chroma_cross(hull[i], hull[(i + 1) % hull.len()], point) >= -1.0e-6)
+    {
+        return point;
+    }
+    let mut nearest = hull[0];
+    let mut distance_squared = f32::INFINITY;
+    let edges = if hull.len() == 1 { 1 } else { hull.len() };
+    for i in 0..edges {
+        let candidate = closest_on_segment(point, hull[i], hull[(i + 1) % hull.len()]);
+        let squared = (point[0] - candidate[0]).powi(2) + (point[1] - candidate[1]).powi(2);
+        if squared < distance_squared {
+            nearest = candidate;
+            distance_squared = squared;
+        }
+    }
+    nearest
+}
+
 /// Give one continuous raw-domain estimator authority over chromaticity for a
 /// complete affected component. The older affine/harmonic result supplies
 /// luminance, spatial detail, and a weak initialization only. Pairwise sensor
@@ -1331,6 +1420,7 @@ fn joint_log_chromaticity(
         neighbors: [u32; 4],
         weights: [f32; 4],
         neighbor_count: u8,
+        has_data_authority: bool,
     }
 
     for region in all_regions {
@@ -1437,6 +1527,7 @@ fn joint_log_chromaticity(
                     neighbors,
                     weights,
                     neighbor_count: neighbor_count as u8,
+                    has_data_authority: w_rg + w_bg + w_rb > EPSILON,
                 }
             })
             .collect();
@@ -1475,6 +1566,39 @@ fn joint_log_chromaticity(
             }
             if max_delta < 1.0e-5 {
                 break;
+            }
+        }
+
+        // The joint field normally owns chromaticity without a binary clamp.
+        // One pathological case has no such authority: every pairwise data
+        // weight is zero and every spatial edge has collapsed to WEIGHT_FLOOR.
+        // There the weak affine/harmonic initializer would otherwise be about
+        // 98% of the system and could invent a hue unsupported by any measured
+        // boundary. Bound only that evidence-free state in the same log-chroma
+        // coordinates as the joint solve; ordinary continuous-confidence cells
+        // remain entirely unconstrained by this compatibility guard.
+        let boundary_hull = chroma_hull(
+            region
+                .boundary
+                .iter()
+                .filter(|&&i| {
+                    let trust = grid.trust[i];
+                    trust[0] * trust[1] + trust[2] * trust[1] + trust[0] * trust[2] > EPSILON
+                })
+                .map(|&i| log_chromaticity(grid.value[i], white_balance))
+                .collect(),
+        );
+        if !boundary_hull.is_empty() {
+            for system in &systems {
+                if system.has_data_authority
+                    || system.weights[..system.neighbor_count as usize]
+                        .iter()
+                        .any(|&weight| weight > WEIGHT_FLOOR)
+                {
+                    continue;
+                }
+                let i = system.index as usize;
+                current_uv[i] = nearest_chroma_envelope(current_uv[i], &boundary_hull);
             }
         }
     }
@@ -1559,7 +1683,6 @@ fn joint_log_chromaticity(
 struct ApplyContext<'a> {
     original: &'a [f32],
     confidence: Option<&'a [f32]>,
-    strength: f32,
     width: usize,
     height: usize,
     cfa: &'a CFA,
@@ -1577,7 +1700,7 @@ fn apply_prediction(
         for x in 0..context.width {
             let i = y * context.width + x;
             let confidence = confidence_at(context.original, context.confidence, i);
-            if confidence == 0.0 || context.strength == 0.0 {
+            if confidence == 0.0 {
                 continue;
             }
             let Some(c) = channel(context.cfa.cfa_color_at(y, x)) else {
@@ -1585,7 +1708,7 @@ fn apply_prediction(
             };
             let cell = (y / 2) * context.grid_width + x / 2;
             let lift = (prediction[cell][c] - context.original[i]).max(0.0);
-            let target = context.original[i] + context.strength * confidence * lift;
+            let target = context.original[i] + confidence * lift;
             if target > samples[i] {
                 max_lift = max_lift.max(target - samples[i]);
                 samples[i] = target;
@@ -1646,8 +1769,11 @@ pub fn reconstruct_cfa(
         });
     }
 
+    // Build one full-strength target, then blend the complete knee + spatial
+    // result once below. This keeps strength 1 byte-identical while giving an
+    // eventual fractional API one linear, stage-order-independent meaning.
     let knee_corrected_sites = if method == HighlightMethod::Harmonic {
-        apply_sensor_knee(samples, confidence, strength, width, height, cfa)
+        apply_sensor_knee(samples, confidence, width, height, cfa)
     } else {
         0
     };
@@ -1672,13 +1798,18 @@ pub fn reconstruct_cfa(
         ApplyContext {
             original: &original,
             confidence,
-            strength,
             width,
             height,
             cfa,
             grid_width: grid.width,
         },
     );
+    if strength < 1.0 {
+        for (sample, &source) in samples.iter_mut().zip(&original) {
+            *sample = source + strength * (*sample - source);
+        }
+    }
+    let max_lift = strength * max_lift;
 
     Ok(RawHighlightReport {
         method,
@@ -1741,6 +1872,18 @@ mod tests {
             assert_eq!(candidate, source);
             assert_eq!(report.reconstructed_cfa_sites, 0);
         }
+    }
+
+    #[test]
+    fn split_green_quad_uses_continuous_value_but_is_not_wholly_measured() {
+        let samples = vec![0.30, 0.93, 0.96, 0.40];
+        let confidence = vec![0.0, 0.10, 1.0, 0.0];
+        let grid = build_grid(&samples, Some(&confidence), 2, 2, &rggb());
+
+        assert_eq!(grid.floor[0][1], 0.96);
+        assert_eq!(grid.confidence[0][1], 0.55);
+        assert!(!grid.valid[0][1]);
+        assert_eq!(grid.value[0][1], 0.93);
     }
 
     #[test]
@@ -1845,6 +1988,32 @@ mod tests {
         );
     }
 
+    #[test]
+    fn fractional_strength_blends_the_complete_full_target_once() {
+        let width = 48;
+        let height = 48;
+        let truth = mosaic(width, height, |x, _| {
+            let value = 0.60 + 0.95 * x as f32 / (width - 1) as f32;
+            [value * 0.74, value, value * 0.95]
+        });
+        let captured: Vec<f32> = truth.iter().map(|value| value.min(1.0)).collect();
+        let options = |strength| ReconstructionOptions {
+            white_balance: [2.3632812, 1.0, 1.8085938],
+            strength,
+            method: HighlightMethod::Harmonic,
+        };
+
+        let mut full = captured.clone();
+        reconstruct_cfa(&mut full, width, height, &rggb(), None, options(1.0)).unwrap();
+        let mut half = captured.clone();
+        reconstruct_cfa(&mut half, width, height, &rggb(), None, options(0.5)).unwrap();
+
+        assert_ne!(full, captured, "the fixture must exercise reconstruction");
+        for i in 0..captured.len() {
+            assert_eq!(half[i], captured[i] + 0.5 * (full[i] - captured[i]));
+        }
+    }
+
     /// Two connected components never share a 4-neighbour, so the joint solve
     /// for one cannot legitimately depend on another. It did: the sweep loop
     /// swapped the whole `current`/`next` buffers, so a finished region read
@@ -1891,7 +2060,38 @@ mod tests {
     }
 
     #[test]
-    fn prediction_application_is_continuous_in_confidence_and_strength() {
+    fn evidence_free_joint_cell_cannot_invent_chroma_beyond_its_boundary() {
+        let boundary = [0.30, 0.60, 1.00];
+        let value = vec![boundary, boundary, boundary, [1.0, 0.60, 1.00]];
+        let grid = Grid {
+            width: 4,
+            height: 1,
+            floor: value.clone(),
+            value,
+            confidence: vec![[0.0; 3], [0.0; 3], [0.0; 3], [1.0; 3]],
+            trust: vec![[1.0; 3], [1.0; 3], [1.0; 3], [0.0; 3]],
+            valid: vec![[true; 3], [true; 3], [true; 3], [false; 3]],
+        };
+        let region = Region {
+            cells: vec![3],
+            boundary: vec![0, 1, 2],
+        };
+        let luminance = vec![boundary, boundary, boundary, [2.4, 0.60, 1.00]];
+        let support = vec![[1.0; 3]; 4];
+
+        let current = joint_log_chromaticity(&grid, &[region], &luminance, &support, [1.0; 3]);
+        assert_eq!(current[3][1], 0.60, "measured green moved");
+        assert_eq!(current[3][2], 1.00, "measured blue moved");
+        assert!(
+            current[3][0] < 1.2,
+            "unsupported magenta lift survived: {:?}",
+            current[3]
+        );
+        assert!(current[3][0] >= grid.floor[3][0]);
+    }
+
+    #[test]
+    fn prediction_application_is_continuous_below_the_old_clip_gate() {
         let width = 2;
         let height = 2;
         let original = vec![1.0_f32; width * height];
@@ -1903,16 +2103,15 @@ mod tests {
             ApplyContext {
                 original: &original,
                 confidence: Some(&confidence),
-                strength: 0.5,
                 width,
                 height,
                 cfa: &rggb(),
                 grid_width: 1,
             },
         );
-        assert_eq!(candidate, vec![1.0, 1.125, 1.25, 1.5]);
+        assert_eq!(candidate, vec![1.0, 1.25, 1.5, 2.0]);
         assert_eq!(changed, 3);
-        assert_eq!(max_lift, 0.5);
+        assert_eq!(max_lift, 1.0);
     }
 
     #[test]
@@ -1961,6 +2160,54 @@ mod tests {
         );
         assert!(first_report.fully_clipped_cores > 0);
         assert_eq!(first_report.solver_fallbacks, 0);
+    }
+
+    #[test]
+    fn luminance_domes_require_a_hard_clipped_core() {
+        let grid = Grid {
+            width: 2,
+            height: 1,
+            value: vec![[0.96; 3], [1.0; 3]],
+            floor: vec![[0.96; 3], [1.0; 3]],
+            confidence: vec![[0.85; 3], [1.0; 3]],
+            trust: vec![[0.15_f32.powi(2); 3], [0.0; 3]],
+            valid: vec![[false; 3], [false; 3]],
+        };
+        let region = Region {
+            cells: vec![0, 1],
+            boundary: vec![0, 1],
+        };
+
+        let cores = fully_clipped_components(&grid, &region);
+        assert_eq!(cores.len(), 1);
+        assert_eq!(cores[0].cells, vec![1]);
+    }
+
+    #[test]
+    fn unfitted_partial_cell_has_no_neighbour_imported_luminance_support() {
+        let value = vec![[0.20, 0.30, 0.40], [0.30, 0.45, 0.60], [0.40, 0.60, 0.80]];
+        let grid = Grid {
+            width: 3,
+            height: 1,
+            floor: value.clone(),
+            value: value.clone(),
+            confidence: vec![[0.0; 3], [0.0; 3], [0.80, 0.0, 0.0]],
+            trust: vec![[1.0; 3], [1.0; 3], [0.04, 1.0, 1.0]],
+            valid: vec![[true; 3], [true; 3], [false, true, true]],
+        };
+        let region = Region {
+            cells: vec![2],
+            boundary: vec![2],
+        };
+        let raw_support = continuous_luminance_support(&grid, &region);
+        assert!(
+            raw_support[0] > 0.9,
+            "fixture must expose the ungated support"
+        );
+        assert!(best_fits(&grid, &region)[0].is_none());
+
+        let (_, support, ..) = harmonic_prediction(&grid, &value, &[region], [1.0; 3]);
+        assert_eq!(support[2][0], 0.0);
     }
 
     #[test]
@@ -2045,7 +2292,7 @@ mod tests {
         // No explicit map: the stage has to engage across its whole operating
         // range on its own evidence. An all-ones map here would make any
         // confidence gating inside the stage untestable.
-        let corrected = apply_sensor_knee(&mut captured, None, 1.0, width, height, &rggb());
+        let corrected = apply_sensor_knee(&mut captured, None, width, height, &rggb());
         assert!(corrected > 0, "the verified knee should engage");
         let mut squared = 0.0_f64;
         let mut count = 0_usize;

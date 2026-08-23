@@ -23,6 +23,15 @@ previous estimator, and connected regions rise from 268 to 399 at an unchanged
 moves from 48 to 64 bytes per pixel; the previous value would have let the
 memory gate admit roughly 1.3 GB of unaccounted footprint at `--jobs 4`.
 
+Follow-up review hardens only the joint estimator's evidence-free edges. A cell
+with neither pairwise data nor meaningful neighbour coupling is bounded by its
+component's measured log-chromaticity envelope, and an unfitted partial channel
+cannot import unsupported luminance. Continuous application below the former
+0.5 confidence gate remains intentional. Fractional spatial strength, though
+still rejected by the public CLI/API, is now defined internally as one blend of
+the complete full-strength knee-plus-spatial target instead of compounding the
+strength across both stages.
+
 ### Joint chromaticity solve: same output, 42% less wall clock
 
 `joint_log_chromaticity`'s Jacobi sweep recomputed roughly thirty

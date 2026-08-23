@@ -1368,6 +1368,93 @@ record raw-autotune.evidence.slice-6-uncertainty-gated-chroma-verify/1 : evidenc
         """
 }
 
+record raw-autotune.evidence.slice5-question-dsc1289-20260823/1 : evidence {
+    title "DSC1289 baseline and final-stage identity hold"
+    state verified
+    result pass
+    method observation
+    observed_at git:15d4866fc6fff73cb4ae46f23a3ba08a0032dadc
+    artifact "src/raw_highlight.rs"
+    summary """
+        Current and 15d4866 baseline DSC1289 outputs were SHA-256 identical; jobs=1 and requested jobs=8 matched, normalized summaries matched, and the post-sharpen final dump had zero decoded-pixel differences from normal output.
+        """
+}
+
+record raw-autotune.evidence.slice5-question-focused-regressions-20260823/1 : evidence {
+    title "Slice 5 focused reconstruction regressions pass"
+    state verified
+    result pass
+    method command
+    observed_at git:15d4866fc6fff73cb4ae46f23a3ba08a0032dadc
+    command "cargo test --release raw_highlight::tests"
+    artifact "src/raw_highlight.rs"
+    summary """
+        All 15 raw_highlight tests passed, including the five new continuous-confidence safety regressions.
+        """
+}
+
+record raw-autotune.evidence.slice5-question-full-corpus-20260823/1 : evidence {
+    title "Full RAW corpus completes after Slice 5 question fixes"
+    state verified
+    result pass
+    method command
+    observed_at git:15d4866fc6fff73cb4ae46f23a3ba08a0032dadc
+    command "target/release/raw-autotune raw/arw raw/arw_better raw/raw_better raw/raw_old raw/raw_3rd_batch --output .agent/scratch/slice5-questions.ZuaD7E/corpus-out --format jpeg --summary .agent/scratch/slice5-questions.ZuaD7E/corpus-summary.json --overwrite"
+    artifact "src/raw_highlight.rs"
+    summary """
+        All 368 corpus inputs completed with zero skipped and zero failed; 267 frames rebuilt 72,521,331 highlight pixels, including 37,633,936 near-white pixels across 212 frames.
+        """
+}
+
+record raw-autotune.evidence.slice5-question-full-suite-20260823/1 : evidence {
+    title "Full release test suite passes after Slice 5 question fixes"
+    state verified
+    result pass
+    method command
+    observed_at git:15d4866fc6fff73cb4ae46f23a3ba08a0032dadc
+    command "cargo test --release"
+    artifact "src/raw_highlight.rs"
+    summary """
+        The full release suite passed: 348 library tests and 10 integration tests, 358 total, with zero failures.
+        """
+}
+
+record raw-autotune.evidence.slice5-question-ledger-resolution-20260823/1 : evidence {
+    title "All Slice 5 review questions are resolved"
+    state verified
+    result pass
+    method observation
+    observed_at git:15d4866fc6fff73cb4ae46f23a3ba08a0032dadc
+    summary """
+        All seven newly added Slice 5 questions now have explicit resolved revisions, with the implementing work declaring resolves edges and each answer tied to focused or standing evidence.
+        """
+}
+
+record raw-autotune.evidence.slice5-question-static-gates-20260823/1 : evidence {
+    title "Formatting, lint, and release build gates pass"
+    state verified
+    result pass
+    method command
+    observed_at git:15d4866fc6fff73cb4ae46f23a3ba08a0032dadc
+    command "cargo clippy --all-targets --release"
+    artifact "src/raw_highlight.rs"
+    summary """
+        Release clippy passed for all targets; cargo fmt --check and cargo build --release also passed, with only known sibling lege-gpu dead-code warnings.
+        """
+}
+
+record raw-autotune.evidence.slice5-question-status-20260823/1 : evidence {
+    title "Standing highlight diagnostics are current"
+    state verified
+    result pass
+    method manual
+    observed_at git:15d4866fc6fff73cb4ae46f23a3ba08a0032dadc
+    artifact "docs/STATUS.md"
+    summary """
+        STATUS now identifies HCHROMA/transport as ablation-only, distinguishes gamut-post from post-sharpen final, and records final-output decoded-pixel identity as the standing dump check.
+        """
+}
+
 record raw-autotune.evidence.spatial-aq-contract-audit/1 : evidence {
     title "SpatialAqMap contains normalized per-class confidence and encoder-neutral uses; no HEVC QP, JPEG XL HfMul, lambda, or quantizer-step values cross the API boundary."
     state verified

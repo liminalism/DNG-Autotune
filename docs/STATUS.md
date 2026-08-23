@@ -759,6 +759,18 @@ random seed, or that depends on batch composition or thread scheduling, does not
 belong in the render path. `--pool-noise` deliberately breaks batch
 independence and says so; `--noise-profile` is the reproducible route.
 
+### Harmonic highlight diagnostics
+
+The Harmonic production path now has one raw-domain joint log-chromaticity
+estimator across the complete clipped component. The older post-demosaic
+`HCHROMA` / `transport_spatial_chromaticity` path remains available only as an
+internal ablation and is not a production-stage diagnostic for Harmonic.
+
+`--dump-stages` writes a post-sharpen `-final.png` checkpoint. Its decoded RGB16
+pixels are byte-identical to the normal default output; PNG container metadata
+may differ. Use this checkpoint for the final identity comparison because
+`gamut-post` precedes output sharpening and therefore is not the encoded result.
+
 ## Verification you should re-run after any change
 
 ```bash
@@ -768,7 +780,7 @@ raw-autotune raw/arw raw/raw_old --dry-run --summary after.json
 
 # 2. Tests and lints.
 cargo fmt --check
-cargo test --release        # 207 tests
+cargo test --release
 cargo clippy --all-targets --release
 
 # 3. Determinism: same input, many runs, --jobs 8, byte-identical sidecars.

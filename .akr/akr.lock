@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:ca9136f52257e99a5e81fa6f66635ef320f955cc45d1dbb84c6bdd4569ca8f7d"
+    source_graph "sha256:e2af7e364025b97c4919baecd2f5e4768cfd272eac3248d267dad93ed63f2e60"
 }
 
 source ".akr/project.akr" {
@@ -19,13 +19,13 @@ source ".akr/records/raw-autotune/assessments.akr" {
 }
 
 source ".akr/records/raw-autotune/decisions.akr" {
-    hash "sha256:a54815d894702c65d8ce9864fd88d566ed6f25646837438a37bcb2afeec0abc0"
-    records 6
+    hash "sha256:9a57ca7f530924939d310166072c45a688a2324f12c3f96020a9f37ae35b03b4"
+    records 7
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:445bfee5fcf2fe90fa021fa93cffb4c892a02b76309971a854950d06ad3c32a6"
-    records 111
+    hash "sha256:9cc791f5c33a3583f2a16d149b5d0c7a695990dcd86bf2a47764d255ed05073f"
+    records 118
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
@@ -39,8 +39,8 @@ source ".akr/records/raw-autotune/policies.akr" {
 }
 
 source ".akr/records/raw-autotune/questions.akr" {
-    hash "sha256:ac1be157381c19247fd9860de793f093b3e144aa02e75a62dce363c861f69b7a"
-    records 7
+    hash "sha256:f983bbc26b72034ac10c5b0c7d65612070785e74d857cd42449b600e892ca0f9"
+    records 14
 }
 
 source ".akr/records/raw-autotune/requirements.akr" {
@@ -49,11 +49,65 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:0ef7a9181a6a9b9cb1e82b62c3773a1d2941e9ffb22f835954870ee1bc5e7451"
-    records 47
+    hash "sha256:81bd6cab35baa8807c730658c76ecb965b73efaa8627b2e8c7a330ffa311bf8b"
+    records 49
+}
+
+resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    slot implements
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    slot resolves
+    to @raw-autotune.question.deleted-chroma-hull-clamp/2
+    hash "sha256:a373d69663065653f243682400100cca9bf6413ffc68b15f30bc429c818d1d81"
+}
+
+resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    slot resolves
+    to @raw-autotune.question.fully-clipped-core-threshold/2
+    hash "sha256:fdb850501dbc8b00319dffd1850e892509c29484fa04cce3e1a98d5ac9412b5b"
+}
+
+resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    slot resolves
+    to @raw-autotune.question.grid-valid-mean-confidence/2
+    hash "sha256:d275d996e5fd3e177df0fe0f68e90e483a63496c6c4ad9086da2e9c39c13722d"
+}
+
+resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    slot resolves
+    to @raw-autotune.question.prediction-band-below-clip-ramp/2
+    hash "sha256:b590625a2bdb7995871ccc10976dab75fc54c9cab7311db92fd9d45153f14680"
+}
+
+resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    slot resolves
+    to @raw-autotune.question.status-doc-standing-verification/2
+    hash "sha256:21add053729b1d673f3f7e0dd1a805ca870ff6397d500898eb77a98861c5a1c0"
+}
+
+resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    slot resolves
+    to @raw-autotune.question.strength-compounding-is-unreachable/2
+    hash "sha256:8bdbb4f6b999ce31ca5012917ad1d8f196279df2a6ac5af174f3dbd9210f303b"
+}
+
+resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    slot resolves
+    to @raw-autotune.question.unfitted-partial-cell-floor/2
+    hash "sha256:2cee9210fb907d5a8ca45080b328d7ddb4e582803dabdf88f54e2034493f396f"
 }
 
 resolution @raw-autotune.question.deleted-chroma-hull-clamp/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.deleted-chroma-hull-clamp/2 {
     slot derived_from
     to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
     hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
@@ -65,7 +119,19 @@ resolution @raw-autotune.question.fully-clipped-core-threshold/1 {
     hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
 }
 
+resolution @raw-autotune.question.fully-clipped-core-threshold/2 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
 resolution @raw-autotune.question.grid-valid-mean-confidence/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.grid-valid-mean-confidence/2 {
     slot derived_from
     to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
     hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
@@ -77,7 +143,19 @@ resolution @raw-autotune.question.prediction-band-below-clip-ramp/1 {
     hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
 }
 
+resolution @raw-autotune.question.prediction-band-below-clip-ramp/2 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
 resolution @raw-autotune.question.status-doc-standing-verification/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.status-doc-standing-verification/2 {
     slot derived_from
     to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
     hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
@@ -89,7 +167,19 @@ resolution @raw-autotune.question.strength-compounding-is-unreachable/1 {
     hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
 }
 
+resolution @raw-autotune.question.strength-compounding-is-unreachable/2 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
 resolution @raw-autotune.question.unfitted-partial-cell-floor/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.unfitted-partial-cell-floor/2 {
     slot derived_from
     to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
     hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
@@ -99,6 +189,72 @@ resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
     slot implements
     to @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1
     hash "sha256:6c5d7df560168ec083fd639cfca2f0e5e217b6abc5a163b54edd7a6ef5d949a1"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/1 {
+    slot depends_on
+    to @raw-autotune.work.slice-5-joint-raw-log-chromaticity/1
+    hash "sha256:d19ba89dd02231b8a4fabd53981a7b1bcfdddd7d2f20bb18a8f84210a1567859"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/1 {
+    slot implements
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot depends_on
+    to @raw-autotune.work.slice-5-joint-raw-log-chromaticity/1
+    hash "sha256:d19ba89dd02231b8a4fabd53981a7b1bcfdddd7d2f20bb18a8f84210a1567859"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot implements
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot resolves
+    to @raw-autotune.question.deleted-chroma-hull-clamp/2
+    hash "sha256:a373d69663065653f243682400100cca9bf6413ffc68b15f30bc429c818d1d81"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot resolves
+    to @raw-autotune.question.fully-clipped-core-threshold/2
+    hash "sha256:fdb850501dbc8b00319dffd1850e892509c29484fa04cce3e1a98d5ac9412b5b"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot resolves
+    to @raw-autotune.question.grid-valid-mean-confidence/2
+    hash "sha256:d275d996e5fd3e177df0fe0f68e90e483a63496c6c4ad9086da2e9c39c13722d"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot resolves
+    to @raw-autotune.question.prediction-band-below-clip-ramp/2
+    hash "sha256:b590625a2bdb7995871ccc10976dab75fc54c9cab7311db92fd9d45153f14680"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot resolves
+    to @raw-autotune.question.status-doc-standing-verification/2
+    hash "sha256:21add053729b1d673f3f7e0dd1a805ca870ff6397d500898eb77a98861c5a1c0"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot resolves
+    to @raw-autotune.question.strength-compounding-is-unreachable/2
+    hash "sha256:8bdbb4f6b999ce31ca5012917ad1d8f196279df2a6ac5af174f3dbd9210f303b"
+}
+
+resolution @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    slot resolves
+    to @raw-autotune.question.unfitted-partial-cell-floor/2
+    hash "sha256:2cee9210fb907d5a8ca45080b328d7ddb4e582803dabdf88f54e2034493f396f"
 }
 
 resolution @raw-autotune.work.scene-model-pack/1 {
@@ -144,6 +300,11 @@ seal @raw-autotune.assessment.scene-evidence-usefulness/2 {
 seal @raw-autotune.assessment.sky-blowout-estimator-handoff/1 {
     state verified
     hash "sha256:2639b99f2b61219165f9b8c9d8887af65e0e51d6c6eae57a9357b99b7bda1a81"
+}
+
+seal @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
+    state active
+    hash "sha256:86c1937e15a6493503d04f3f6b6663ec62c7304480c84bf50792812426547a07"
 }
 
 seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/1 {
@@ -666,6 +827,41 @@ seal @raw-autotune.evidence.slice-6-uncertainty-gated-chroma-verify/1 {
     hash "sha256:178d1ede83406cf7f995ebc0bf148def5dec5fe2b0cdc807cbb6755ed5bf5c5a"
 }
 
+seal @raw-autotune.evidence.slice5-question-dsc1289-20260823/1 {
+    state verified
+    hash "sha256:dc8bb92637a399b31a97a7447c5c68f9af972613d84bc48e8a3f908cc171f8f1"
+}
+
+seal @raw-autotune.evidence.slice5-question-focused-regressions-20260823/1 {
+    state verified
+    hash "sha256:11d3ad0c0ef5222930b839f759a8bf6e3ccd1e546d4d7c4038b9cacb20e28545"
+}
+
+seal @raw-autotune.evidence.slice5-question-full-corpus-20260823/1 {
+    state verified
+    hash "sha256:4e24a51e255e055d721c85339fc6cb22d8f49392cf339a2f1fab6f54f56f1ab4"
+}
+
+seal @raw-autotune.evidence.slice5-question-full-suite-20260823/1 {
+    state verified
+    hash "sha256:b48ba1a9c5c341f0eedf389a4fbd6fdf319e39cb4d8600397e4b7ba0e322537b"
+}
+
+seal @raw-autotune.evidence.slice5-question-ledger-resolution-20260823/1 {
+    state verified
+    hash "sha256:2c505869c9c4c503975fbea8e3449b1fce3508295f56ffd8142e53a405be44bf"
+}
+
+seal @raw-autotune.evidence.slice5-question-static-gates-20260823/1 {
+    state verified
+    hash "sha256:fe2420ce41a3a3144063800265e45e2cd6fce259aae77422811138e28e9c0e2e"
+}
+
+seal @raw-autotune.evidence.slice5-question-status-20260823/1 {
+    state verified
+    hash "sha256:15f5cb6587ee3ca37bf08374eb23455303299b03832501b25339acacb4f60f96"
+}
+
 seal @raw-autotune.evidence.spatial-aq-contract-audit/1 {
     state verified
     hash "sha256:56d33ebd508fe086e7f39788f49e3c1cb3378209b007ce472a71c7aef4ccc1bb"
@@ -972,38 +1168,73 @@ seal @raw-autotune.papercut.while-running-three-targeted-rust-tests-i/1 {
 }
 
 seal @raw-autotune.question.deleted-chroma-hull-clamp/1 {
-    state open
-    hash "sha256:262c931871ebb933b5976c2863b3a00a13b1cdf9bb471d1651f103ff324468ac"
+    state superseded
+    hash "sha256:aaf6b1c3d7084bb616dd1ae06df0806ee36be6435d3de6fc7e052b3318ab346d"
+}
+
+seal @raw-autotune.question.deleted-chroma-hull-clamp/2 {
+    state resolved
+    hash "sha256:a373d69663065653f243682400100cca9bf6413ffc68b15f30bc429c818d1d81"
 }
 
 seal @raw-autotune.question.fully-clipped-core-threshold/1 {
-    state open
-    hash "sha256:44eb9e68cd9a61728ca186147fbdf9b518564e1aec7b2ef52c3227a708d919e0"
+    state superseded
+    hash "sha256:874c88ae97fb9e16296af447aaa1ea5ef314e8588b1b1ce30fa2e4b301ddd4a4"
+}
+
+seal @raw-autotune.question.fully-clipped-core-threshold/2 {
+    state resolved
+    hash "sha256:fdb850501dbc8b00319dffd1850e892509c29484fa04cce3e1a98d5ac9412b5b"
 }
 
 seal @raw-autotune.question.grid-valid-mean-confidence/1 {
-    state open
-    hash "sha256:688f9e42353592f292eb9ea227141a92a16fb2632c72827e88f96a4f606cc6dd"
+    state superseded
+    hash "sha256:8a0140a5c30bf79746b429e56c3df56ab6f6db1e82eea17f26c70499f39431c8"
+}
+
+seal @raw-autotune.question.grid-valid-mean-confidence/2 {
+    state resolved
+    hash "sha256:d275d996e5fd3e177df0fe0f68e90e483a63496c6c4ad9086da2e9c39c13722d"
 }
 
 seal @raw-autotune.question.prediction-band-below-clip-ramp/1 {
-    state open
-    hash "sha256:ad07c2a6ccb0bbe7076fb45deec45703564fc7333564a48cc4bc971d4fe3e78d"
+    state superseded
+    hash "sha256:c517b6d43436f354d16e9ec9c4e61129b20749a59ecbdba3d7a75291d9ee7d21"
+}
+
+seal @raw-autotune.question.prediction-band-below-clip-ramp/2 {
+    state resolved
+    hash "sha256:b590625a2bdb7995871ccc10976dab75fc54c9cab7311db92fd9d45153f14680"
 }
 
 seal @raw-autotune.question.status-doc-standing-verification/1 {
-    state open
-    hash "sha256:f7fdfd1d522efd11e709587610878378fb2500438a3021d13106ebbdf4894c51"
+    state superseded
+    hash "sha256:4c82472450eb993671e9fc1b8047a69665ed754931aa995c1d4e66b8ccd2d11d"
+}
+
+seal @raw-autotune.question.status-doc-standing-verification/2 {
+    state resolved
+    hash "sha256:21add053729b1d673f3f7e0dd1a805ca870ff6397d500898eb77a98861c5a1c0"
 }
 
 seal @raw-autotune.question.strength-compounding-is-unreachable/1 {
-    state open
-    hash "sha256:d30e30ac0722371d966380de6e16d0d7ede4c2122718452f9dc00c9a2f52e0e9"
+    state superseded
+    hash "sha256:c16b77c6aebb7d101ef5ddb45d7a42c90ee9bc4d2d6d898f40f3943666711ac9"
+}
+
+seal @raw-autotune.question.strength-compounding-is-unreachable/2 {
+    state resolved
+    hash "sha256:8bdbb4f6b999ce31ca5012917ad1d8f196279df2a6ac5af174f3dbd9210f303b"
 }
 
 seal @raw-autotune.question.unfitted-partial-cell-floor/1 {
-    state open
-    hash "sha256:8af1875d5e9e6d04ff316f9e40d0cece4e723511430e7a43c79bc0fe6b4dd11c"
+    state superseded
+    hash "sha256:00eae369a2a3a3cc327c7b3c1dc44b4226a95ffde161821ac3281168c7382cdc"
+}
+
+seal @raw-autotune.question.unfitted-partial-cell-floor/2 {
+    state resolved
+    hash "sha256:2cee9210fb907d5a8ca45080b328d7ddb4e582803dabdf88f54e2034493f396f"
 }
 
 seal @raw-autotune.work.compression-aware-highlight-ratio-promotion/1 {
@@ -1084,6 +1315,16 @@ seal @raw-autotune.work.raw-pyramid-highlight-baseline/1 {
 seal @raw-autotune.work.residual-purple-sky-external-scope/1 {
     state completed
     hash "sha256:2fa06f102ad0b32b14f497d71860ec974f25cf54920938141dd538d3d259b386"
+}
+
+seal @raw-autotune.work.resolve-slice-5-open-questions/1 {
+    state superseded
+    hash "sha256:032b3aa1aca49997dc91ca55a034e087d2dc9e80f980189b96b86c885a61dcee"
+}
+
+seal @raw-autotune.work.resolve-slice-5-open-questions/2 {
+    state completed
+    hash "sha256:7a2f7fdb5a4c9bdbb42092765271811f48685aee7f2a0ee6598ed51fff70c4c6"
 }
 
 seal @raw-autotune.work.rollback-compression-highlight-ratio-default/1 {

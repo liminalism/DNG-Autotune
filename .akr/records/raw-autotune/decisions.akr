@@ -124,3 +124,42 @@ record raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1 : 
         CPU fallback remains available for portability.
         """
 }
+
+record raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 : decision {
+    title "Define Slice 5 continuous-confidence edge semantics"
+    state active
+    scope [
+        path "docs/STATUS.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/raw_highlight.rs"
+    ]
+    topic raw-highlight-continuous-confidence-edge-semantics
+    decision """
+        Keep continuous confidence authoritative wherever evidence exists, but bound evidence-free degeneracies explicitly: project only zero-data/floor-coupled chroma cells to the measured boundary hull; require an accepted colour-line fit for partial-cell luminance support; reserve domes and neutral fallback for all-channel hard clips; retain trust-weighted grid values with mean-confidence compatibility topology; apply every nonzero clip confidence continuously; define fractional strength as one blend of the complete full target while public spatial methods remain full-only; and treat HCHROMA as ablation-only with post-sharpen final-dump identity as the standing output check.
+        """
+    context """
+        The joint log-chromaticity review exposed seven ambiguous edge cases spanning evidence-free chroma, no-fit luminance, soft shoulders, split-green grid topology, sub-threshold application, fractional strength, and standing diagnostics.
+        """
+    consequences """
+        The production path retains no binary final-authority threshold. Pathological cells cannot import unsupported hue or luminance, fractional semantics are safe before future API exposure, and the documentation and regressions pin the deliberate compatibility boundaries.
+        """
+    implements [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+    resolves [
+        @raw-autotune.question.deleted-chroma-hull-clamp,
+        @raw-autotune.question.fully-clipped-core-threshold,
+        @raw-autotune.question.grid-valid-mean-confidence,
+        @raw-autotune.question.prediction-band-below-clip-ramp,
+        @raw-autotune.question.status-doc-standing-verification,
+        @raw-autotune.question.strength-compounding-is-unreachable,
+        @raw-autotune.question.unfitted-partial-cell-floor
+    ]
+    supported_by [
+        @raw-autotune.evidence.slice5-question-dsc1289-20260823/1,
+        @raw-autotune.evidence.slice5-question-focused-regressions-20260823/1,
+        @raw-autotune.evidence.slice5-question-full-corpus-20260823/1,
+        @raw-autotune.evidence.slice5-question-full-suite-20260823/1,
+        @raw-autotune.evidence.slice5-question-status-20260823/1
+    ]
+}
