@@ -879,12 +879,14 @@ mod tests {
         assert_eq!(plain_mid, paper_mid, "uncompressed midtones must be exact");
     }
 
-    /// The last diagnostic checkpoint is the renderer's output, not a second
-    /// approximation of it.  Keep this assertion on the encoded u16 buffer so
-    /// a future change cannot make `gamut-post` look equivalent while differing
-    /// at values that the lossless stage dump still preserves.
+    /// `gamut_post` encodes to what `render` returns. Note what this does and
+    /// does not cover: both sides wrap the same `render_pixel_stages` call with
+    /// `local_tone = None`, so the equality largely holds by construction, and
+    /// nothing here touches `dump_final_diagnostic`. It guards the encode step
+    /// only -- the dump path itself is covered by
+    /// `final_diagnostic_dump_is_byte_identical_to_the_encoded_output`.
     #[test]
-    fn final_checkpoint_is_byte_identical_to_render_output() {
+    fn gamut_post_checkpoint_encodes_to_the_render_output() {
         let image = LinearImage::new(
             3,
             2,
@@ -913,6 +915,42 @@ mod tests {
         let checkpoint_output = encode_srgb_u16(&gamut_post);
 
         assert_eq!(rendered.as_raw(), checkpoint_output.as_slice());
+    }
+
+    /// The claim `dump_final_diagnostic` exists to make -- that the post-sharpen
+    /// checkpoint is byte-identical to what the encoder receives -- asserted
+    /// against the file the function actually writes, rather than against a
+    /// reconstruction of what it ought to contain.
+    #[test]
+    fn final_diagnostic_dump_is_byte_identical_to_the_encoded_output() {
+        let width = 5_u32;
+        let height = 3_u32;
+        let rendered: Rgb16Image = ImageBuffer::from_fn(width, height, |x, y| {
+            let i = (y * width + x) as u16;
+            Rgb([i.wrapping_mul(4099), i.wrapping_mul(271), 65535 - i * 37])
+        });
+
+        let dir = std::env::temp_dir().join("raw-autotune-final-diagnostic-dump");
+        let _ = std::fs::remove_dir_all(&dir);
+        dump_final_diagnostic(&rendered, &dir, "fixture");
+
+        let path = dir.join("fixture-final.png");
+        assert!(
+            path.exists(),
+            "the dump wrote no file at {}",
+            path.display()
+        );
+        let reloaded = image::open(&path)
+            .expect("the dump must be a readable image")
+            .to_rgb16();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert_eq!(reloaded.dimensions(), rendered.dimensions());
+        assert_eq!(
+            reloaded.as_raw(),
+            rendered.as_raw(),
+            "the final dump is not the buffer handed to the encoder"
+        );
     }
 
     /// The per-pixel reconstruction-uncertainty map, not a display-brightness

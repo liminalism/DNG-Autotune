@@ -2,6 +2,70 @@
 
 ## Unreleased — a standalone front-end
 
+### Joint raw-domain log-chromaticity reconstruction
+
+One estimator now owns chromaticity across the complete connected component
+spanning one-channel- and two-channel-clipped Bayer quads. Chromaticity is no
+longer handed from raw harmonic reconstruction to a second post-demosaic
+`(u'v')` transport model on only the two-channel side, which was the source of
+the visible `1<->2` clip-state discontinuity in skies;
+`transport_spatial_chromaticity` is retained only as an internal ablation.
+`joint_log_chromaticity` solves one edge-aware two-dimensional field per
+affected component from all three pairwise constraints `log(R/G)`, `log(B/G)`
+and `log(R/B)`, weighted by continuous trust `t_c=(1-c_c)^2`, with the harmonic
+result demoted to a weak initialization prior. Measured channels remain lower
+bounds, and confidence `0` and strength `0` remain exact no-ops.
+
+Measured on `_DSC1289`: rendered output moves by 0.286% RMSE against the
+previous estimator, and connected regions rise from 268 to 399 at an unchanged
+623,593 clipped CFA sites. Peak RSS on a 24 MP frame at `--jobs 1` rises from
+~992 MB to ~1324 MB, so `HighlightMethod::Harmonic`'s batch-planner reserve
+moves from 48 to 64 bytes per pixel; the previous value would have let the
+memory gate admit roughly 1.3 GB of unaccounted footprint at `--jobs 4`.
+
+### Corrections to the joint chromaticity estimator
+
+Review of the above found three defects, fixed here.
+
+The Jacobi sweep published each region's result by swapping the whole
+`current`/`next` buffers, while writing only the current region's cells. A
+finished region therefore read back as either its converged or its
+one-sweep-stale field, decided by the parity of the sweep counts that later,
+unrelated regions happened to take — regions that share no 4-neighbour with it
+and cannot legitimately affect it. The sweep now copies back only its own
+cells. `joint_chromaticity_does_not_depend_on_the_order_of_other_regions` is
+the regression: its two-blob fixture converges in 82 and 75 sweeps, and the
+odd count makes the old code fail on reversed region order.
+
+`apply_sensor_knee` scaled its lift by clip confidence, which is exactly `0`
+below `CLIP_RAMP_LOW` (0.92) while the stage's own range starts at `KNEE_LOW`
+(0.80) — so the correction that exists to invert a smooth sensor shoulder was
+disabled across most of that shoulder and applied at a fraction of an analytic
+inverse above it (0.44 at raw 0.95). Confidence is now honoured as a veto on an
+explicit per-site zero, not as a scale; `accepted[c][bin]` remains the evidence
+gate and `strength` the only continuous scale. On the knee fixture the old
+behaviour gives an inverse RMSE of 0.041 against the stage's 0.003 gate; the
+existing test had been passing an all-ones confidence map, which forced full
+authority and hid it. The stage was inert on the Sony corpus either way, since
+`KNEE_MIN_VOTES` rejects the fit on a hard-clip sensor.
+
+`clip_transition_metrics` pushed a pixel's same-state neighbour distances once
+per boundary pair that pixel took part in, and counted a pair whose members
+were both endpoints from both directions. That weighted the same-state baseline
+toward the transition, where chroma steps are largest, inflating the
+denominator of the `<= 1.25` ratios the sky gates assert on. Same-state pairs
+are now deduplicated before the percentile.
+
+Two tests that named behaviour they did not reach were rewritten.
+`zero_confidence_and_zero_strength_are_exact_no_ops` fed a flat buffer, which
+tripped `reconstruct_cfa`'s early return in both of its cases, so it proved
+only that the early return works; it now runs on a clipping ramp that
+demonstrably moves at full strength and asserts the per-pixel invariant against
+a mixed confidence map. The final-checkpoint test never called
+`dump_final_diagnostic`; the dump path is now asserted against the file the
+function actually writes, and the older assertion is renamed to what it
+covers.
+
 ### Scene-model pack (perception, no render change)
 
 `tools/scene_models/` fetches and rewrites the first perception graphs for

@@ -57,12 +57,17 @@ impl HighlightMethod {
         !matches!(self, Self::Current)
     }
 
-    /// Conservative transient reserve until the 24 MP RSS gate is rerun.
+    /// Transient reserve `memory.rs` sizes `--jobs` against. The harmonic
+    /// figure is measured, not nominal: peak RSS on a 24 MP frame at
+    /// `--jobs 1` is ~1324 MB against ~992 MB for the pre-joint-chromaticity
+    /// path, i.e. ~14 bytes/pixel on top of the previous 48 for the joint
+    /// solver's `initial_uv`/`current_uv`/`next_uv`/`guide`/`output` plus the
+    /// grid's `confidence` and `trust`. Rounded up for headroom.
     pub const fn extra_bytes_per_pixel(self) -> u64 {
         match self {
             Self::Current => 0,
             Self::RawPyramid => 24,
-            Self::Harmonic => 48,
+            Self::Harmonic => 64,
         }
     }
 }
@@ -428,9 +433,18 @@ fn apply_sensor_knee(
                 as usize)
                 .min(KNEE_BINS - 1);
             if accepted[c][bin] {
+                // An explicit per-site zero means "do not touch"; honour that
+                // as a veto. Do not scale the lift by clip confidence: this
+                // stage inverts a measured shoulder over [KNEE_LOW,
+                // KNEE_HIGH), which begins well below CLIP_RAMP_LOW, so a clip
+                // ramp would zero the correction across most of the stage's own
+                // range and apply a fraction of an analytic inverse above it.
+                // `accepted[c][bin]` is already the evidence gate.
+                if confidence.is_some_and(|map| map[i] <= 0.0) {
+                    continue;
+                }
                 let corrected = value + lifts[c][bin];
-                let authority = strength * confidence_at(&original, confidence, i);
-                let applied = value + authority * (corrected - value).max(0.0);
+                let applied = value + strength * (corrected - value).max(0.0);
                 if applied > samples[i] {
                     samples[i] = applied;
                     corrected_sites += 1;
@@ -1379,7 +1393,13 @@ fn joint_log_chromaticity(
                     .max((solved[1] - current_uv[i][1]).abs());
                 next_uv[i] = solved;
             }
-            std::mem::swap(&mut current_uv, &mut next_uv);
+            // Publish only this region's own cells. Swapping the whole
+            // buffers would leave an already-finished region reading back as
+            // either its final or its one-sweep-stale value, decided by the
+            // parity of the sweep counts taken by later, unrelated regions.
+            for &i in &region.cells {
+                current_uv[i] = next_uv[i];
+            }
             if max_delta < 1.0e-5 {
                 break;
             }
@@ -1678,29 +1698,115 @@ mod tests {
 
     #[test]
     fn zero_confidence_and_zero_strength_are_exact_no_ops() {
-        let width = 16;
-        let height = 16;
-        let source = vec![1.0_f32; width * height];
-        for (confidence, strength) in [
-            (vec![0.0; source.len()], 1.0),
-            (vec![1.0; source.len()], 0.0),
-        ] {
-            let mut candidate = source.clone();
-            reconstruct_cfa(
-                &mut candidate,
-                width,
-                height,
-                &rggb(),
-                Some(&confidence),
-                ReconstructionOptions {
-                    white_balance: [2.3632812, 1.0, 1.8085938],
-                    strength,
-                    method: HighlightMethod::Harmonic,
-                },
-            )
-            .unwrap();
-            assert_eq!(candidate, source);
+        let width = 48;
+        let height = 48;
+        // A frame the reconstructor genuinely acts on. A flat buffer would trip
+        // `reconstruct_cfa`'s own early return, so the assertions below would
+        // prove only that the early return works -- not the per-pixel
+        // invariant, which lives past it.
+        let truth = mosaic(width, height, |x, _| {
+            let value = 0.60 + 0.95 * x as f32 / (width - 1) as f32;
+            [value * 0.74, value, value * 0.95]
+        });
+        let captured: Vec<f32> = truth.iter().map(|value| value.min(1.0)).collect();
+        let options = |strength| ReconstructionOptions {
+            white_balance: [2.3632812, 1.0, 1.8085938],
+            strength,
+            method: HighlightMethod::Harmonic,
+        };
+
+        // Unless the fixture moves at full strength, neither case below means
+        // anything.
+        let mut moved = captured.clone();
+        reconstruct_cfa(&mut moved, width, height, &rggb(), None, options(1.0)).unwrap();
+        assert!(
+            moved != captured,
+            "the fixture must exercise reconstruction"
+        );
+
+        // Strength zero, on a frame that otherwise changes.
+        let mut candidate = captured.clone();
+        reconstruct_cfa(&mut candidate, width, height, &rggb(), None, options(0.0)).unwrap();
+        assert_eq!(candidate, captured, "strength 0 moved a sample");
+
+        // Per pixel: sites handed an explicit zero stay byte-exact while the
+        // sites interleaved with them reconstruct normally.
+        let confidence: Vec<f32> = captured
+            .iter()
+            .enumerate()
+            .map(|(i, &value)| {
+                if i % 3 == 0 {
+                    0.0
+                } else {
+                    crate::highlight::clip_confidence(value)
+                }
+            })
+            .collect();
+        let mut candidate = captured.clone();
+        reconstruct_cfa(
+            &mut candidate,
+            width,
+            height,
+            &rggb(),
+            Some(&confidence),
+            options(1.0),
+        )
+        .unwrap();
+        let mut pinned = 0_usize;
+        for i in (0..captured.len()).step_by(3) {
+            assert_eq!(candidate[i], captured[i], "zero-confidence site {i} moved");
+            pinned += 1;
         }
+        assert!(pinned > 0);
+        assert!(
+            candidate != captured,
+            "the rest of the frame must still reconstruct"
+        );
+    }
+
+    /// Two connected components never share a 4-neighbour, so the joint solve
+    /// for one cannot legitimately depend on another. It did: the sweep loop
+    /// swapped the whole `current`/`next` buffers, so a finished region read
+    /// back as final or one-sweep-stale according to the parity of the sweep
+    /// counts later regions happened to take. Region order is the cheapest
+    /// probe for that -- it is invariant now and was not before.
+    #[test]
+    fn joint_chromaticity_does_not_depend_on_the_order_of_other_regions() {
+        let width = 64;
+        let height = 48;
+        let white_balance = [2.3632812, 1.0, 1.8085938];
+        let blob = |x: usize, y: usize, cx: f32, cy: f32| {
+            let dx = x as f32 - cx;
+            let dy = y as f32 - cy;
+            (-(dx * dx + dy * dy) / 40.0).exp()
+        };
+        let truth = mosaic(width, height, |x, y| {
+            let value = 0.42 + 1.10 * (blob(x, y, 14.0, 24.0) + blob(x, y, 49.0, 22.0));
+            [value * 0.74, value, value * 0.95]
+        });
+        let captured: Vec<f32> = truth.iter().map(|value| value.min(1.0)).collect();
+
+        let grid = build_grid(&captured, None, width, height, &rggb());
+        let pyramid = build_pyramid(&grid);
+        let pyramid_prediction = pyramid_prediction(&grid, &pyramid);
+        let mut all_regions = regions(&grid);
+        assert!(
+            all_regions.len() >= 2,
+            "the fixture needs several regions, found {}",
+            all_regions.len()
+        );
+        let (luminance, support, ..) =
+            harmonic_prediction(&grid, &pyramid_prediction, &all_regions, white_balance);
+
+        let forward =
+            joint_log_chromaticity(&grid, &all_regions, &luminance, &support, white_balance);
+        all_regions.reverse();
+        let reversed =
+            joint_log_chromaticity(&grid, &all_regions, &luminance, &support, white_balance);
+        assert_eq!(
+            forward, reversed,
+            "a region's field moved with region order"
+        );
     }
 
     #[test]
@@ -1855,15 +1961,10 @@ mod tests {
         };
         let mut captured: Vec<f32> = truth.iter().copied().map(shoulder).collect();
         let before_knee = captured.clone();
-        let confidence = vec![1.0; captured.len()];
-        let corrected = apply_sensor_knee(
-            &mut captured,
-            Some(&confidence),
-            1.0,
-            width,
-            height,
-            &rggb(),
-        );
+        // No explicit map: the stage has to engage across its whole operating
+        // range on its own evidence. An all-ones map here would make any
+        // confidence gating inside the stage untestable.
+        let corrected = apply_sensor_knee(&mut captured, None, 1.0, width, height, &rggb());
         assert!(corrected > 0, "the verified knee should engage");
         let mut squared = 0.0_f64;
         let mut count = 0_usize;

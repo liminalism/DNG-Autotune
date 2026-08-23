@@ -463,6 +463,7 @@ fn clip_transition_metrics(
     let mut boundary_curve: [Vec<f32>; 3] = std::array::from_fn(|_| Vec::new());
     let mut same_post: [Vec<f32>; 3] = std::array::from_fn(|_| Vec::new());
     let mut same_curve: [Vec<f32>; 3] = std::array::from_fn(|_| Vec::new());
+    let mut same_pairs: [Vec<(usize, usize)>; 3] = std::array::from_fn(|_| Vec::new());
     let mut counts = [0_usize; 3];
 
     for (a, b) in boundary_pairs(width, height, state) {
@@ -494,15 +495,31 @@ fn clip_transition_metrics(
                 if state[neighbor] != state[endpoint] {
                     continue;
                 }
-                same_post[low].push(ab_distance(
-                    highlight_post.pixels[endpoint],
-                    highlight_post.pixels[neighbor],
-                ));
-                same_curve[low].push(ab_distance(
-                    rendered[endpoint].after_curve,
-                    rendered[neighbor].after_curve,
-                ));
+                same_pairs[low].push((endpoint.min(neighbor), endpoint.max(neighbor)));
             }
+        }
+    }
+
+    // One same-state pair contributes once. Pushing a distance per boundary
+    // pair an endpoint takes part in counted a pixel's neighbours k times over,
+    // and counted a pair whose members are both endpoints from both
+    // directions -- weighting the baseline toward the transition, where chroma
+    // steps are largest. That baseline is the denominator of the ratios the
+    // gate tests assert on, so the bias read as a smaller contrast than the
+    // frame actually has. Sorting keeps the sample order independent of
+    // traversal order.
+    for transition in 0..3 {
+        same_pairs[transition].sort_unstable();
+        same_pairs[transition].dedup();
+        for &(first, second) in &same_pairs[transition] {
+            same_post[transition].push(ab_distance(
+                highlight_post.pixels[first],
+                highlight_post.pixels[second],
+            ));
+            same_curve[transition].push(ab_distance(
+                rendered[first].after_curve,
+                rendered[second].after_curve,
+            ));
         }
     }
 
