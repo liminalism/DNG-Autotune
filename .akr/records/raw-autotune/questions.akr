@@ -1,0 +1,112 @@
+akr 0.1
+project raw-autotune
+
+record raw-autotune.question.deleted-chroma-hull-clamp/1 : question {
+    title "Should the measured-chromaticity hull clamp be restored in some form?"
+    state open
+    scope [ path "src/raw_highlight.rs" ]
+    question """
+        e42d481 deleted constrain_region_chromaticity, chroma_hull, nearest_chroma_envelope and CHROMA_ENVELOPE_TOLERANCE. That code took the convex hull of the chromaticities measured on a region's boundary and, for every partially-clipped cell (grid.valid neither all-false nor all-true) whose reconstructed chromaticity fell outside the hull by more than the tolerance, pulled it back toward the nearest hull point. Nothing in the new path bounds chromaticity by measured chromaticity: component_coherence, luminance_support and luminance_envelope all scale magnitude, which preserves the R:G:B ratio by construction.
+
+        The exposure is a cell with no trusted channel pair, where w_rg = w_bg = w_rb = 0 and all four spatial weights collapse to WEIGHT_FLOOR (1e-4). The 2x2 system is then PRIOR_WEIGHT 0.02 against 4e-4 of neighbour coupling — about 98% prior — so the cell converges back to initial_uv[i], the unconstrained affine/harmonic initializer's own hue, with nothing to catch it. This is the invented-magenta case the deleted test partial_reconstruction_cannot_invent_chroma_beyond_its_measured_boundary caught, asserting current[3][0] < 1.2 against an affine prediction of 2.4. That test was deleted with no replacement, and no surviving assertion in src/ or tests/ bounds reconstructed chromaticity by measured chromaticity.
+
+        Open question: was removing the hull clamp the point of the joint estimator (on the theory that the joint solve cannot invent chroma), or collateral? If the former, the reasoning needs recording and the WEIGHT_FLOOR-collapse case needs a test showing the prior is safe there. If the latter, restore a bound and its regression test.
+
+        Found by review of e42d481; not fixed in 4fcba63.
+        """
+    derived_from [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}
+
+record raw-autotune.question.fully-clipped-core-threshold/1 : question {
+    title "Why did the fully-clipped-core test tighten from mean confidence 0.5 to 1.0 minus epsilon?"
+    state open
+    scope [ path "src/raw_highlight.rs" ]
+    question """
+        fully_clipped_components' core seed test changed in e42d481 from `grid.valid[seed] != [false; 3]` (skip unless every channel is invalid, i.e. mean confidence >= VALID_CONFIDENCE_MAX = 0.5) to `grid.confidence[seed].iter().any(|&c| c < 1.0 - EPSILON)` (skip unless every channel's mean confidence is >= 1.0 - 1e-8, reachable only when every sample in the quad reads >= CLIP_RAMP_HIGH = 0.985). That is roughly a 2x tightening of what counts as a blown core.
+
+        Cores are what receive apply_luminance_domes' distance-weighted rim-and-slope extrapolation, which is what gives a large blown region a dome rather than a plateau. A core whose samples sit around 0.96 (mean confidence ~0.85) qualified before and does not now; it falls back to plain harmonic diffusion, which by the maximum principle cannot exceed its boundary values, giving a visibly flatter highlight. joint_log_chromaticity does not compensate: its trusted_denominator <= EPSILON branch falls through to harmonic_scalar, the same undomed field.
+
+        Review measured fully_clipped_cores at 0 on the frames it tested, so practical exposure depends on corpus content and this may be latent. Open question: was the tightening deliberate — for instance to stop domes firing on soft shoulders — or an unconsidered consequence of moving from the binary `valid` topology to continuous confidence? If deliberate, record the threshold's justification; if not, the natural continuous analogue of the old test is mean confidence >= VALID_CONFIDENCE_MAX, not >= 1.0 - EPSILON.
+
+        Found by review of e42d481; not fixed in 4fcba63.
+        """
+    derived_from [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}
+
+record raw-autotune.question.grid-valid-mean-confidence/1 : question {
+    title "Was build_grid's switch from any-trusted-sample to mean-confidence intended?"
+    state open
+    scope [ path "src/raw_highlight.rs" ]
+    question """
+        In e42d481 build_grid changed `valid[i][c]` from `trusted_count[i][c] > 0` (any sample in the quad was trusted, and `value[i][c]` was the mean of the trusted samples only) to `grid_confidence[i][c] < VALID_CONFIDENCE_MAX`, where `grid_confidence` is the mean clip confidence over all samples and `value[i][c]` is now a trust-weighted mean over all samples including clipped ones. Only green has two samples per RGGB quad, so only green changes behaviour, and it changes in the direction that matters: a green quad with sample confidences [0.1, 1.0] was previously measured data valued at the clean sample, and is now unknown, to be resynthesized with grid.floor[i][1] = max(G1, G2) — the clipped sample — as its lower bound. Separately, mixing a clipped (always upward-biased) sample into `value` contaminates the regression points that fit_line and knee_reference_line treat as ground truth. grid.valid remains the measured/unknown authority in twelve downstream reads, including the unknown set in solve_region_direct and the pyramid/fit_line paths. This fires along the leading edge of every clipped region — the 1<->2 transition the same commit names as its critical sky gate — and the commit message does not mention it.
+
+        Open question: was this semantic change deliberate? If it was, it needs a comment stating the intent and a test pinning the green-quad case; if it was collateral from introducing continuous confidence, it is a defect and the trusted-only mean should be restored for `value` even if `valid` stays mean-based.
+
+        Found by review of e42d481; not fixed in 4fcba63.
+        """
+    derived_from [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}
+
+record raw-autotune.question.prediction-band-below-clip-ramp/1 : question {
+    title "Should apply_prediction touch measured data in the band (0.92, 0.9525)?"
+    state open
+    scope [ path "src/raw_highlight.rs" ]
+    question """
+        apply_prediction's guard changed in e42d481 from `if confidence_at(...) < VALID_CONFIDENCE_MAX { continue; }` — touching only sites at confidence >= 0.5, i.e. raw >= ~0.9525, and writing `prediction.max(original)` — to `if confidence == 0.0 || strength == 0.0 { continue; }`, which admits every site above CLIP_RAMP_LOW = 0.92, writing `original + strength * confidence * lift`.
+
+        The band (0.92, 0.9525) is the new part, and it contains genuinely unclipped sensor data that was previously left byte-exact. Because prediction[cell][c] >= grid.floor[cell][c] and grid.floor is the MAX over the quad's samples, the lower of an RGGB quad's two greens receives a positive lift even when nothing about green clipped: at G_lower = 0.930 against G_upper = 0.960 the confidence smoothstep gives about 0.05, closing roughly 6% of the gap. Small per pixel, but applied across the whole bright half of a sky gradient it pulls each quad's two greens together and quantizes sub-quad green detail to quad resolution in the brightest real data. Above 0.9525 the new form is gentler than the old outright overwrite; only the new band is a regression.
+
+        Open question: is admitting the sub-clip band the intended consequence of making the estimator continuous, or should the write remain gated at VALID_CONFIDENCE_MAX while the lift stays continuous above it? Note this interacts with reconstruct_cfa's early return, which moved from `clipped_cfa_sites == 0` to `!has_reconstruction_authority` in the same commit and admits frames on the same 0.92 threshold; the two should be decided together.
+
+        Found by review of e42d481; not fixed in 4fcba63.
+        """
+    derived_from [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}
+
+record raw-autotune.question.status-doc-standing-verification/1 : question {
+    title "What does docs/STATUS.md owe the removed HCHROMA line and the new final stage dump?"
+    state open
+    scope [ path "docs/STATUS.md" ]
+    question """
+        CLAUDE.md states that docs/STATUS.md records what actually works per source and the standing verification steps. e42d481 removed the HCHROMA diagnostic line (transport_spatial_chromaticity is no longer on the Harmonic production path) and added a new post-sharpen `-final.png` stage dump reachable through --dump-stages, but left STATUS.md unchanged. The CHANGELOG gap from the same commit was closed in 4fcba63; this one was not.
+
+        Open question: which of these belong in STATUS.md — specifically, does the -final.png dump become part of the standing verification steps (it is the only diagnostic checkpoint that can be byte-identical to a default CLI output, since output sharpening runs after gamut-post, and the true-default identity check is already recorded as evidence in @raw-autotune.evidence.sky-final-output-20260816), and should the removed HCHROMA line be struck from the per-source status or noted as ablation-only?
+
+        Found by review of e42d481.
+        """
+    derived_from [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}
+
+record raw-autotune.question.strength-compounding-is-unreachable/1 : question {
+    title "Fractional reconstruction strength compounds across two stages and is unreachable today"
+    state open
+    scope [ path "src/api.rs", path "src/cli.rs", path "src/raw_highlight.rs" ]
+    question """
+        For a fractional strength the two lifting stages compound multiplicatively. apply_sensor_knee mutates `samples` in place, build_grid then reads those already-modified samples, and apply_prediction multiplies by strength a second time against the pre-knee `original`. At strength 0.5 a site both stages want to raise ends up governed by max(original + 0.5 * knee_lift, original + 0.5 * confidence * pred_lift), where pred_lift was itself derived from a grid built on knee-modified samples — a strength-squared-flavoured composition with no defined meaning. No test covers the pair; prediction_application_is_continuous_in_confidence_and_strength exercises apply_prediction standalone.
+
+        This is unreachable today: cli.rs:479 and api.rs:221 both `ensure!` that highlight_reconstruction == 1.0 for any spatial method. The consequence worth recording is that the entire continuous-strength machinery e42d481 adds is dead outside unit tests, and is a trap for whoever relaxes that guard.
+
+        Open question: should continuous strength be defined and tested as a single composed scale (one strength applied once to the total lift), or should the dead machinery be removed and strength kept binary for spatial methods until there is a reason to expose it? Either answer is cheap now and expensive after someone relaxes the ensure!.
+
+        Note: review also claimed color.rs:1169 forces raw_method = Current at strength 0.0; that could not be confirmed by grep and should be checked when this is resolved.
+
+        Found by review of e42d481; not fixed in 4fcba63.
+        """
+    derived_from [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}
+
+record raw-autotune.question.unfitted-partial-cell-floor/1 : question {
+    title "What replaces keep_unfitted_partial_cells' hard floor when every colour-line fit is rejected?"
+    state open
+    scope [ path "src/raw_highlight.rs" ]
+    question """
+        e42d481 deleted keep_unfitted_partial_cells from both harmonic_prediction call sites. It pinned a partially-clipped channel to grid.floor[i][target] whenever best_fits returned None for that channel, and its own comment gave the reasoning: a partially clipped coloured highlight still has a measured hue, and without a trusted line its saturated sample is the only defensible lower bound, because a spatial guess would import a neighbour's colour.
+
+        The replacement, continuous_luminance_support, is an ungated weighted r^2: unlike fit_line it has no acceptance threshold at all, it simply returns a value in [0, 1], and luminance_support[i][target] is additionally floored at the product of the cell's confidences. So for a cell where every colour-line fit was rejected, the neighbour-imported hue that was previously overwritten outright now survives at component_coherence * luminance_support of its magnitude rather than at zero. Concretely, a saturated red object beside a clipped sky can now tint the sky's missing channel a little where before it could not tint it at all.
+
+        Open question: is a continuous attenuation the intended replacement for the hard floor, and if so what bounds it when no fit is trustworthy? Either continuous_luminance_support needs an acceptance threshold matching fit_line's, or the grid.floor pin needs restoring for the no-fit case.
+
+        Found by review of e42d481; not fixed in 4fcba63.
+        """
+    derived_from [ @raw-autotune.requirement.slice-5-continuous-log-chromaticity ]
+}

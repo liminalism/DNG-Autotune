@@ -23,6 +23,40 @@ previous estimator, and connected regions rise from 268 to 399 at an unchanged
 moves from 48 to 64 bytes per pixel; the previous value would have let the
 memory gate admit roughly 1.3 GB of unaccounted footprint at `--jobs 4`.
 
+### Joint chromaticity solve: same output, 42% less wall clock
+
+`joint_log_chromaticity`'s Jacobi sweep recomputed roughly thirty
+transcendentals per cell on every one of up to `SWEEPS` (160) passes — five
+`log_chromaticity` calls and four `exp`/`sqrt` groups — although only
+`current_uv[n]` varies between sweeps. The observed chromaticities, trust
+products, matrix entries and spatial weights are now computed once per region
+into a `CellSystem` and reused, with accumulation order preserved. That pass
+writes nothing and regions are connected components, so it also parallelises;
+`with_min_len(256)` keeps small regions sequential.
+
+`continuous_luminance_support` scanned each region's padded bounding box six
+times (3 targets x 2 guides), but its weight is symmetric in `(target, guide)`
+and `covariance^2 / (var_x * var_y)` is invariant under swapping x and y, so
+three of the six scans computed a bit-identical `f32`. It now evaluates each
+unordered pair once.
+
+`solve_region_direct` gated on `region.cells.len()` before checking the
+per-channel unknown count. Since `regions()`' `affected` predicate widened,
+regions carry many trusted cells that are not unknowns, so a region whose
+system fits comfortably could be pushed into the 300-sweep iterative fallback
+on padding alone. The guard now bounds the widest per-channel unknown count,
+which is what the constant names. `reconstruct_cfa` also made two separate full
+passes over 24 M samples to compute two counts from the same per-sample
+confidence; they are fused into one.
+
+Measured on `_DSC1289` at `--jobs 1`: 35.56 s to 20.75 s wall clock, peak RSS
+1,324,112 KB to 1,334,208 KB (the per-region `CellSystem` transient, +0.4%, so
+the 64 bytes/pixel reserve still holds). The rendered JPEG is byte-identical
+(same MD5) and the summary sidecar is identical apart from the output path —
+including `solver_fallbacks`, so no region changed solver path on this frame.
+The direct-solve change can still move output on a frame with a region under
+the unknown cap but over the cell cap; that did not occur here.
+
 ### Corrections to the joint chromaticity estimator
 
 Review of the above found three defects, fixed here.

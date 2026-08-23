@@ -13,6 +13,7 @@ use faer::prelude::{Col, Solve, SparseColMat};
 use faer::sparse::Triplet;
 use rawler::CFA;
 use rawler::cfa::CFAColor;
+use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::VecDeque;
 
@@ -797,43 +798,45 @@ fn continuous_luminance_support(grid: &Grid, region: &Region) -> [f32; 3] {
     min_y = min_y.saturating_sub(PAD);
     max_x = (max_x + PAD).min(grid.width - 1);
     max_y = (max_y + PAD).min(grid.height - 1);
-    std::array::from_fn(|target| {
-        (0..3)
-            .filter(|&guide| guide != target)
-            .map(|guide| {
-                let mut sum_w = 0.0_f64;
-                let mut sum_x = 0.0_f64;
-                let mut sum_y = 0.0_f64;
-                let mut sum_xx = 0.0_f64;
-                let mut sum_yy = 0.0_f64;
-                let mut sum_xy = 0.0_f64;
-                for y in min_y..=max_y {
-                    for x in min_x..=max_x {
-                        let i = y * grid.width + x;
-                        let weight = f64::from(grid.trust[i][target] * grid.trust[i][guide]);
-                        let x = f64::from(grid.value[i][guide]);
-                        let y = f64::from(grid.value[i][target]);
-                        sum_w += weight;
-                        sum_x += weight * x;
-                        sum_y += weight * y;
-                        sum_xx += weight * x * x;
-                        sum_yy += weight * y * y;
-                        sum_xy += weight * x * y;
-                    }
-                }
-                if sum_w <= f64::from(EPSILON) {
-                    return 0.0;
-                }
-                let var_x = sum_xx - sum_x * sum_x / sum_w;
-                let var_y = sum_yy - sum_y * sum_y / sum_w;
-                if var_x <= 1.0e-12 || var_y <= 1.0e-12 {
-                    return 0.0;
-                }
-                let covariance = sum_xy - sum_x * sum_y / sum_w;
-                (covariance * covariance / (var_x * var_y)).clamp(0.0, 1.0) as f32
-            })
-            .fold(0.0_f32, f32::max)
-    })
+    // `weight` is symmetric in (target, guide) and covariance^2 / (var_x *
+    // var_y) is invariant under swapping x and y, so pass (a, b) and pass
+    // (b, a) compute the identical f32. Evaluate each unordered pair once.
+    let pair = |target: usize, guide: usize| -> f32 {
+        let mut sum_w = 0.0_f64;
+        let mut sum_x = 0.0_f64;
+        let mut sum_y = 0.0_f64;
+        let mut sum_xx = 0.0_f64;
+        let mut sum_yy = 0.0_f64;
+        let mut sum_xy = 0.0_f64;
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                let i = y * grid.width + x;
+                let weight = f64::from(grid.trust[i][target] * grid.trust[i][guide]);
+                let x = f64::from(grid.value[i][guide]);
+                let y = f64::from(grid.value[i][target]);
+                sum_w += weight;
+                sum_x += weight * x;
+                sum_y += weight * y;
+                sum_xx += weight * x * x;
+                sum_yy += weight * y * y;
+                sum_xy += weight * x * y;
+            }
+        }
+        if sum_w <= f64::from(EPSILON) {
+            return 0.0;
+        }
+        let var_x = sum_xx - sum_x * sum_x / sum_w;
+        let var_y = sum_yy - sum_y * sum_y / sum_w;
+        if var_x <= 1.0e-12 || var_y <= 1.0e-12 {
+            return 0.0;
+        }
+        let covariance = sum_xy - sum_x * sum_y / sum_w;
+        (covariance * covariance / (var_x * var_y)).clamp(0.0, 1.0) as f32
+    };
+    let rg = pair(0, 1);
+    let rb = pair(0, 2);
+    let gb = pair(1, 2);
+    [rg.max(rb), rg.max(gb), rb.max(gb)]
 }
 
 fn depth_map(grid: &Grid, region: &Region) -> Vec<f32> {
@@ -1032,7 +1035,23 @@ fn solve_region_direct(
     fits: [Option<LineFit>; 3],
     current: &mut [[f32; 3]],
 ) -> bool {
-    if region.cells.len() > DIRECT_SOLVE_MAX_UNKNOWNS {
+    // Bound the system by what it actually solves for. Gating on
+    // `region.cells.len()` rejected regions on padding that is not even
+    // unknown, which the widened `affected` predicate in `regions()` made
+    // common: a region that fits comfortably would fall into the 300-sweep
+    // iterative path on trusted cells alone. The per-channel check below is
+    // the real guard; this one only avoids the full-image clone that follows.
+    let widest_unknown = (0..3)
+        .map(|target| {
+            region
+                .cells
+                .iter()
+                .filter(|&&i| !grid.valid[i][target])
+                .count()
+        })
+        .max()
+        .unwrap_or(0);
+    if widest_unknown > DIRECT_SOLVE_MAX_UNKNOWNS {
         return false;
     }
     let mut candidate = current.to_vec();
@@ -1299,10 +1318,34 @@ fn joint_log_chromaticity(
         })
         .collect();
 
+    // One cell's share of the Jacobi system. Every field reads only `grid`,
+    // `guide` and `initial_uv`, so all of it is invariant across sweeps.
+    struct CellSystem {
+        index: u32,
+        a: f32,
+        d: f32,
+        off: f32,
+        determinant: f32,
+        rhs_u: f32,
+        rhs_v: f32,
+        neighbors: [u32; 4],
+        weights: [f32; 4],
+        neighbor_count: u8,
+    }
+
     for region in all_regions {
-        for _ in 0..SWEEPS {
-            let mut max_delta = 0.0_f32;
-            for &i in &region.cells {
+        // Hoist the sweep-invariant work out of the sweep. The body below used
+        // to recompute about thirty transcendentals per cell on every one of up
+        // to SWEEPS passes -- five log_chromaticity calls and four exp/sqrt
+        // groups -- although only `current_uv[n]` varies between sweeps.
+        // Accumulation order is unchanged, so the result is bit-identical.
+        // Regions are connected components and this pass writes nothing, so it
+        // parallelises cleanly; `with_min_len` keeps small regions sequential.
+        let systems: Vec<CellSystem> = region
+            .cells
+            .par_iter()
+            .with_min_len(256)
+            .map(|&i| {
                 let x = i % grid.width;
                 let y = i / grid.width;
                 let observed = log_chromaticity(grid.value[i], white_balance);
@@ -1314,12 +1357,15 @@ fn joint_log_chromaticity(
                 let mut a = PRIOR_WEIGHT + w_rg + w_rb;
                 let mut d = PRIOR_WEIGHT + w_bg + w_rb;
                 let off = -w_rb;
-                let mut rhs_u = PRIOR_WEIGHT * initial_uv[i][0]
+                let rhs_u = PRIOR_WEIGHT * initial_uv[i][0]
                     + w_rg * observed[0]
                     + w_rb * (observed[0] - observed[1]);
-                let mut rhs_v = PRIOR_WEIGHT * initial_uv[i][1] + w_bg * observed[1]
+                let rhs_v = PRIOR_WEIGHT * initial_uv[i][1] + w_bg * observed[1]
                     - w_rb * (observed[0] - observed[1]);
 
+                let mut neighbors = [0_u32; 4];
+                let mut weights = [0.0_f32; 4];
+                let mut neighbor_count = 0_usize;
                 let guide_scale = guide[i].abs().max(0.05);
                 for (dx, dy) in [(1_isize, 0_isize), (-1, 0), (0, 1), (0, -1)] {
                     let nx = mirror(x as isize + dx, grid.width);
@@ -1375,18 +1421,45 @@ fn joint_log_chromaticity(
                         .max(WEIGHT_FLOOR);
                     a += spatial;
                     d += spatial;
-                    rhs_u += spatial * current_uv[n][0];
-                    rhs_v += spatial * current_uv[n][1];
+                    neighbors[neighbor_count] = n as u32;
+                    weights[neighbor_count] = spatial;
+                    neighbor_count += 1;
                 }
 
-                let determinant = a * d - off * off;
-                if determinant <= EPSILON || !determinant.is_finite() {
+                CellSystem {
+                    index: i as u32,
+                    a,
+                    d,
+                    off,
+                    determinant: a * d - off * off,
+                    rhs_u,
+                    rhs_v,
+                    neighbors,
+                    weights,
+                    neighbor_count: neighbor_count as u8,
+                }
+            })
+            .collect();
+
+        for _ in 0..SWEEPS {
+            let mut max_delta = 0.0_f32;
+            for system in &systems {
+                let i = system.index as usize;
+                let mut rhs_u = system.rhs_u;
+                let mut rhs_v = system.rhs_v;
+                for slot in 0..system.neighbor_count as usize {
+                    let n = system.neighbors[slot] as usize;
+                    rhs_u += system.weights[slot] * current_uv[n][0];
+                    rhs_v += system.weights[slot] * current_uv[n][1];
+                }
+
+                if system.determinant <= EPSILON || !system.determinant.is_finite() {
                     next_uv[i] = current_uv[i];
                     continue;
                 }
                 let solved = [
-                    ((rhs_u * d - off * rhs_v) / determinant).clamp(-8.0, 8.0),
-                    ((a * rhs_v - off * rhs_u) / determinant).clamp(-8.0, 8.0),
+                    ((rhs_u * system.d - system.off * rhs_v) / system.determinant).clamp(-8.0, 8.0),
+                    ((system.a * rhs_v - system.off * rhs_u) / system.determinant).clamp(-8.0, 8.0),
                 ];
                 max_delta = max_delta
                     .max((solved[0] - current_uv[i][0]).abs())
@@ -1552,11 +1625,19 @@ pub fn reconstruct_cfa(
     let confidence = confidence.filter(|map| map.len() == samples.len());
     let strength = strength.clamp(0.0, 1.0);
     let original = samples.to_vec();
-    let clipped_cfa_sites = (0..samples.len())
-        .filter(|&i| confidence_at(&original, confidence, i) >= VALID_CONFIDENCE_MAX)
-        .count();
-    let has_reconstruction_authority =
-        (0..samples.len()).any(|i| confidence_at(&original, confidence, i) > 0.0);
+    // One pass, not two: both counts read the same per-sample confidence, and
+    // at 24 M samples the second scan is pure duplicate work.
+    let mut clipped_cfa_sites = 0_usize;
+    let mut has_reconstruction_authority = false;
+    for i in 0..samples.len() {
+        let site = confidence_at(&original, confidence, i);
+        if site >= VALID_CONFIDENCE_MAX {
+            clipped_cfa_sites += 1;
+        }
+        if site > 0.0 {
+            has_reconstruction_authority = true;
+        }
+    }
     if !has_reconstruction_authority || strength == 0.0 {
         return Ok(RawHighlightReport {
             method,

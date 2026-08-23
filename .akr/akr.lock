@@ -2,10 +2,10 @@ akr-lock 0.1
 project raw-autotune
 
 build {
-    tool "akr 0.3.1"
+    tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:b6751391b55f0119fe8a67ba1cce9f380c2730a9aa56aab082ad86034a03ab89"
+    source_graph "sha256:ca9136f52257e99a5e81fa6f66635ef320f955cc45d1dbb84c6bdd4569ca8f7d"
 }
 
 source ".akr/project.akr" {
@@ -38,6 +38,11 @@ source ".akr/records/raw-autotune/policies.akr" {
     records 2
 }
 
+source ".akr/records/raw-autotune/questions.akr" {
+    hash "sha256:ac1be157381c19247fd9860de793f093b3e144aa02e75a62dce363c861f69b7a"
+    records 7
+}
+
 source ".akr/records/raw-autotune/requirements.akr" {
     hash "sha256:42532fc31dfce1fbc1b4da789822e3d30aee92bfb5abaec3e64b45486d011e17"
     records 3
@@ -46,6 +51,48 @@ source ".akr/records/raw-autotune/requirements.akr" {
 source ".akr/records/raw-autotune/work.akr" {
     hash "sha256:0ef7a9181a6a9b9cb1e82b62c3773a1d2941e9ffb22f835954870ee1bc5e7451"
     records 47
+}
+
+resolution @raw-autotune.question.deleted-chroma-hull-clamp/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.fully-clipped-core-threshold/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.grid-valid-mean-confidence/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.prediction-band-below-clip-ramp/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.status-doc-standing-verification/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.strength-compounding-is-unreachable/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
+}
+
+resolution @raw-autotune.question.unfitted-partial-cell-floor/1 {
+    slot derived_from
+    to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
+    hash "sha256:b0775f2b8b5670e202cab878f489966d91eb9fac5820bb2952ebc97c5d455211"
 }
 
 resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
@@ -922,6 +969,41 @@ seal @raw-autotune.papercut.while-running-the-focused-scene-and-preview/1 {
 seal @raw-autotune.papercut.while-running-three-targeted-rust-tests-i/1 {
     state verified
     hash "sha256:c5e3288ae283b176cb9f30c153936a292f2f27597c653169464a0ffd98e80ef3"
+}
+
+seal @raw-autotune.question.deleted-chroma-hull-clamp/1 {
+    state open
+    hash "sha256:262c931871ebb933b5976c2863b3a00a13b1cdf9bb471d1651f103ff324468ac"
+}
+
+seal @raw-autotune.question.fully-clipped-core-threshold/1 {
+    state open
+    hash "sha256:44eb9e68cd9a61728ca186147fbdf9b518564e1aec7b2ef52c3227a708d919e0"
+}
+
+seal @raw-autotune.question.grid-valid-mean-confidence/1 {
+    state open
+    hash "sha256:688f9e42353592f292eb9ea227141a92a16fb2632c72827e88f96a4f606cc6dd"
+}
+
+seal @raw-autotune.question.prediction-band-below-clip-ramp/1 {
+    state open
+    hash "sha256:ad07c2a6ccb0bbe7076fb45deec45703564fc7333564a48cc4bc971d4fe3e78d"
+}
+
+seal @raw-autotune.question.status-doc-standing-verification/1 {
+    state open
+    hash "sha256:f7fdfd1d522efd11e709587610878378fb2500438a3021d13106ebbdf4894c51"
+}
+
+seal @raw-autotune.question.strength-compounding-is-unreachable/1 {
+    state open
+    hash "sha256:d30e30ac0722371d966380de6e16d0d7ede4c2122718452f9dc00c9a2f52e0e9"
+}
+
+seal @raw-autotune.question.unfitted-partial-cell-floor/1 {
+    state open
+    hash "sha256:8af1875d5e9e6d04ff316f9e40d0cece4e723511430e7a43c79bc0fe6b4dd11c"
 }
 
 seal @raw-autotune.work.compression-aware-highlight-ratio-promotion/1 {
