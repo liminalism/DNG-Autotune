@@ -196,6 +196,12 @@ pub struct Cli {
     #[arg(long, value_name = "DIR")]
     pub dump_stages: Option<PathBuf>,
 
+    /// Write the 512-px semantic proxy (content region only, the exact pixels
+    /// scene models see) as an sRGB PNG per file. Requires --semantic.
+    /// Diagnostic only; it never changes what is rendered.
+    #[arg(long, value_name = "DIR")]
+    pub dump_scene_proxy: Option<PathBuf>,
+
     /// Run optional scene perception and record masks/region evidence without
     /// changing exposure, tone, colour, or output pixels.
     #[arg(long)]
@@ -579,6 +585,7 @@ impl Cli {
         options.working_space = self.working_space;
         options.sub_black = self.sub_black;
         options.dump_stages = self.dump_stages;
+        options.dump_scene_proxy = self.dump_scene_proxy;
         options.semantic = self.semantic;
         options.semantic_sky_highlights = self.semantic_sky_highlights;
         options.semantic_sky_chroma = self.semantic_sky_chroma;

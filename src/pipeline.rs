@@ -172,6 +172,50 @@ fn dump_stage(
     }
 }
 
+fn dump_scene_proxy(directory: &Path, input: &Path, proxy: &crate::scene::SemanticProxy) {
+    let stem = input
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "unnamed".to_string());
+    let path = directory.join(format!("{stem}-scene-proxy.png"));
+
+    let write = || -> Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        // Content region only: the letterbox padding is a proxy-geometry
+        // artifact, not scene pixels, and downstream consumers letterbox for
+        // their own input shapes.
+        let mut rgb =
+            image::RgbImage::new(proxy.content_width as u32, proxy.content_height as u32);
+        for y in 0..proxy.content_height {
+            for x in 0..proxy.content_width {
+                let offset = ((proxy.content_y + y) * proxy.width + proxy.content_x + x) * 3;
+                rgb.put_pixel(
+                    x as u32,
+                    y as u32,
+                    image::Rgb([
+                        proxy.rgb[offset],
+                        proxy.rgb[offset + 1],
+                        proxy.rgb[offset + 2],
+                    ]),
+                );
+            }
+        }
+        rgb.save(&path)?;
+        Ok(())
+    };
+
+    match write() {
+        Ok(()) => eprintln!("DUMP  {}: {}", input.display(), path.display()),
+        Err(error) => eprintln!(
+            "DUMP  {}: could not write {}: {error}",
+            input.display(),
+            path.display()
+        ),
+    }
+}
+
 /// What this rendering is honestly not, recorded in every sidecar.
 ///
 /// Conditional on the colour path since 0.1.17: the standing "no wide-gamut
@@ -624,6 +668,9 @@ fn process_job_inner(
             &options.semantic_model_dir,
             options.semantic_faces,
         )?;
+        if let Some(directory) = &options.dump_scene_proxy {
+            dump_scene_proxy(directory, &job.input, &proxy);
+        }
         let sky_map = if options.semantic_sky_highlights > 0.0 {
             let map = crate::scene::build_sky_highlight_map(
                 &linear,

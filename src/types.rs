@@ -259,6 +259,9 @@ pub struct RunOptions {
     pub sub_black: crate::rescale::SubBlack,
     /// Where to write per-stage scene-linear dumps, when asked for.
     pub dump_stages: Option<PathBuf>,
+    /// Where to write the 512-px semantic proxy (content region only) as an
+    /// sRGB PNG, when asked for. Requires `semantic`; diagnostic only.
+    pub dump_scene_proxy: Option<PathBuf>,
     /// Collect scene evidence. It remains observational unless an explicit
     /// semantic policy strength is also non-zero.
     pub semantic: bool,
@@ -370,6 +373,7 @@ impl RunOptions {
             working_space: crate::color::WorkingSpace::Srgb,
             sub_black: crate::rescale::SubBlack::Preserve,
             dump_stages: None,
+            dump_scene_proxy: None,
             semantic: false,
             semantic_sky_highlights: 0.0,
             semantic_sky_chroma: 0.0,
