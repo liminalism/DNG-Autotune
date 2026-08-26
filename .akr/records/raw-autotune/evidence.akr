@@ -58,6 +58,33 @@ record raw-autotune.evidence.blown-sky-renders-white-again/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.c5-acceptance-20260826/1 : evidence {
+    title "C5 Rust integration: goldens, byte-identity, determinism, CCT separation"
+    state superseded
+    result pass
+    method command
+    observed_at git:e5f045b409d78b2072ff0efd51a54c2170fda3f2
+    command "target/release/raw-autotune raw/indoor_tungsten --dry-run --illuminant --summary tungsten.json"
+    artifact "tools/scene_models/c5-acceptance-20260826.md"
+    summary """
+        Phase-2 acceptance passes on first contact with real data. The Rust integration (src/illuminant.rs behind the observational --illuminant flag, pre-white-balance camera-proxy hook in color::develop, lege-gpu session with one additive chroma_histograms ModelTarget) was verified four ways. (1) Golden fixtures: Rust histogram matches the Python reference to 1.9e-9 (chroma plane) and 3.0e-5 (edge plane, bounded by the fixture's float32 resolution); apply_ccc angular error 5e-6 degrees; ONNX end-to-end through the lege-gpu CPU session 1e-5 degrees. (2) Flag-off byte identity: --dry-run --summary over the 9-frame indoor_tungsten batch and a 12-frame daylight corpus sample is IDENTICAL (ignoring elapsed_ms) between the pre-change HEAD binary and the patched binary. (3) Determinism: repeated flag-on runs at --jobs 8 produce identical summaries. (4) CCT separation on the user's new paired RAW+JPEG indoor_tungsten batch (shot 2026-08-26: overhead tungsten, small lamp, daylight-contaminated porch/room frames): the tungsten cluster spans 2936-3398 K with negative duv, the daylight-dominated frames 5049-5354 K, and the 12-frame daylight corpus control 4339-7941 K median 5903 K — zero overlap between the tungsten cluster (max 3398 K) and the daylight distribution (min 4339 K). as_shot_angular_error_deg spans 0.9-12.1 degrees, confirming the estimate is independent of the camera's own neutral. Runtime: full test suite 357 lib + 15 integration pass, clippy clean; the flag adds roughly 80-130 ms/frame (histogram 8 ms, apply_ccc 0.4 ms, the rest lege-gpu CPU ONNX), only when enabled.
+        """
+}
+
+record raw-autotune.evidence.c5-acceptance-20260826/2 : evidence {
+    title "C5 Rust integration: goldens, byte-identity, determinism, CCT separation"
+    state verified
+    result pass
+    method command
+    observed_at git:e5f045bddbc768d810fab36172fa30254b2680e2
+    command "target/release/raw-autotune raw/indoor_tungsten --dry-run --illuminant --summary tungsten.json"
+    artifact "tools/scene_models/c5-acceptance-20260826.md"
+    summary """
+        Phase-2 acceptance passes on first contact with real data. The Rust integration (src/illuminant.rs behind the observational --illuminant flag, pre-white-balance camera-proxy hook in color::develop, lege-gpu session with one additive chroma_histograms ModelTarget) was verified four ways. (1) Golden fixtures: Rust histogram matches the Python reference to 1.9e-9 (chroma plane) and 3.0e-5 (edge plane, bounded by the fixture's float32 resolution); apply_ccc angular error 5e-6 degrees; ONNX end-to-end through the lege-gpu CPU session 1e-5 degrees. (2) Flag-off byte identity: --dry-run --summary over the 9-frame indoor_tungsten batch and a 12-frame daylight corpus sample is IDENTICAL (ignoring elapsed_ms) between the pre-change HEAD binary and the patched binary. (3) Determinism: repeated flag-on runs at --jobs 8 produce identical summaries. (4) CCT separation on the user's new paired RAW+JPEG indoor_tungsten batch (shot 2026-08-26: overhead tungsten, small lamp, daylight-contaminated porch/room frames): the tungsten cluster spans 2936-3398 K with negative duv, the daylight-dominated frames 5049-5354 K, and the 12-frame daylight corpus control 4339-7941 K median 5903 K — zero overlap between the tungsten cluster (max 3398 K) and the daylight distribution (min 4339 K). as_shot_angular_error_deg spans 0.9-12.1 degrees, confirming the estimate is independent of the camera's own neutral. Runtime: full test suite 357 lib + 15 integration pass, clippy clean; the flag adds roughly 80-130 ms/frame (histogram 8 ms, apply_ccc 0.4 ms, the rest lege-gpu CPU ONNX), only when enabled.
+        """
+    supersedes [ @raw-autotune.evidence.c5-acceptance-20260826/1 ]
+}
+
 record raw-autotune.evidence.c5-onnx-parity-20260826/1 : evidence {
     title "C5 ONNX export parity and determinism-mode measurement"
     state verified

@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:f4346a8a904a0a69947d740be3a3dd6a51e3939089e22ac8784a69481b369882"
+    source_graph "sha256:c1a999dfbdc27a0f3f15f9c77c8b1aef4088f57e8d143553cf60ef0fe92961a4"
 }
 
 source ".akr/project.akr" {
@@ -24,8 +24,8 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:30f51b0c19d79cd301ffaf9396b65da68b8bb70de1fe1bac12c83b1a13373a91"
-    records 167
+    hash "sha256:b97e6769ece5ec772a77d7d8f4330177b54a2e2cbb37f7f1891f2f3b0e0d9854"
+    records 169
 }
 
 source ".akr/records/raw-autotune/observations.akr" {
@@ -54,7 +54,7 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:a16e7b99f6d0c8ba34af18f058896a038697b81cd7f474a2f891539727593afc"
+    hash "sha256:f827494689116f52dae7b63b1e95ef7658d20d091b57977396505bc5140b34e0"
     records 55
 }
 
@@ -389,6 +389,16 @@ seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 {
 seal @raw-autotune.evidence.blown-sky-renders-white-again/1 {
     state verified
     hash "sha256:461e672a7e37d2c4968dd22b3717d6bfb54ff1dc621ba5a4c4a951b41e27eeb2"
+}
+
+seal @raw-autotune.evidence.c5-acceptance-20260826/1 {
+    state superseded
+    hash "sha256:674409dcfe077874c64e2f5107878215cc33bfc9574e0368477fd9f8272eed9e"
+}
+
+seal @raw-autotune.evidence.c5-acceptance-20260826/2 {
+    state verified
+    hash "sha256:5802a72f501c643b2cdcf476a6ad7d49ca2a3be0fa056b8e45aabc5481b3a764"
 }
 
 seal @raw-autotune.evidence.c5-onnx-parity-20260826/1 {
@@ -1647,8 +1657,8 @@ seal @raw-autotune.work.night-low-light-rendering/2 {
 }
 
 seal @raw-autotune.work.port-c5-illuminant-estimator/1 {
-    state active
-    hash "sha256:476d9c9845f637390c35725b50dd3f4a8ed69619aad5b83f3a9c90828abfa4e6"
+    state completed
+    hash "sha256:a74e90486961c74791853c7fcad251d455e6228896f8b06bf14aab708db4ab38"
 }
 
 seal @raw-autotune.work.profiled-purple-sky-experiment/1 {

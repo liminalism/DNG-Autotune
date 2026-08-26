@@ -777,7 +777,7 @@ record raw-autotune.work.open-questions/1 : work {
 
 record raw-autotune.work.port-c5-illuminant-estimator/1 : work {
     title "Port C5 illuminant estimator (Model B) to ONNX + Rust integration"
-    state active
+    state completed
     scope [ path "models/**", path "src/**", path "tools/scene_models/**" ]
     intent """
         Phase 2 of the lighting-detection plan: port Model B, the C5 cross-camera illuminant estimator (ICCV 2021, Apache-2.0, github.com/mahmoudnafifi/C5), into the pipeline as an ONNX model plus Rust-owned pre/post-processing, then run it observationally over the corpus recording CCT/tint per frame as sidecar evidence only.
@@ -792,6 +792,7 @@ record raw-autotune.work.port-c5-illuminant-estimator/1 : work {
                 Run observationally over the paired corpus, the recorded CCT separates the known tungsten/indoor frames from daylight frames, and the pipeline's runtime budget shows no regression with the estimator enabled.
                 """
             method command
+            verified_by [ @raw-autotune.evidence.c5-acceptance-20260826/1 ]
         }
         check c5-onnx-parity {
             statement """
