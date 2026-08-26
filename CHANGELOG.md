@@ -2,6 +2,113 @@
 
 ## Unreleased — a standalone front-end
 
+### The archive profile stops solving highlights it has no highlights to solve
+
+`archive-auto-v5` ran the harmonic estimator on every Bayer frame. Almost all of
+that estimator's cost is full-image work — `build_grid`, `build_pyramid`,
+`pyramid_prediction`, the sensor-knee pass — and none of it scales down when the
+frame has nothing clipped, so a clean frame paid the whole bill for a result the
+post-demosaic `current` estimator would have produced.
+
+`reconstruct_cfa` now declines the solve when the clipped-CFA-site fraction is
+below `DEFAULT_SPATIAL_CLIPPED_FLOOR` (`1e-5`, about 240 sites on a 24 MP
+mosaic) and *reports* `current`; `color::develop` reads the reported method
+rather than the requested one, so the declined frame takes the whole `current`
+path. `--spatial-highlight-floor` is the control and `0` always solves. The
+unattended profile advances to **`archive-auto-v6`** because this deliberately
+moves default rendered pixels.
+
+Measured on 29 Sony A7C ARWs (every ninth file of `raw/arw`, `--dry-run
+--jobs 4`):
+
+| | floor at 1e-5 | floor at 0 |
+|---|---:|---:|
+| wall clock | **1:07.5** | 1:26.9 |
+| summed per-file `elapsed_ms` | **136,790** | 150,085 |
+| peak RSS | 2,701,532 KB | 2,749,016 KB |
+| frames declined | 6 of 29 | 0 |
+
+8.9% of total CPU time, 0.4 to 0.6 s per declined frame. **The saving is
+bounded and that is the honest headline**: cost is dominated by the heavily
+clipped frames, which correctly still solve — `_DSC1135.ARW` at 9.5% clipped
+takes 45.8 s, against 0.5 s for a frame with no clipped sites at all. This makes
+a clean batch cheap; it does not make a clipped batch cheap.
+
+Two properties were checked on real files rather than argued. Rendering
+`_DSC0883`, `_DSC0928`, `_DSC0937`, `_DSC1000`, `_DSC1045` and `_DSC1099` (all
+zero clipped CFA sites) three ways gives output **byte-identical to
+`--highlight-method current`** and different from `--spatial-highlight-floor 0`;
+`_DSC1126` (1552 sites, 6.4e-5, above the floor) is byte-identical to
+`--spatial-highlight-floor 0` and different from `current`, so the floor does
+not touch a frame that clears it. On `_DSC0883` the change is 153 of 30,984,192
+16-bit samples, 0.0005%, maximum single-sample delta 18529/65535.
+
+The floor is set conservatively rather than swept. Its supporting corpus
+measurement is `docs/HDR_EVALUATION.md`'s clipped-channel census over all 58
+files of `raw/raw_3rd_batch`: the two-or-more-channel fraction has a median of
+0.0003%, a p90 of 1.9% and a max of 12.4%, and the frames independently flagged
+by eye as having a highlight defect are the nine above 1% — three orders of
+magnitude clear of the floor. That census counts a different population than
+this floor does (pixels with 2+ channels clipped, against CFA sites at or above
+`VALID_CONFIDENCE_MAX`), so the margin is indicative, not exact.
+`raw-autotune.question.spatial-highlight-floor-not-swept` records the gap.
+
+`memory.rs` still reserves the harmonic method's 64 bytes per pixel when it
+sizes `--jobs`. It cannot use this gate: the planner runs before any file is
+decoded, so it cannot know which frames will decline. Peak RSS falls in practice
+on a clean batch; the planned worker count does not.
+
+### The face detector is gated off
+
+`--semantic` ran YuNet on every frame. It has never found a face: zero true
+positives over the 74-image corpus, and the corpus's only person response was a
+low-confidence false positive on a faucet still life. Nothing consumes the mask
+— no exposure policy, no encoder ROI — so the run was spending an ONNX session
+per frame to write an empty plane.
+
+`--semantic-faces` (`RenderOptions::semantic_faces`) turns it back on;
+`scene::FACE_DETECTION_DEFAULT` is false. `RegionMasks::blank()` already seeded
+an empty `Face` plane, so the sidecar shape is unchanged: a default `--semantic`
+run still reports all nine region kinds, and only `models` is one entry shorter.
+Verified on `expertraw.dng`.
+
+Gated rather than deleted. The model stays prepared and pinned in
+`models/manifest.json`, and the honest reading of the corpus result is "this
+detector, at this 512 px letterboxed proxy, on this corpus" — the proxy size is
+a plausible cause on its own and has not been ruled out.
+
+### The in-memory API carries EXIF, ICC and its colour space
+
+`render_file_rgb16` used to return pixels and a report, so an embedding encoder
+had to reopen the source RAW to recover EXIF and had to *assume* sRGB.
+`RenderedRgb16Image` (and `RenderedImage`) now also carry:
+
+- `color_space: metadata::OutputColorSpace` — the output encoding, stated. Note
+  this is **not** `--working-space`: `WorkingSpace` selects the space the
+  intermediate stages compute in and `WorkingSpace::to_display` converts back to
+  sRGB primaries before the tone curve, precisely so the working space cannot
+  change the rendering. So the answer is `Srgb` in every current configuration,
+  which `output_colour_space_is_srgb_for_every_working_space` pins. The
+  `Rec2020` variant and its profile exist because the consumer has to signal
+  something explicit rather than assume, and because the day an output-referred
+  wide-gamut path lands the signal is already there.
+- `exif: Option<Vec<u8>>` — the bare EXIF TIFF structure, no `Exif\0\0` header
+  and no APP1 framing, offsets relative to the buffer, orientation normalized,
+  dimensions the rendered ones. It comes from `SourceMetadata::exif_payload`,
+  the same and only builder `output.rs` uses, so there is no second EXIF path to
+  drift.
+- `icc: Option<Vec<u8>>` — the generated matrix-shaper profile for
+  `color_space`, byte-identical to what the file writers embed.
+
+`RenderOptions::metadata` (default true, mirroring `--no-metadata` inverted)
+turns both off and skips the extra metadata parse. All three fields are
+additive; a consumer reading only `width`/`height`/`data` is unaffected.
+
+`build_srgb_icc_profile` is generalized to `build_icc_profile(primaries, white,
+description)`; the sRGB bytes are unmoved, which
+`icc_profile_is_cached_and_stable` and `icc_colorants_are_the_derived_srgb_matrix`
+both still pin.
+
 ### Joint raw-domain log-chromaticity reconstruction
 
 One estimator now owns chromaticity across the complete connected component

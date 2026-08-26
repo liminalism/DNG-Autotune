@@ -73,12 +73,52 @@ impl HighlightMethod {
     }
 }
 
+/// Fraction of CFA sites that must read as clipped before a spatial estimator
+/// is worth its cost.
+///
+/// The spatial solvers are the expensive part of the whole program: on a 24 MP
+/// frame the harmonic path costs ~20.75 s of wall clock and ~1324 MB of peak
+/// RSS at `--jobs 1` (`CHANGELOG.md`, "Joint chromaticity solve"). Almost all of
+/// that is paid whether or not there is anything to reconstruct, because
+/// `build_grid`, `build_pyramid` and `pyramid_prediction` are full-image passes.
+/// A frame with a few hundred isolated clipped sites gets nothing back for it,
+/// and the post-demosaic `Current` estimator — the default for the whole life of
+/// the project before the harmonic promotion — already handles isolated clipped
+/// pixels.
+///
+/// `1e-5` is 0.001% of sites, i.e. about 240 sites on a 24 MP mosaic. It is
+/// chosen conservatively rather than swept. The supporting corpus measurement is
+/// `docs/HDR_EVALUATION.md`, which classified every pixel of all 58 files in
+/// `raw/raw_3rd_batch` by clipped-channel count: the two-or-more-channel fraction
+/// has a **median of 0.0003%** (3e-6, below this floor), a **p90 of 1.9%** and a
+/// **maximum of 12.4%**, and the frames that were independently flagged by eye as
+/// having a highlight defect are the nine above 1% — three orders of magnitude
+/// above the floor. So the floor separates "nothing to reconstruct" from every
+/// frame the corpus has ever shown a highlight problem on, with a wide margin on
+/// both sides.
+///
+/// Two honest caveats, recorded in the AKR ledger as an open question
+/// (`raw-autotune.question.spatial-highlight-floor-not-swept`):
+///
+/// - that measurement counts *pixels with two or more channels clipped*, while
+///   this floor counts *CFA sites at or above [`VALID_CONFIDENCE_MAX`]*, which is
+///   a strictly larger population. The two are not the same statistic, so the
+///   margin above is indicative rather than exact;
+/// - no sweep of this constant against the paired-camera corpus has been run.
+///   `clipped_cfa_sites` is reported for every frame precisely so one can be.
+pub const DEFAULT_SPATIAL_CLIPPED_FLOOR: f32 = 1.0e-5;
+
 /// Parameters that define one pre-demosaic reconstruction pass.
 #[derive(Debug, Clone, Copy)]
 pub struct ReconstructionOptions {
     pub white_balance: [f32; 3],
     pub strength: f32,
     pub method: HighlightMethod,
+    /// Decline the spatial solve below this fraction of clipped CFA sites and
+    /// fall back to the post-demosaic estimator. `0.0` always solves, which is
+    /// what the ablation paths and the `--spatial-highlight-floor 0` override
+    /// use; it reproduces the pre-floor behaviour exactly.
+    pub clipped_fraction_floor: f32,
 }
 
 /// What a pre-demosaic estimator did before its counters are folded into the
@@ -1732,6 +1772,7 @@ pub fn reconstruct_cfa(
         white_balance,
         strength,
         method,
+        clipped_fraction_floor,
     } = options;
     ensure!(
         method.is_spatial(),
@@ -1764,6 +1805,23 @@ pub fn reconstruct_cfa(
     if !has_reconstruction_authority || strength == 0.0 {
         return Ok(RawHighlightReport {
             method,
+            clipped_cfa_sites,
+            ..RawHighlightReport::default()
+        });
+    }
+
+    // Archive-speed gate. Everything below this point is full-image work whose
+    // cost does not scale with how much of the frame is actually clipped, so a
+    // frame with essentially no clipped sites pays ~20 s and ~1.3 GB for a
+    // result indistinguishable from the cheap post-demosaic estimator. Declining
+    // here reports `Current`, and `color::develop` reads the *reported* method,
+    // so the frame takes the whole `Current` path and is byte-identical to an
+    // explicit `--highlight-method current` run. The samples are untouched.
+    if clipped_fraction_floor > 0.0
+        && (clipped_cfa_sites as f32) < clipped_fraction_floor * samples.len() as f32
+    {
+        return Ok(RawHighlightReport {
+            method: HighlightMethod::Current,
             clipped_cfa_sites,
             ..RawHighlightReport::default()
         });
@@ -1866,12 +1924,96 @@ mod tests {
                     white_balance: [1.0; 3],
                     strength: 1.0,
                     method,
+                    clipped_fraction_floor: 0.0,
                 },
             )
             .expect("valid CFA");
             assert_eq!(candidate, source);
             assert_eq!(report.reconstructed_cfa_sites, 0);
         }
+    }
+
+    /// The archive-speed floor: a frame with a handful of clipped sites must
+    /// decline the solve, leave every sample untouched, and *say* it declined by
+    /// reporting `Current`, because `color::develop` routes the post-demosaic
+    /// estimator off that field. A frame over the floor must be unaffected by
+    /// the floor's existence.
+    #[test]
+    fn the_spatial_floor_declines_sparse_clipping_and_reports_current() {
+        let width = 64;
+        let height = 64;
+        // One clipped site in 4096, i.e. a clipped fraction of 2.4e-4.
+        let mut sparse = mosaic(width, height, |x, y| {
+            let v = 0.1 + 0.4 * (x + y) as f32 / (width + height) as f32;
+            [v * 0.7, v * 0.9, v]
+        });
+        sparse[width * (height / 2) + width / 2] = 1.0;
+        let before = sparse.clone();
+
+        // Below the floor: declined, untouched, reported as `Current`, and the
+        // clipped count is still measured so a future sweep has the statistic.
+        let mut candidate = sparse.clone();
+        let declined = reconstruct_cfa(
+            &mut candidate,
+            width,
+            height,
+            &rggb(),
+            None,
+            ReconstructionOptions {
+                white_balance: [1.0; 3],
+                strength: 1.0,
+                method: HighlightMethod::Harmonic,
+                clipped_fraction_floor: 1.0e-3,
+            },
+        )
+        .expect("valid CFA");
+        assert_eq!(candidate, before, "a declined frame must not move");
+        assert_eq!(declined.method, HighlightMethod::Current);
+        assert_eq!(declined.clipped_cfa_sites, 1);
+        assert_eq!(declined.reconstructed_cfa_sites, 0);
+
+        // The same frame with the floor at the shipped default, which this
+        // fraction clears: the solve runs and reports the method it was asked
+        // for. Whether it changes a sample is the estimator's business, not the
+        // gate's.
+        let mut solved = sparse.clone();
+        let ran = reconstruct_cfa(
+            &mut solved,
+            width,
+            height,
+            &rggb(),
+            None,
+            ReconstructionOptions {
+                white_balance: [1.0; 3],
+                strength: 1.0,
+                method: HighlightMethod::Harmonic,
+                clipped_fraction_floor: DEFAULT_SPATIAL_CLIPPED_FLOOR,
+            },
+        )
+        .expect("valid CFA");
+        assert_eq!(ran.method, HighlightMethod::Harmonic);
+
+        // And `0` is the documented always-solve override.
+        let mut forced = sparse;
+        let unfloored = reconstruct_cfa(
+            &mut forced,
+            width,
+            height,
+            &rggb(),
+            None,
+            ReconstructionOptions {
+                white_balance: [1.0; 3],
+                strength: 1.0,
+                method: HighlightMethod::Harmonic,
+                clipped_fraction_floor: 0.0,
+            },
+        )
+        .expect("valid CFA");
+        assert_eq!(unfloored.method, HighlightMethod::Harmonic);
+        assert_eq!(
+            forced, solved,
+            "the floor must not change what the solver does"
+        );
     }
 
     #[test]
@@ -1907,6 +2049,7 @@ mod tests {
                     white_balance: [1.0; 3],
                     strength: 1.0,
                     method,
+                    clipped_fraction_floor: 0.0,
                 },
             )
             .expect("valid CFA");
@@ -1937,6 +2080,7 @@ mod tests {
             white_balance: [2.3632812, 1.0, 1.8085938],
             strength,
             method: HighlightMethod::Harmonic,
+            clipped_fraction_floor: 0.0,
         };
 
         // Unless the fixture moves at full strength, neither case below means
@@ -2001,6 +2145,7 @@ mod tests {
             white_balance: [2.3632812, 1.0, 1.8085938],
             strength,
             method: HighlightMethod::Harmonic,
+            clipped_fraction_floor: 0.0,
         };
 
         let mut full = captured.clone();
@@ -2137,6 +2282,7 @@ mod tests {
                 white_balance: [1.0; 3],
                 strength: 1.0,
                 method: HighlightMethod::Harmonic,
+                clipped_fraction_floor: 0.0,
             },
         )
         .unwrap();
@@ -2150,6 +2296,7 @@ mod tests {
                 white_balance: [1.0; 3],
                 strength: 1.0,
                 method: HighlightMethod::Harmonic,
+                clipped_fraction_floor: 0.0,
             },
         )
         .unwrap();
@@ -2355,6 +2502,7 @@ mod tests {
                 white_balance: [1.0; 3],
                 strength: 1.0,
                 method: HighlightMethod::Harmonic,
+                clipped_fraction_floor: 0.0,
             },
         )
         .unwrap();

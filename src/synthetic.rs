@@ -614,6 +614,7 @@ pub fn evaluate_raw_to_render(
                     white_balance: fixture.wb,
                     strength: 1.0,
                     method: spatial,
+                    clipped_fraction_floor: 0.0,
                 },
             )
             .expect("synthetic CFA is valid");

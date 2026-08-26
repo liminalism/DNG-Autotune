@@ -2,6 +2,26 @@
 
 ## Verified
 
+Rebuilt and re-tested on Linux (`x86_64-unknown-linux-gnu`) on 2026-08-26, for
+the archive-speed highlight floor and the in-memory metadata surface:
+
+```text
+cargo check --all-targets                  # clean, no warnings
+cargo clippy --all-targets --release       # no warnings
+cargo fmt --check                          # clean
+cargo test --release                       # 362 passed, 0 failed
+29-file Sony ARW dry run, --jobs 4         # 29/29, 1:07.5, peak RSS 2.70 GB
+10-file raw_old batch render, --jobs 1     # 10/10, 0:49.5, peak RSS 1.77 GB
+7-file PNG A/B over three highlight modes  # byte-identity as documented
+```
+
+The corpus regression gate proper — a field-by-field `--dry-run --summary` diff
+over all 376 files against a previous-release binary — was **not** re-run for
+that change, because the change deliberately moves default output on frames
+below the floor, so a field-by-field identity diff is not the right instrument
+for it. The byte-identity properties that *are* invariant were checked instead
+and are recorded in `CHANGELOG.md`.
+
 Built, tested, linted, and batch-rendered on Linux with Rust 1.94.1
 (`x86_64-unknown-linux-gnu`) on 2026-07-28:
 

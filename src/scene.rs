@@ -442,6 +442,7 @@ pub fn observe(
     noise_snr10_ev: Option<f32>,
     embedded_preview_semantic_eligible: bool,
     model_dir: &Path,
+    faces: bool,
 ) -> Result<(SemanticProxy, SceneEvidence)> {
     let proxy = build_proxy(image, working_to_display)?;
     let mut evidence = SceneEvidence {
@@ -457,7 +458,7 @@ pub fn observe(
         masks: RegionMasks::blank(),
     };
 
-    infer(&proxy, model_dir, &mut evidence);
+    infer(&proxy, model_dir, faces, &mut evidence);
 
     evidence.regions = measure_regions(
         image,
@@ -736,7 +737,28 @@ pub fn build_sky_chroma_map(
     })
 }
 
-fn infer(proxy: &SemanticProxy, model_dir: &Path, evidence: &mut SceneEvidence) {
+/// Whether the face detector runs at all.
+///
+/// **Off.** The YuNet path is wired, works, and has never produced a true
+/// positive: over the 74-image day/night/extreme-bright corpus it returned zero
+/// faces, and the corpus's only person response was a low-confidence false
+/// positive on a faucet still life
+/// (`raw-autotune.assessment.scene-evidence-usefulness`). Nothing consumes the
+/// mask — no exposure policy, no encoder ROI — so running it spent an ONNX
+/// session per frame to write an empty plane.
+///
+/// It is gated rather than deleted because the model and its provenance are
+/// prepared and pinned in `models/manifest.json`, and the honest reading of the
+/// corpus result is "this detector, at this 512 px letterboxed proxy, on this
+/// corpus" rather than "face detection is impossible here". `--semantic-faces`
+/// turns it back on for anyone re-opening that.
+///
+/// `RegionMasks::blank()` already seeds an empty `Face` plane, so a run with the
+/// detector off has the same sidecar *shape* as one with it on — one fewer
+/// entry in `models`, and a `Face` mask that stays blank.
+pub const FACE_DETECTION_DEFAULT: bool = false;
+
+fn infer(proxy: &SemanticProxy, model_dir: &Path, faces: bool, evidence: &mut SceneEvidence) {
     match infer_segmenter(proxy, model_dir) {
         Ok((masks, scores, provenance)) => {
             evidence.models.push(provenance);
@@ -746,6 +768,9 @@ fn infer(proxy: &SemanticProxy, model_dir: &Path, evidence: &mut SceneEvidence) 
         Err(error) => evidence
             .inference_errors
             .push(format!("segmenter: {error:#}")),
+    }
+    if !faces {
+        return;
     }
     match infer_faces(proxy, model_dir) {
         Ok((face, provenance)) => {

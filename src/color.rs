@@ -49,16 +49,23 @@
 //! all — `tone::compress_gamut` is where out-of-range values are resolved, at the
 //! end, once, against the pixel's own rendered luminance.
 //!
-//! **That hand-off is not yet correct, and the A/B found it.** `compress_gamut`
-//! anchors on `luminance(rgb).clamp(0.0, 1.0)`, and `luminance` is a *signed* sum
-//! — so a pixel whose luminance is negative anchors at 0, which makes the
-//! compressor's scale `0 / |min|` = 0 and zeroes every channel including the
-//! positive ones. Rawler's per-channel clip kept those, so on that cohort this
-//! module is currently *more* destructive than the clip it replaces. See
-//! [`ClipCost::negative_luminance_fraction`], the test
-//! `a_negative_luminance_pixel_renders_to_pure_black_but_a_clipped_one_does_not`,
-//! and `docs/STATUS.md` for the fix that is queued. It is why `rawler` is still
-//! the default.
+//! **That hand-off was wrong at first, and the A/B is what found it.** The
+//! original `compress_gamut` anchored on `luminance(rgb).clamp(0.0, 1.0)`, and
+//! `luminance` is a *signed* sum — so a pixel whose luminance was negative
+//! anchored at 0, which made the compressor's scale `0 / |min|` = 0 and zeroed
+//! every channel including the positive ones. Rawler's per-channel clip kept
+//! those, so on that cohort this module was briefly *more* destructive than the
+//! clip it replaced. That was the whole of the 0.1.17 `crushed_fraction`
+//! regression, and [`ClipCost::negative_luminance_fraction`] predicted it exactly
+//! — zero false positives and zero false negatives over 108 frames.
+//!
+//! It is fixed. `tone.rs` now floors the chroma anchor at
+//! `black_output_linear` rather than 0, so the curve and the anchor agree about
+//! where black is, and the shadow branch of `compress_gamut` uses an
+//! anchor-floored scale instead of collapsing to the Oklab path. The pinning
+//! test is `a_negative_luminance_pixel_keeps_its_positive_channels`. Since
+//! 0.1.18 `owned` is the default colour path: it ties `rawler` on
+//! `crushed_fraction`, wins `average_gradient`, and beats it on hue.
 //!
 //! # The optional full-DNG path
 //!
@@ -758,6 +765,7 @@ type Demosaiced = (
 struct RawHighlightSettings {
     method: crate::raw_highlight::HighlightMethod,
     strength: f32,
+    clipped_fraction_floor: f32,
 }
 
 pub fn demosaic_camera_rgb(
@@ -782,6 +790,7 @@ pub fn demosaic_camera_rgb(
         RawHighlightSettings {
             method: crate::raw_highlight::HighlightMethod::Current,
             strength: 0.0,
+            clipped_fraction_floor: 0.0,
         },
     )?;
     Ok((a, b, c, d))
@@ -885,6 +894,7 @@ fn demosaic_camera_rgb_with_lens(
                             white_balance: [raw.wb_coeffs[0], raw.wb_coeffs[1], raw.wb_coeffs[2]],
                             strength: highlight.strength,
                             method: highlight.method,
+                            clipped_fraction_floor: highlight.clipped_fraction_floor,
                         },
                     )?);
                 }
@@ -1133,6 +1143,11 @@ pub struct DevelopOptions {
     /// CLI-only estimator selection. Public render options always use
     /// `Current`; the spatial experiments are injected by the batch pipeline.
     pub highlight_method: crate::raw_highlight::HighlightMethod,
+    /// Decline a spatial estimator below this fraction of clipped CFA sites and
+    /// develop the frame on the post-demosaic `Current` path instead. See
+    /// [`crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR`]. `0.0` always
+    /// solves and reproduces the pre-floor behaviour exactly.
+    pub spatial_highlight_floor: f32,
     pub demosaic: DemosaicMethod,
     pub snr10_ev: Option<f32>,
     /// Compose the DNG matrix transform when the profile is complete, using
@@ -1182,8 +1197,18 @@ pub fn develop(
             RawHighlightSettings {
                 method: raw_method,
                 strength: options.highlight_reconstruction,
+                clipped_fraction_floor: options.spatial_highlight_floor,
             },
         )?;
+
+    // The pre-demosaic pass may decline a spatial solve on a frame with
+    // essentially no clipped sites and report `Current` instead. The
+    // post-demosaic estimator has to follow that decision, or a declined frame
+    // would be handed to `spatial_report_and_uncertainty` with an empty
+    // reconstruction and get neither estimator.
+    let resolved_highlight_method = raw_highlight_report
+        .as_ref()
+        .map_or(options.highlight_method, |report| report.method);
 
     // Clipped-highlight reconstruction runs on camera RGB, after the demosaic
     // and before white balance and the colour matrix: "was this channel at the
@@ -1212,7 +1237,7 @@ pub fn develop(
             transform.white_balance[1],
             transform.white_balance[2],
         ];
-        let (report, uncertainty) = match options.highlight_method {
+        let (report, uncertainty) = match resolved_highlight_method {
             crate::raw_highlight::HighlightMethod::Current => {
                 crate::highlight::reconstruct_with_confidence_and_uncertainty(
                     image,
@@ -1229,7 +1254,7 @@ pub fn develop(
                     demosaiced_confidence.as_deref(),
                     raw_highlight_report.unwrap_or_else(|| {
                         crate::raw_highlight::RawHighlightReport {
-                            method: options.highlight_method,
+                            method: resolved_highlight_method,
                             ..crate::raw_highlight::RawHighlightReport::default()
                         }
                     }),

@@ -1,0 +1,354 @@
+{
+ "sample-floored": [
+  {
+   "input": "_DSC0883.ARW",
+   "elapsed_ms": 746,
+   "method": "current",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0892.ARW",
+   "elapsed_ms": 1831,
+   "method": "harmonic",
+   "clipped_cfa_sites": 448
+  },
+  {
+   "input": "_DSC0901.ARW",
+   "elapsed_ms": 789,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0910.ARW",
+   "elapsed_ms": 18321,
+   "method": "harmonic",
+   "clipped_cfa_sites": 1155448
+  },
+  {
+   "input": "_DSC0919.ARW",
+   "elapsed_ms": 7790,
+   "method": "harmonic",
+   "clipped_cfa_sites": 92002
+  },
+  {
+   "input": "_DSC0928.ARW",
+   "elapsed_ms": 552,
+   "method": "current",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0937.ARW",
+   "elapsed_ms": 567,
+   "method": "current",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0946.ARW",
+   "elapsed_ms": 13343,
+   "method": "harmonic",
+   "clipped_cfa_sites": 11337
+  },
+  {
+   "input": "_DSC0955.ARW",
+   "elapsed_ms": 1486,
+   "method": "harmonic",
+   "clipped_cfa_sites": 6087
+  },
+  {
+   "input": "_DSC0964.ARW",
+   "elapsed_ms": 7981,
+   "method": "harmonic",
+   "clipped_cfa_sites": 769063
+  },
+  {
+   "input": "_DSC0973.ARW",
+   "elapsed_ms": 475,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0982.ARW",
+   "elapsed_ms": 462,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0991.ARW",
+   "elapsed_ms": 497,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1000.ARW",
+   "elapsed_ms": 489,
+   "method": "current",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1009.ARW",
+   "elapsed_ms": 1262,
+   "method": "harmonic",
+   "clipped_cfa_sites": 177
+  },
+  {
+   "input": "_DSC1018.ARW",
+   "elapsed_ms": 512,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1027.ARW",
+   "elapsed_ms": 569,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1036.ARW",
+   "elapsed_ms": 531,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1045.ARW",
+   "elapsed_ms": 596,
+   "method": "current",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1054.ARW",
+   "elapsed_ms": 1446,
+   "method": "harmonic",
+   "clipped_cfa_sites": 223
+  },
+  {
+   "input": "_DSC1063.ARW",
+   "elapsed_ms": 11343,
+   "method": "harmonic",
+   "clipped_cfa_sites": 2036
+  },
+  {
+   "input": "_DSC1072.ARW",
+   "elapsed_ms": 592,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1081.ARW",
+   "elapsed_ms": 1225,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1090.ARW",
+   "elapsed_ms": 4478,
+   "method": "harmonic",
+   "clipped_cfa_sites": 261368
+  },
+  {
+   "input": "_DSC1099.ARW",
+   "elapsed_ms": 1043,
+   "method": "current",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1108.ARW",
+   "elapsed_ms": 4868,
+   "method": "harmonic",
+   "clipped_cfa_sites": 3029
+  },
+  {
+   "input": "_DSC1117.ARW",
+   "elapsed_ms": 3856,
+   "method": "harmonic",
+   "clipped_cfa_sites": 57129
+  },
+  {
+   "input": "_DSC1126.ARW",
+   "elapsed_ms": 3365,
+   "method": "harmonic",
+   "clipped_cfa_sites": 1552
+  },
+  {
+   "input": "_DSC1135.ARW",
+   "elapsed_ms": 45775,
+   "method": "harmonic",
+   "clipped_cfa_sites": 2315411
+  }
+ ],
+ "sample-always": [
+  {
+   "input": "_DSC0883.ARW",
+   "elapsed_ms": 1279,
+   "method": "harmonic",
+   "clipped_cfa_sites": 6
+  },
+  {
+   "input": "_DSC0892.ARW",
+   "elapsed_ms": 1681,
+   "method": "harmonic",
+   "clipped_cfa_sites": 448
+  },
+  {
+   "input": "_DSC0901.ARW",
+   "elapsed_ms": 680,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0910.ARW",
+   "elapsed_ms": 16064,
+   "method": "harmonic",
+   "clipped_cfa_sites": 1155448
+  },
+  {
+   "input": "_DSC0919.ARW",
+   "elapsed_ms": 7131,
+   "method": "harmonic",
+   "clipped_cfa_sites": 92002
+  },
+  {
+   "input": "_DSC0928.ARW",
+   "elapsed_ms": 1062,
+   "method": "harmonic",
+   "clipped_cfa_sites": 22
+  },
+  {
+   "input": "_DSC0937.ARW",
+   "elapsed_ms": 942,
+   "method": "harmonic",
+   "clipped_cfa_sites": 7
+  },
+  {
+   "input": "_DSC0946.ARW",
+   "elapsed_ms": 8525,
+   "method": "harmonic",
+   "clipped_cfa_sites": 11337
+  },
+  {
+   "input": "_DSC0955.ARW",
+   "elapsed_ms": 1996,
+   "method": "harmonic",
+   "clipped_cfa_sites": 6087
+  },
+  {
+   "input": "_DSC0964.ARW",
+   "elapsed_ms": 7779,
+   "method": "harmonic",
+   "clipped_cfa_sites": 769063
+  },
+  {
+   "input": "_DSC0973.ARW",
+   "elapsed_ms": 463,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0982.ARW",
+   "elapsed_ms": 475,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC0991.ARW",
+   "elapsed_ms": 500,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1000.ARW",
+   "elapsed_ms": 1096,
+   "method": "harmonic",
+   "clipped_cfa_sites": 7
+  },
+  {
+   "input": "_DSC1009.ARW",
+   "elapsed_ms": 1316,
+   "method": "harmonic",
+   "clipped_cfa_sites": 177
+  },
+  {
+   "input": "_DSC1018.ARW",
+   "elapsed_ms": 491,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1027.ARW",
+   "elapsed_ms": 569,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1036.ARW",
+   "elapsed_ms": 622,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1045.ARW",
+   "elapsed_ms": 1030,
+   "method": "harmonic",
+   "clipped_cfa_sites": 1
+  },
+  {
+   "input": "_DSC1054.ARW",
+   "elapsed_ms": 1431,
+   "method": "harmonic",
+   "clipped_cfa_sites": 223
+  },
+  {
+   "input": "_DSC1063.ARW",
+   "elapsed_ms": 10162,
+   "method": "harmonic",
+   "clipped_cfa_sites": 2036
+  },
+  {
+   "input": "_DSC1072.ARW",
+   "elapsed_ms": 493,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1081.ARW",
+   "elapsed_ms": 532,
+   "method": "harmonic",
+   "clipped_cfa_sites": 0
+  },
+  {
+   "input": "_DSC1090.ARW",
+   "elapsed_ms": 3829,
+   "method": "harmonic",
+   "clipped_cfa_sites": 261368
+  },
+  {
+   "input": "_DSC1099.ARW",
+   "elapsed_ms": 982,
+   "method": "harmonic",
+   "clipped_cfa_sites": 5
+  },
+  {
+   "input": "_DSC1108.ARW",
+   "elapsed_ms": 5281,
+   "method": "harmonic",
+   "clipped_cfa_sites": 3029
+  },
+  {
+   "input": "_DSC1117.ARW",
+   "elapsed_ms": 2371,
+   "method": "harmonic",
+   "clipped_cfa_sites": 57129
+  },
+  {
+   "input": "_DSC1126.ARW",
+   "elapsed_ms": 3056,
+   "method": "harmonic",
+   "clipped_cfa_sites": 1552
+  },
+  {
+   "input": "_DSC1135.ARW",
+   "elapsed_ms": 68247,
+   "method": "harmonic",
+   "clipped_cfa_sites": 2315411
+  }
+ ]
+}

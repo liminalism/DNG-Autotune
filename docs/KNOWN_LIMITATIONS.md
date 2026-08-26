@@ -62,6 +62,38 @@ phone DNGs only.
 
 ## Highlights
 
+### The spatial estimator is not run on every frame
+
+Since `archive-auto-v6` the harmonic solver is declined on a frame whose
+clipped CFA fraction is below `raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR`
+(`1e-5`, about 240 sites on a 24 MP mosaic), and that frame develops on the
+post-demosaic `current` estimator instead — byte-identically to an explicit
+`--highlight-method current` run, which is what the corpus check confirmed.
+`--spatial-highlight-floor 0` always solves.
+
+This is a cost decision, not a quality one, and its limits should be stated:
+
+- **The floor has not been swept.** It is set conservatively, from
+  `docs/HDR_EVALUATION.md`'s clipped-channel census rather than from a sweep of
+  this constant. `clipped_cfa_sites` is in every sidecar so a sweep is possible.
+- **It changes default output on declined frames.** Measured on `_DSC0883.ARW`
+  (zero clipped CFA sites): 153 of 30,984,192 16-bit samples move, 0.0005%,
+  with a maximum single-sample delta of 18529/65535. Small in extent, not
+  nothing in amplitude.
+- **The saving is bounded, because the cost is not uniform.** On a 29-frame
+  Sony sample the floor declined 6 frames and saved 8.9% of total CPU time
+  (67 s against 87 s of wall clock at `--jobs 4`). The frames that dominate the
+  cost are the heavily clipped ones — `_DSC1135.ARW`, 9.5% clipped, takes 45.8 s
+  — and those correctly still solve. Do not expect this to make a clipped batch
+  cheap; it makes a *clean* batch cheap.
+- **The memory planner cannot use the gate.** `memory.rs` reserves 64 bytes per
+  pixel for the harmonic method when it sizes `--jobs`, and it does that before
+  any file is decoded, so it cannot know which frames will decline. The reserve
+  therefore stays at worst case. Peak RSS falls in practice on a clean batch;
+  the *planned* worker count does not change.
+
+### What reconstruction can and cannot do
+
 The automatic profile reconstructs a partially clipped RGB channel from the
 surviving channel ratios before colour conversion. Fully clipped pixels and
 strongly coloured highlights are deliberately left alone, so the program still
@@ -95,10 +127,52 @@ Chroma noise reduction exists since 0.1.14 (`src/chroma.rs`), automatic and
 driven by the frame's own fitted noise model. It is inert on clean frames — 309
 of 368 corpus files — and cannot alter luminance at all, by construction.
 
-Not done: **luma denoising** or semantic local texture control. Hot/dead CFA
-suppression and noise-aware output sharpening are automatic and can be scaled
-or disabled. Lens correction is available only where standardized metadata
-supports it, as described below.
+Luma noise reduction exists since the 2026-08-13 low-light work (`src/luma.rs`),
+also automatic and noise-model driven. It engages only on frames noisy enough to
+need it — roughly ISO 1600 and up — so a clean frame renders identically whether
+or not it runs. `--luma-denoise` scales the automatic strength; `0` disables it.
+This supersedes the earlier position that luma grain was left alone
+deliberately: the measured result on the ISO 12800 night pairs was markedly
+reduced grain with cloud and edge detail preserved.
+
+Hot/dead CFA suppression and noise-aware output sharpening are automatic and can
+be scaled or disabled. Lens correction is available only where standardized
+metadata supports it, as described below.
+
+Still not done: **semantic local texture control**. `--semantic` records scene
+masks but is observational by construction and cannot alter texture; see
+"Automatic decisions" below.
+
+Two limits of the chroma filter specifically:
+
+- Its first stage is a fixed-radius box on the colour difference, which removes
+  speckle but not **low-frequency chroma blotching**. That was the state this
+  entry described, at about 1.40x the camera's saturation at extreme ISO.
+  0.1.15 added the second stage the entry called for — a guided filter over the
+  colour differences with the frame's own luminance as guide, 128 px support —
+  which `docs/STATUS.md` records as taking the ISO 8000+ saturation ratio
+  1.37 → 1.27 and removing the veil visibly. The residual is now
+  regularisation-limited rather than support-limited: widening 48 → 256 px
+  changes nothing. **The two numbers in `docs/STATUS.md` for this band disagree
+  — its 0.1.15 section says 1.27 while its acceptance table still expects 1.35
+  to 1.45 — so treat the exact residual as needing one re-measurement rather
+  than quoting either.**
+- Luma grain is untouched by design, so a high-ISO frame still looks grainier
+  than the camera's own JPEG — though the camera's is also visibly mushier, and
+  which is preferable for an archive is a taste call this project has not made.
+
+High-ISO shadow lifting can still expose luma noise.
+
+Since 0.1.6 a per-image sensor noise model (`src/noise.rs`) bounds the black
+point: it is never placed below the level where SNR falls to 1, so shadow range
+is not spent stretching pure noise. This binds on 12% of the Sony batch.
+
+The model is validated against EXIF ISO in aggregate: `shot_slope` tracks ISO
+at +1.039 in log2 against a theoretical 1.000, R^2 0.976. It is not validated
+per frame, where dense texture still inflates the fit, so the floor is capped at
+the frame's 5th percentile and a bad estimate cannot crush more than about 5% of
+an image. 257 of 258 frames yield an estimate; the one refusal has too little
+dynamic range to determine a slope. See `docs/RESEARCH_NOTES.md`.
 
 ## Lens correction
 
@@ -117,35 +191,36 @@ There is deliberately no generic correction guessed from make/model. DNG
 `WarpFisheye`, `WarpRectilinear2`, gain-map opcodes, and vendor MakerNote lens
 profiles are not yet implemented.
 
-Two limits of the chroma filter specifically:
-
-- It is a fixed-radius box on the colour difference, so it removes speckle but
-  not **low-frequency chroma blotching**, which at extreme ISO leaves the frame
-  at about 1.40x the camera's saturation. A wider box would reach it only by
-  smearing colour across real edges; a multi-scale or edge-aware filter is the
-  actual fix.
-- Luma grain is untouched by design, so a high-ISO frame still looks grainier
-  than the camera's own JPEG — though the camera's is also visibly mushier, and
-  which is preferable for an archive is a taste call this project has not made.
-
-High-ISO shadow lifting can still expose luma noise.
-
-Since 0.1.6 a per-image sensor noise model (`src/noise.rs`) bounds the black
-point: it is never placed below the level where SNR falls to 1, so shadow range
-is not spent stretching pure noise. This binds on 12% of the Sony batch.
-
-The model is validated against EXIF ISO in aggregate: `shot_slope` tracks ISO
-at +1.039 in log2 against a theoretical 1.000, R^2 0.976. It is not validated
-per frame, where dense texture still inflates the fit, so the floor is capped at
-the frame's 5th percentile and a bad estimate cannot crush more than about 5% of
-an image. 257 of 258 frames yield an estimate; the one refusal has too little
-dynamic range to determine a slope. See `docs/RESEARCH_NOTES.md`.
 
 ## Automatic decisions
 
-The controller does not identify people, faces, sky, foreground, night scenes,
-snow, documents, products, or intended subjects. Center weighting is only a
-weak composition prior.
+The controller does not identify people, faces, foreground, snow, documents,
+products, or intended subjects. Center weighting is only a weak composition
+prior.
+
+Two exceptions have landed since this section was first written, and neither one
+makes the controller subject-aware:
+
+- **Night scenes are detected**, from raw statistics alone rather than from any
+  semantic model. A `low_light_score` derived from an EV100 gate reads 0.98-1.00
+  on the night pairs and 0 on bright day frames, and drives the automatic night
+  tone map (`--night-tone`, default on). The gate was calibrated to reject
+  hostile high-ISO daylight: a dark-but-bright ISO 2500 daytime frame scores
+  0.19 and is correctly not treated as night.
+- **Faces are not detected, and the detector no longer runs.** The YuNet path
+  is wired and prepared, and it returned zero faces over the whole 74-image
+  corpus; the corpus's only person response was a low-confidence false positive
+  on a faucet still life. Nothing consumed the mask. Since 2026-08-26 it is off
+  unless `--semantic-faces` is passed. It is gated rather than deleted because
+  the honest reading of that result is "this detector, at this 512 px
+  letterboxed proxy, on this corpus", not "faces cannot be found here".
+- **Sky can be identified**, but only under the opt-in `--semantic` flag, and
+  that path is observational: it records masks and region evidence in the
+  sidecar without changing exposure, tone, colour, or output pixels. The two
+  experimental operators that *would* act on the mask,
+  `--semantic-sky-highlights` and `--semantic-sky-chroma`, both default to 0.
+
+So the unattended default gained a night detector, not a subject detector.
 
 Failures on high-key, low-key, strongly backlit, or unusual photographs are
 expected and should be retained as test cases for the next controller.
@@ -172,11 +247,19 @@ measured against 21 paired camera JPEGs that reduces the mean subject error from
   makes ProShot the place to test controller changes.
 
 The `+1.0 EV` ceiling on an oracle-derived target (`ORACLE_TARGET_CEILING_EV`)
-binds on 16 of 287 files with previews and is probably too tight — most of them
-are independently classified `high_key`, i.e. genuinely bright rather than
-badly previewed. No paired JPEG exists for any of the 16, and 0.1.14's beach and
-high-variance pairs did not reach that regime either (brightest camera subject
-+0.99 EV), so it has not been changed. See `docs/STATUS.md`.
+used to bind on 16 of 287 files with previews with no paired evidence either
+way, and this section used to record it as "probably too tight but unchanged".
+
+**It was changed in 0.1.16, and the suspicion was correct.** 0.1.16 got the
+missing pair — a white wall in direct midday sun, camera subject +1.63 EV,
+unclipped, analyzer calling the raw `high_key` — and the clamp was holding the
+render 0.42 EV darker than the camera. The fix keeps the guard where its
+reasoning is sound: a bright preview the raw statistics *contradict* still
+clamps to +1.0, while one they corroborate raises the ceiling by up to +1 EV,
+ramped on the key score from the high-key threshold (0.32) to 0.60. That is
+`analyze::oracle_target_ceiling_ev`. The 16 bound files split exactly along
+that line — ten freed, six still clamped. See `docs/STATUS.md`, "The oracle
+ceiling".
 
 ## Output metadata
 
@@ -247,6 +330,11 @@ trip it.
 
 ## Build verification
 
-See `docs/BUILD_STATUS.md`. The code builds, tests, and lints clean on Windows
-with Rust 1.89.0 and has been run over a real DNG batch. Linux and macOS builds
-have not been verified.
+See `docs/BUILD_STATUS.md`, which is the authority. The code builds, tests and
+lints clean on **both Linux and Windows**, and has been run over the real
+corpus on both. **macOS is the platform that has not been verified.**
+
+This section used to say Linux was unverified; that was already contradicted by
+`docs/BUILD_STATUS.md`'s 2026-07-28 Linux entry when it was written, and is
+contradicted again by the Linux build and test runs recorded for the
+2026-08-26 archive-speed work.

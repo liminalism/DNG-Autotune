@@ -224,6 +224,13 @@ pub struct Cli {
     )]
     pub semantic_sky_chroma: f32,
 
+    /// Run the YuNet face detector as part of `--semantic`. Off by default: it
+    /// returned zero faces over the whole 74-image corpus and nothing consumes
+    /// its mask, so it spent an ONNX session per frame writing an empty plane.
+    /// The `Face` mask stays present and blank either way.
+    #[arg(long, requires = "semantic")]
+    pub semantic_faces: bool,
+
     /// Directory containing prepared scene_image ONNX graphs.
     #[arg(long, value_name = "DIR", requires = "semantic")]
     pub semantic_model_dir: Option<PathBuf>,
@@ -341,6 +348,15 @@ pub struct Cli {
     /// every spatial method requires `--highlight-reconstruction 1`.
     #[arg(long, value_enum, default_value = "harmonic")]
     pub highlight_method: HighlightMethod,
+
+    /// Fraction of clipped CFA sites below which a spatial highlight estimator
+    /// is skipped and the frame develops on the post-demosaic `current`
+    /// estimator instead. The spatial solvers cost about 20 s and 1.3 GB on a
+    /// 24 MP frame whether or not anything is clipped, so this is what keeps an
+    /// unclipped archive batch cheap. Pass `0` to always solve.
+    #[arg(long, value_name = "FRACTION",
+          default_value_t = crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR)]
+    pub spatial_highlight_floor: f32,
 
     /// Compatibility spelling: the DNG matrix-profile path is already automatic.
     #[arg(long, conflicts_with = "no_dng_color", hide = true)]
@@ -469,6 +485,11 @@ impl Cli {
                 && (0.0..=1.0).contains(&self.highlight_reconstruction),
             "--highlight-reconstruction must be between 0 and 1"
         );
+        ensure!(
+            self.spatial_highlight_floor.is_finite()
+                && (0.0..=1.0).contains(&self.spatial_highlight_floor),
+            "--spatial-highlight-floor must be between 0 and 1"
+        );
         if self.highlight_method.is_spatial() {
             ensure!(
                 self.raw_color_path == RawColorPath::Owned,
@@ -561,6 +582,7 @@ impl Cli {
         options.semantic = self.semantic;
         options.semantic_sky_highlights = self.semantic_sky_highlights;
         options.semantic_sky_chroma = self.semantic_sky_chroma;
+        options.semantic_faces = self.semantic_faces;
         if let Some(directory) = self.semantic_model_dir {
             options.semantic_model_dir = directory;
         }
@@ -581,6 +603,7 @@ impl Cli {
         options.hot_pixels = self.hot_pixels;
         options.highlight_reconstruction = self.highlight_reconstruction;
         options.highlight_method = self.highlight_method;
+        options.spatial_highlight_floor = self.spatial_highlight_floor;
         options.full_dng_color = !self.no_dng_color;
         options.lens_correction = if self.no_lens_correction {
             LensCorrectionMode::Off

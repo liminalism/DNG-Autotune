@@ -117,6 +117,7 @@ fn develop(
                 hot_pixels: options.hot_pixels,
                 highlight_reconstruction: options.highlight_reconstruction,
                 highlight_method,
+                spatial_highlight_floor: options.spatial_highlight_floor,
                 demosaic: options.demosaic,
                 snr10_ev,
                 full_dng_color: options.full_dng_color,
@@ -621,6 +622,7 @@ fn process_job_inner(
             noise_floor.as_ref().map(|floor| floor.snr10_ev),
             preview_semantic_eligible,
             &options.semantic_model_dir,
+            options.semantic_faces,
         )?;
         let sky_map = if options.semantic_sky_highlights > 0.0 {
             let map = crate::scene::build_sky_highlight_map(

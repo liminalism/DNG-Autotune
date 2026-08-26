@@ -1,6 +1,24 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.evidence.archive-speed-tree-clean-20260826/1 : evidence {
+    title "Tests, clippy, fmt and check clean on Linux for the archive-speed and metadata work"
+    state verified
+    result pass
+    method command
+    observed_at git:2ce6bf6210815faf878df448047f7621cb9903cd
+    command "cargo test --release; cargo clippy --all-targets --release; cargo fmt --check; cargo check --all-targets"
+    summary """
+        Linux x86_64-unknown-linux-gnu, working tree at 2ce6bf62 plus the archive-speed change.
+
+        cargo test --release: 362 passed, 0 failed, across the library (351) and the four integration binaries. cargo clippy --all-targets --release: no warnings. cargo fmt --check: clean. cargo check --all-targets: clean, no warnings.
+
+        The new coverage is three tests. raw_highlight::the_spatial_floor_declines_sparse_clipping_and_reports_current pins that a below-floor frame is untouched and reports Current, that a frame clearing the floor reports the requested method, and that floor 0 produces the same samples as a frame that cleared the floor. metadata::the_rec2020_profile_is_a_distinct_valid_profile_and_srgb_is_unmoved and metadata::output_colour_space_is_srgb_for_every_working_space pin the generalized ICC builder and today's colour-space answer. tests/in_memory_api::the_in_memory_render_carries_exif_icc_and_an_explicit_colour_space renders a real ProShot DNG and checks the EXIF blob equals SourceMetadata::exif_payload at the rendered dimensions, carries no Exif NUL NUL header, parses standalone with orientation normalized, that the ICC is the cached sRGB profile, and that metadata false returns None for both while leaving every pixel identical.
+
+        What was deliberately not run: the full 376-file field-by-field --dry-run --summary regression diff against a previous-release binary. The change moves default output on frames below the floor by design, so an identity diff is the wrong instrument; the byte-identity properties that are invariant were checked directly instead and are recorded separately.
+        """
+}
+
 record raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/1 : evidence {
     title "Backlit-foliage glow on _DSC1289 is captured flare shown by exposure, not a render halo"
     state superseded
@@ -54,7 +72,7 @@ record raw-autotune.evidence.cityscapes-lraspp-lege-gpu-cpu-probe/1 : evidence {
 
 record raw-autotune.evidence.compression-highlight-default-rollback-identity-20260810/1 : evidence {
     title "Restored archive-auto-v2 ordinary output is byte-identical to the pre-promotion default: both _DSC1289 JPEGs have SHA-256 b5ef8b967ac4f9d60571a4d7434b457cf98fb1a6add4eb127d69b26a33e4dbe0."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
@@ -63,6 +81,22 @@ record raw-autotune.evidence.compression-highlight-default-rollback-identity-202
     summary """
         Restored archive-auto-v2 ordinary output is byte-identical to the pre-promotion default: both _DSC1289 JPEGs have SHA-256 b5ef8b967ac4f9d60571a4d7434b457cf98fb1a6add4eb127d69b26a33e4dbe0.
         """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-default-rollback-identity-20260810/2 : evidence {
+    title "Restored archive-auto-v2 ordinary output is byte-identical to the pre-promotion default: both _DSC1289 JPEGs have SHA-256 b5ef8b967ac4f9d60571a4d7434b457cf98fb1a6add4eb127d69b26a33e4dbe0."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command ".\\\\target\\\\release\\\\raw-autotune.exe raw\\\\raw_3rd_batch\\\\_DSC1289.ARW -o .agent\\\\scratch\\\\rollback-default-identity-metadata-20260810 --overwrite --no-summary; Get-FileHash ..."
+    summary """
+        Restored archive-auto-v2 ordinary output is byte-identical to the pre-promotion default: both _DSC1289 JPEGs have SHA-256 b5ef8b967ac4f9d60571a4d7434b457cf98fb1a6add4eb127d69b26a33e4dbe0.
+        """
+    supersedes [
+        @raw-autotune.evidence.compression-highlight-default-rollback-identity-20260810/1
+    ]
     author "GitHub Uploader"
 }
 
@@ -82,7 +116,7 @@ record raw-autotune.evidence.compression-highlight-default-rollback-tests-202608
 
 record raw-autotune.evidence.compression-highlight-paired-gate-20260810/1 : evidence {
     title "On 42 paired frames, saturation ratio moved 1.114493 to 1.034033, near-white median 0.030280 to 0.003267767, maximum 0.1592422 to 0.1338907, and mean hue error 18.2185 to 18.24891 degrees; exposure was identical."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
@@ -94,9 +128,23 @@ record raw-autotune.evidence.compression-highlight-paired-gate-20260810/1 : evid
     author "GitHub Uploader"
 }
 
+record raw-autotune.evidence.compression-highlight-paired-gate-20260810/2 : evidence {
+    title "On 42 paired frames, saturation ratio moved 1.114493 to 1.034033, near-white median 0.030280 to 0.003267767, maximum 0.1592422 to 0.1338907, and mean hue error 18.2185 to 18.24891 degrees; exposure was identical."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "Render raw/arw_better and raw/raw_better with --reference at legacy exponent 1.0 and candidate 0.6; compare batch summaries."
+    summary """
+        On 42 paired frames, saturation ratio moved 1.114493 to 1.034033, near-white median 0.030280 to 0.003267767, maximum 0.1592422 to 0.1338907, and mean hue error 18.2185 to 18.24891 degrees; exposure was identical.
+        """
+    supersedes [ @raw-autotune.evidence.compression-highlight-paired-gate-20260810/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.compression-highlight-regression-gate-20260810/1 : evidence {
     title "307 library tests and all integration/doc tests passed; clippy and formatting passed. Ten repeated jobs-8 artifacts were byte-identical. The archive-auto-v3 default matched explicit 0.6, while explicit 1.0 matched the pre-change JPEG byte-for-byte."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
@@ -105,6 +153,20 @@ record raw-autotune.evidence.compression-highlight-regression-gate-20260810/1 : 
     summary """
         307 library tests and all integration/doc tests passed; clippy and formatting passed. Ten repeated jobs-8 artifacts were byte-identical. The archive-auto-v3 default matched explicit 0.6, while explicit 1.0 matched the pre-change JPEG byte-for-byte.
         """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-regression-gate-20260810/2 : evidence {
+    title "307 library tests and all integration/doc tests passed; clippy and formatting passed. Ten repeated jobs-8 artifacts were byte-identical. The archive-auto-v3 default matched explicit 0.6, while explicit 1.0 matched the pre-change JPEG byte-for-byte."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "cargo test --release; cargo clippy --all-targets --release -- -D warnings; cargo fmt --check; render five sky frames repeatedly with --jobs 8 and hash JPEGs/sidecars; compare explicit 1.0 to pre-change output."
+    summary """
+        307 library tests and all integration/doc tests passed; clippy and formatting passed. Ten repeated jobs-8 artifacts were byte-identical. The archive-auto-v3 default matched explicit 0.6, while explicit 1.0 matched the pre-change JPEG byte-for-byte.
+        """
+    supersedes [ @raw-autotune.evidence.compression-highlight-regression-gate-20260810/1 ]
     author "GitHub Uploader"
 }
 
@@ -123,7 +185,7 @@ record raw-autotune.evidence.compression-highlight-rejection-recorded-20260810/1
 
 record raw-autotune.evidence.compression-highlight-sky-gate-20260810/1 : evidence {
     title "On 58 files, exponent 0.6 reduced median near-white 0.022232 to 0.0038817108, held max 0.284304 to 0.284300, and reduced max hard clipping 0.000284 to 0.000268. Across 56 paired sky grades, median green deficit fell 0.11543 to 0.08657, sky moved -0.01 EV, and ground was unchanged."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
@@ -132,6 +194,20 @@ record raw-autotune.evidence.compression-highlight-sky-gate-20260810/1 : evidenc
     summary """
         On 58 files, exponent 0.6 reduced median near-white 0.022232 to 0.0038817108, held max 0.284304 to 0.284300, and reduced max hard clipping 0.000284 to 0.000268. Across 56 paired sky grades, median green deficit fell 0.11543 to 0.08657, sky moved -0.01 EV, and ground was unchanged.
         """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.compression-highlight-sky-gate-20260810/2 : evidence {
+    title "On 58 files, exponent 0.6 reduced median near-white 0.022232 to 0.0038817108, held max 0.284304 to 0.284300, and reduced max hard clipping 0.000284 to 0.000268. Across 56 paired sky grades, median green deficit fell 0.11543 to 0.08657, sky moved -0.01 EV, and ground was unchanged."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "Render raw/raw_3rd_batch at legacy exponent 1.0 and candidate 0.6; compare summaries and run python tools/grade_sky.py against raw/jpeg."
+    summary """
+        On 58 files, exponent 0.6 reduced median near-white 0.022232 to 0.0038817108, held max 0.284304 to 0.284300, and reduced max hard clipping 0.000284 to 0.000268. Across 56 paired sky grades, median green deficit fell 0.11543 to 0.08657, sky moved -0.01 EV, and ground was unchanged.
+        """
+    supersedes [ @raw-autotune.evidence.compression-highlight-sky-gate-20260810/1 ]
     author "GitHub Uploader"
 }
 
@@ -217,7 +293,7 @@ record raw-autotune.evidence.encoder-hints-api-tests/1 : evidence {
 
 record raw-autotune.evidence.encoder-hints-real-frames/1 : evidence {
     title "Encoder hints on clipped-sky frames"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:58f63399509d60246db3414e6e486856fc179164
@@ -228,9 +304,23 @@ record raw-autotune.evidence.encoder-hints-real-frames/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.encoder-hints-real-frames/2 : evidence {
+    title "Encoder hints on clipped-sky frames"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "jq '{schema_version, files: [.files[] | {input, encoder_hints}]}' .agent/scratch/sky-chroma/on-summary.json"
+    summary """
+        All four clipped-sky frames emitted schema-1 encoder hints with minimum 10-bit and sky/vegetation ROI descriptors; only DSC1283 requested 4:4:4 or high-quality 4:2:2 from its independent chroma gate, and no face/person ROI was emitted.
+        """
+    supersedes [ @raw-autotune.evidence.encoder-hints-real-frames/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.encoder-hints-render-neutral/1 : evidence {
     title "Encoder hints leave output pixels unchanged"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:58f63399509d60246db3414e6e486856fc179164
@@ -239,6 +329,20 @@ record raw-autotune.evidence.encoder-hints-render-neutral/1 : evidence {
     summary """
         Adding always-derived encoder hints changed report schema but left the default rendered PNG byte-identical, SHA-256 11dc0d8f92f1f9e490aee01758b56f1bf65fcf69492412a5e89b05b4f7609035.
         """
+}
+
+record raw-autotune.evidence.encoder-hints-render-neutral/2 : evidence {
+    title "Encoder hints leave output pixels unchanged"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "cmp -s .agent/scratch/sky-chroma/off-check/_DSC1272_auto.png .agent/scratch/sky-ablation/off/_DSC1272_auto.png"
+    summary """
+        Adding always-derived encoder hints changed report schema but left the default rendered PNG byte-identical, SHA-256 11dc0d8f92f1f9e490aee01758b56f1bf65fcf69492412a5e89b05b4f7609035.
+        """
+    supersedes [ @raw-autotune.evidence.encoder-hints-render-neutral/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.exact-lens-profile-gate/1 : evidence {
@@ -339,7 +443,7 @@ record raw-autotune.evidence.harmonic-core-ramp-render-20260810/1 : evidence {
 
 record raw-autotune.evidence.harmonic-default-output-identity-20260810/1 : evidence {
     title "Ordinary archive-auto-v4 jobs-1 and jobs-8 renders and the accepted core-ramp-75-88 _DSC1290 JPEG are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
@@ -351,9 +455,23 @@ record raw-autotune.evidence.harmonic-default-output-identity-20260810/1 : evide
     author "GitHub Uploader"
 }
 
+record raw-autotune.evidence.harmonic-default-output-identity-20260810/2 : evidence {
+    title "Ordinary archive-auto-v4 jobs-1 and jobs-8 renders and the accepted core-ramp-75-88 _DSC1290 JPEG are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0."
+    state verified
+    result pass
+    method command
+    observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
+    command "raw-autotune _DSC1290.ARW --jobs 1/8; Get-FileHash SHA256"
+    summary """
+        Ordinary archive-auto-v4 jobs-1 and jobs-8 renders and the accepted core-ramp-75-88 _DSC1290 JPEG are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0.
+        """
+    supersedes [ @raw-autotune.evidence.harmonic-default-output-identity-20260810/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.harmonic-default-output-identity-committed-20260810/1 : evidence {
     title "At committed code 1fb96284, ordinary jobs-1, jobs-8, and accepted core-ramp-75-88 _DSC1290 JPEGs are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:1fb962843f1fda2052d6a873224ed62c031c248c
@@ -362,6 +480,20 @@ record raw-autotune.evidence.harmonic-default-output-identity-committed-20260810
     summary """
         At committed code 1fb96284, ordinary jobs-1, jobs-8, and accepted core-ramp-75-88 _DSC1290 JPEGs are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0.
         """
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.harmonic-default-output-identity-committed-20260810/2 : evidence {
+    title "At committed code 1fb96284, ordinary jobs-1, jobs-8, and accepted core-ramp-75-88 _DSC1290 JPEGs are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0."
+    state verified
+    result pass
+    method command
+    observed_at git:1fb962843f1fda2052d6a873224ed62c031c248c
+    command "ordinary archive-auto-v4 jobs-1/jobs-8 render and SHA-256 comparison"
+    summary """
+        At committed code 1fb96284, ordinary jobs-1, jobs-8, and accepted core-ramp-75-88 _DSC1290 JPEGs are byte-identical at SHA-256 c8e53931d34feec0407dd48ef4034948b644baeb5fff4b0ff63865b96f1b01f0.
+        """
+    supersedes [ @raw-autotune.evidence.harmonic-default-output-identity-committed-20260810/1 ]
     author "GitHub Uploader"
 }
 
@@ -610,6 +742,24 @@ record raw-autotune.evidence.highlight-white-path-target-grade/2 : evidence {
     supersedes [ @raw-autotune.evidence.highlight-white-path-target-grade/1 ]
 }
 
+record raw-autotune.evidence.in-memory-metadata-matches-the-file-writers-20260826/1 : evidence {
+    title "The in-memory EXIF blob equals the file writers' payload and never moves a pixel"
+    state verified
+    result pass
+    method command
+    observed_at git:2ce6bf6210815faf878df448047f7621cb9903cd
+    command "cargo test --release --test in_memory_api"
+    summary """
+        render_file_rgb16 on raw/raw_old/files_2026-07-27_16-48-01/proshot.dng returns an EXIF payload byte-identical to SourceMetadata::read(path).exif_payload(width, height), which is the same and only builder output.rs uses, so the cross-repo claim that the blob equals what the file writers embed is checked rather than commented.
+
+        The blob is a bare TIFF structure: it does not start with the JPEG APP1 Exif NUL NUL header, it parses standalone through GenericTiffReader, and its orientation is ORIENTATION_NORMAL because the returned pixels are upright. That is what a JPEG XL encoder's with_exif expects.
+
+        icc is the cached srgb_icc_profile bytes by pointer identity through OutputColorSpace::icc_profile, and color_space is Srgb.
+
+        With RenderOptions::metadata false both fields are None and the returned sample buffer is equal to the metadata-on run, so the surface cannot move a pixel.
+        """
+}
+
 record raw-autotune.evidence.lege-gpu-adapter-skip-tests/1 : evidence {
     title "lege-gpu adapter unit tests passed: default order still prefers discrete; WGPU_ADAPTER_SKIP matches 4060 name fragments. Scene OnnxSession does not open wgpu."
     state verified
@@ -636,7 +786,7 @@ record raw-autotune.evidence.mobileone-lege-gpu-cpu-probe/1 : evidence {
 
 record raw-autotune.evidence.night-day-ev100-separation-20260813/1 : evidence {
     title "EV100 gate separates the night positives from hostile high-ISO daylight negatives"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
@@ -647,9 +797,23 @@ record raw-autotune.evidence.night-day-ev100-separation-20260813/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.night-day-ev100-separation-20260813/2 : evidence {
+    title "EV100 gate separates the night positives from hostile high-ISO daylight negatives"
+    state verified
+    result pass
+    method command
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    command "jq -r '.files[] | [(.input|split(\"/\")|last), .analysis.capture_ev100, .analysis.low_light_score] | @tsv' .agent/scratch/night-day-ev100-gate-20260813.json"
+    summary """
+        All eight raw_at_night frames measured capture EV100 -3.03 to 4.29 and retained low_light_score 0.7407-1.0. The five daylight waterfall stress frames measured 9.0-14.34 EV100 and now score exactly 0.0; _DSC1277/_DSC1278 previously scored about 0.87/0.96 from darkness plus noise alone.
+        """
+    supersedes [ @raw-autotune.evidence.night-day-ev100-separation-20260813/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.night-day-tone-pixel-gate-20260813/1 : evidence {
     title "Night tone is pixel-inert on daylight and active on night"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
@@ -658,6 +822,20 @@ record raw-autotune.evidence.night-day-tone-pixel-gate-20260813/1 : evidence {
     summary """
         Daylight _DSC1277 produced identical SHA-256 c8107973 with --night-tone 1 and 0. Night _DSC1310 produced different hashes 5047e92e and 7fc3e740, with score 0.98 selecting HDR-at-night strength 0.85 only in the enabled render.
         """
+}
+
+record raw-autotune.evidence.night-day-tone-pixel-gate-20260813/2 : evidence {
+    title "Night tone is pixel-inert on daylight and active on night"
+    state verified
+    result pass
+    method command
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    command "sha256sum .agent/scratch/night-day-ev100-pixels/day-{on,off}/_DSC1277_auto.jpg .agent/scratch/night-day-ev100-pixels/night-{on,off}/_DSC1310_auto.jpg"
+    summary """
+        Daylight _DSC1277 produced identical SHA-256 c8107973 with --night-tone 1 and 0. Night _DSC1310 produced different hashes 5047e92e and 7fc3e740, with score 0.98 selecting HDR-at-night strength 0.85 only in the enabled render.
+        """
+    supersedes [ @raw-autotune.evidence.night-day-tone-pixel-gate-20260813/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.night-ev100-build-tests-20260813/1 : evidence {
@@ -825,7 +1003,7 @@ record raw-autotune.evidence.scene-artifacts-gitignored/1 : evidence {
 
 record raw-autotune.evidence.scene-corpus-rtx4060/1 : evidence {
     title "Primary scene corpus completed on RTX 4060"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
@@ -834,6 +1012,20 @@ record raw-autotune.evidence.scene-corpus-rtx4060/1 : evidence {
     summary """
         Observed 74/74 RAW files analyzed (58 day/mixed, 8 night, 8 extreme-bright), zero skipped or failed; both scene models reported lege-gpu Vulkan on the NVIDIA GeForce RTX 4060 Laptop GPU and no fallback.
         """
+}
+
+record raw-autotune.evidence.scene-corpus-rtx4060/2 : evidence {
+    title "Primary scene corpus completed on RTX 4060"
+    state verified
+    result pass
+    method command
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 target/release/raw-autotune raw/raw_3rd_batch raw/raw_at_night raw/raw_extremely_bright --dry-run --semantic --summary .agent/scratch/scene-corpus-primary-20260813.json"
+    summary """
+        Observed 74/74 RAW files analyzed (58 day/mixed, 8 night, 8 extreme-bright), zero skipped or failed; both scene models reported lege-gpu Vulkan on the NVIDIA GeForce RTX 4060 Laptop GPU and no fallback.
+        """
+    supersedes [ @raw-autotune.evidence.scene-corpus-rtx4060/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.scene-perception-validation-20260813/1 : evidence {
@@ -850,7 +1042,7 @@ record raw-autotune.evidence.scene-perception-validation-20260813/1 : evidence {
 
 record raw-autotune.evidence.scene-policy-remains-observational/1 : evidence {
     title "Semantic policy remained observational"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
@@ -861,9 +1053,23 @@ record raw-autotune.evidence.scene-policy-remains-observational/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.scene-policy-remains-observational/2 : evidence {
+    title "Semantic policy remained observational"
+    state verified
+    result pass
+    method command
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    command "jq '[.files[] | select((.scene.policy_adjustments | length) != 0)] | length' .agent/scratch/scene-corpus-primary-20260813.json"
+    summary """
+        Observed zero files with semantic policy adjustments across the 74-image corpus; the detector did not change rendering.
+        """
+    supersedes [ @raw-autotune.evidence.scene-policy-remains-observational/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.scene-policy-report/1 : evidence {
     title "Scene evidence usefulness report"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
@@ -872,6 +1078,20 @@ record raw-autotune.evidence.scene-policy-report/1 : evidence {
     summary """
         Observed a deterministic report covering region distributions, correlations, group splits, per-image RAW/encoder hints, guardrails, and failure modes: sky 42/74, vegetation 65/74, building/interior 64/74, face 0/74, person 1/74 below gate; four high-confidence clipped-sky cases and four conservative chroma-profile candidates.
         """
+}
+
+record raw-autotune.evidence.scene-policy-report/2 : evidence {
+    title "Scene evidence usefulness report"
+    state verified
+    result pass
+    method command
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    command "python3 tools/scene_policy_report.py .agent/scratch/scene-corpus-primary-20260813.json --output .agent/scratch/scene-corpus-primary-report.json"
+    summary """
+        Observed a deterministic report covering region distributions, correlations, group splits, per-image RAW/encoder hints, guardrails, and failure modes: sky 42/74, vegetation 65/74, building/interior 64/74, face 0/74, person 1/74 below gate; four high-confidence clipped-sky cases and four conservative chroma-profile candidates.
+        """
+    supersedes [ @raw-autotune.evidence.scene-policy-report/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.scene-policy-report-tests/1 : evidence {
@@ -889,7 +1109,7 @@ record raw-autotune.evidence.scene-policy-report-tests/1 : evidence {
 
 record raw-autotune.evidence.scene-rtx4060-pixel-identity-20260813/1 : evidence {
     title "The feature-off baseline and RTX 4060 semantic render had identical SHA-256 7e9c2da55ce4992fa87ee85b53635619058bb7b3b1d92323d9d5cebda0cf9e8f."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
@@ -900,9 +1120,23 @@ record raw-autotune.evidence.scene-rtx4060-pixel-identity-20260813/1 : evidence 
         """
 }
 
+record raw-autotune.evidence.scene-rtx4060-pixel-identity-20260813/2 : evidence {
+    title "The feature-off baseline and RTX 4060 semantic render had identical SHA-256 7e9c2da55ce4992fa87ee85b53635619058bb7b3b1d92323d9d5cebda0cf9e8f."
+    state verified
+    result pass
+    method command
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    command "sha256sum .agent/scratch/scene-infra-gate-20260813/off/_DSC1289_auto.png .agent/scratch/scene-gpu-4060-20260813/_DSC1289_auto.png"
+    summary """
+        The feature-off baseline and RTX 4060 semantic render had identical SHA-256 7e9c2da55ce4992fa87ee85b53635619058bb7b3b1d92323d9d5cebda0cf9e8f.
+        """
+    supersedes [ @raw-autotune.evidence.scene-rtx4060-pixel-identity-20260813/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.scene-rtx4060-vulkan-20260813/1 : evidence {
     title "wgpu enumerated three Linux adapters, selected NVIDIA GeForce RTX 4060 Laptop GPU (Vulkan, DiscreteGpu), and both scene model provenance entries recorded that backend with no CPU fallback."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
@@ -913,9 +1147,23 @@ record raw-autotune.evidence.scene-rtx4060-vulkan-20260813/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.scene-rtx4060-vulkan-20260813/2 : evidence {
+    title "wgpu enumerated three Linux adapters, selected NVIDIA GeForce RTX 4060 Laptop GPU (Vulkan, DiscreteGpu), and both scene model provenance entries recorded that backend with no CPU fallback."
+    state verified
+    result pass
+    method command
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 cargo run --release -- raw/raw_3rd_batch/_DSC1289.ARW --output .agent/scratch/scene-gpu-4060-20260813 --format png --sidecar --no-summary --overwrite --jobs 1 --semantic --dump-stages .agent/scratch/scene-gpu-4060-20260813/stages"
+    summary """
+        wgpu enumerated three Linux adapters, selected NVIDIA GeForce RTX 4060 Laptop GPU (Vulkan, DiscreteGpu), and both scene model provenance entries recorded that backend with no CPU fallback.
+        """
+    supersedes [ @raw-autotune.evidence.scene-rtx4060-vulkan-20260813/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.scene-visual-audit/1 : evidence {
     title "Scene mask visual audit"
-    state verified
+    state superseded
     result pass
     method observation
     observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
@@ -925,9 +1173,22 @@ record raw-autotune.evidence.scene-visual-audit/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.scene-visual-audit/2 : evidence {
+    title "Scene mask visual audit"
+    state verified
+    result pass
+    method observation
+    observed_at git:c9b286c01f9717ecd5e174ea70a01ba441af78fd
+    summary """
+        Observed that the four clipped-sky candidates align their sky masks with real sky in the proxy; vegetation/building masks are broadly spatially plausible. The corpus's sole person response is a low-confidence false positive on a faucet still life, so face/person exposure and encoder ROI remain unusable.
+        """
+    supersedes [ @raw-autotune.evidence.scene-visual-audit/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.semantic-inference-is-observational-20260813/1 : evidence {
     title "Enabling semantic inference added only the declared schema-20 scene evidence and semantic limitation: output PNG bytes were identical, and all other sidecar fields were identical after removing path/schema/scene/limitations."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
@@ -938,9 +1199,23 @@ record raw-autotune.evidence.semantic-inference-is-observational-20260813/1 : ev
         """
 }
 
+record raw-autotune.evidence.semantic-inference-is-observational-20260813/2 : evidence {
+    title "Enabling semantic inference added only the declared schema-20 scene evidence and semantic limitation: output PNG bytes were identical, and all other sidecar fields were identical after removing path/schema/scene/limitations."
+    state verified
+    result pass
+    method command
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    command "sha256sum off/_DSC1289_auto.png on/_DSC1289_auto.png && diff -u <(jq -S 'del(.scene,.schema_version,.limitations,.output)' off/_DSC1289_auto.json) <(jq -S 'del(.scene,.schema_version,.limitations,.output)' on/_DSC1289_auto.json)"
+    summary """
+        Enabling semantic inference added only the declared schema-20 scene evidence and semantic limitation: output PNG bytes were identical, and all other sidecar fields were identical after removing path/schema/scene/limitations.
+        """
+    supersedes [ @raw-autotune.evidence.semantic-inference-is-observational-20260813/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.semantic-pixel-identity-20260813/1 : evidence {
     title "Inference-off and --semantic renders of _DSC1289 were byte-identical PNGs with SHA-256 7e9c2da55ce4992fa87ee85b53635619058bb7b3b1d92323d9d5cebda0cf9e8f."
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
@@ -949,6 +1224,20 @@ record raw-autotune.evidence.semantic-pixel-identity-20260813/1 : evidence {
     summary """
         Inference-off and --semantic renders of _DSC1289 were byte-identical PNGs with SHA-256 7e9c2da55ce4992fa87ee85b53635619058bb7b3b1d92323d9d5cebda0cf9e8f.
         """
+}
+
+record raw-autotune.evidence.semantic-pixel-identity-20260813/2 : evidence {
+    title "Inference-off and --semantic renders of _DSC1289 were byte-identical PNGs with SHA-256 7e9c2da55ce4992fa87ee85b53635619058bb7b3b1d92323d9d5cebda0cf9e8f."
+    state verified
+    result pass
+    method command
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    command "sha256sum .agent/scratch/scene-infra-gate-20260813/off/_DSC1289_auto.png .agent/scratch/scene-infra-gate-20260813/on/_DSC1289_auto.png"
+    summary """
+        Inference-off and --semantic renders of _DSC1289 were byte-identical PNGs with SHA-256 7e9c2da55ce4992fa87ee85b53635619058bb7b3b1d92323d9d5cebda0cf9e8f.
+        """
+    supersedes [ @raw-autotune.evidence.semantic-pixel-identity-20260813/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.semantic-preview-split-20260813/1 : evidence {
@@ -965,7 +1254,7 @@ record raw-autotune.evidence.semantic-preview-split-20260813/1 : evidence {
 
 record raw-autotune.evidence.semantic-sidecar-and-masks-20260813/1 : evidence {
     title "The semantic sidecar recorded the 512x512 proxy geometry, eligible embedded preview, verified SHA-256 provenance for YuNet and LR-ASPP, raw scores and region statistics, zero inference errors, and zero policy adjustments; the overlay plausibly separated sky and vegetation."
-    state verified
+    state superseded
     result pass
     method observation
     observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
@@ -975,9 +1264,36 @@ record raw-autotune.evidence.semantic-sidecar-and-masks-20260813/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.semantic-sidecar-and-masks-20260813/2 : evidence {
+    title "The semantic sidecar recorded the 512x512 proxy geometry, eligible embedded preview, verified SHA-256 provenance for YuNet and LR-ASPP, raw scores and region statistics, zero inference errors, and zero policy adjustments; the overlay plausibly separated sky and vegetation."
+    state verified
+    result pass
+    method observation
+    observed_at git:0ce87d881d77dda9f40366cdb9958ca2050c4856
+    summary """
+        The semantic sidecar recorded the 512x512 proxy geometry, eligible embedded preview, verified SHA-256 provenance for YuNet and LR-ASPP, raw scores and region statistics, zero inference errors, and zero policy adjustments; the overlay plausibly separated sky and vegetation.
+        """
+    supersedes [ @raw-autotune.evidence.semantic-sidecar-and-masks-20260813/1 ]
+    author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.semantic-sidecar-shape-survives-the-face-gate-20260826/1 : evidence {
+    title "Gating the face detector removes a model load, not a sidecar field"
+    state verified
+    result pass
+    method command
+    observed_at git:2ce6bf6210815faf878df448047f7621cb9903cd
+    command "./target/release/raw-autotune raw/raw_old/files_2026-07-27_16-48-01/expertraw.dng --dry-run --semantic --summary S.json"
+    summary """
+        A default --semantic run with the face detector gated off still produces the full observational sidecar: models lists cityscapes-segmenter alone, inference_errors is absent, and all nine RegionKind entries — face, person, sky, vegetation, water, snow_or_sand, building_or_interior, text_or_document, salient_foreground — are still present in regions. So gating the detector removed a model load, not a field.
+
+        cargo test --release passes in full (362) with the gate in place, and clippy and fmt are clean.
+        """
+}
+
 record raw-autotune.evidence.semantic-sky-camera-grade/1 : evidence {
     title "Camera-paired sky policy grade"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
@@ -988,9 +1304,23 @@ record raw-autotune.evidence.semantic-sky-camera-grade/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.semantic-sky-camera-grade/2 : evidence {
+    title "Camera-paired sky policy grade"
+    state verified
+    result pass
+    method command
+    observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
+    command "python3 tools/grade_sky.py .agent/scratch/sky-ablation/off .agent/scratch/sky-ablation/on --reference raw/jpeg --json .agent/scratch/sky-ablation/camera-grade.json --per-frame"
+    summary """
+        Median sky error versus paired camera JPEG moved from -0.42 EV off to -0.43 EV on while ground stayed -0.05 EV; sky green deficit moved 22.9% to 23.0%. The mask is useful, but this compression direction does not merit default promotion.
+        """
+    supersedes [ @raw-autotune.evidence.semantic-sky-camera-grade/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.semantic-sky-chroma-ablation/1 : evidence {
     title "Mask-gated sky chroma RTX 4060 ablation"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:58f63399509d60246db3414e6e486856fc179164
@@ -1001,9 +1331,23 @@ record raw-autotune.evidence.semantic-sky-chroma-ablation/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.semantic-sky-chroma-ablation/2 : evidence {
+    title "Mask-gated sky chroma RTX 4060 ablation"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 target/release/raw-autotune raw/raw_3rd_batch/_DSC1272.ARW raw/raw_3rd_batch/_DSC1283.ARW raw/raw_3rd_batch/_DSC1288.ARW raw/raw_3rd_batch/_DSC1289.ARW --semantic --semantic-sky-chroma 1 --sharpen 0 --format png --dump-stages .agent/scratch/sky-chroma/on-dumps --summary .agent/scratch/sky-chroma/on-summary.json"
+    summary """
+        RTX 4060 Vulkan processed 4/4. The mask gated positive-Oklab-a correction to 0%-7.27% of each frame, preserved global exposure, luminance and blue/yellow ratio by construction, and visual inspection found changes confined to bright/reconstructed sky topology.
+        """
+    supersedes [ @raw-autotune.evidence.semantic-sky-chroma-ablation/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.semantic-sky-chroma-camera-grade/1 : evidence {
     title "Camera-paired sky chroma grade"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:58f63399509d60246db3414e6e486856fc179164
@@ -1014,9 +1358,23 @@ record raw-autotune.evidence.semantic-sky-chroma-camera-grade/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.semantic-sky-chroma-camera-grade/2 : evidence {
+    title "Camera-paired sky chroma grade"
+    state verified
+    result pass
+    method command
+    observed_at git:58f63399509d60246db3414e6e486856fc179164
+    command "python3 tools/grade_sky.py .agent/scratch/sky-ablation/off .agent/scratch/sky-chroma/on --reference raw/jpeg --json .agent/scratch/sky-chroma/camera-grade.json --per-frame"
+    summary """
+        Median sky and ground EV stayed -0.42/-0.05 and sky green deficit stayed 22.9%; purple fraction improved modestly 0.48% to 0.46%, including 0.36% to 0.31% on DSC1288. The result supports opt-in diagnostics only, not default sky white balance.
+        """
+    supersedes [ @raw-autotune.evidence.semantic-sky-chroma-camera-grade/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.semantic-sky-feature-off/1 : evidence {
     title "Semantic feature-off pixel identity"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
@@ -1027,9 +1385,23 @@ record raw-autotune.evidence.semantic-sky-feature-off/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.semantic-sky-feature-off/2 : evidence {
+    title "Semantic feature-off pixel identity"
+    state verified
+    result pass
+    method command
+    observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
+    command "target/release/raw-autotune raw/raw_3rd_batch/_DSC1272.ARW --output .agent/scratch/sky-ablation/no-semantic --format png --overwrite --sharpen 0 --no-summary --jobs 1 && sha256sum .agent/scratch/sky-ablation/no-semantic/_DSC1272_auto.png .agent/scratch/sky-ablation/off/_DSC1272_auto.png && cmp -s .agent/scratch/sky-ablation/no-semantic/_DSC1272_auto.png .agent/scratch/sky-ablation/off/_DSC1272_auto.png"
+    summary """
+        Observation-only semantic inference and no semantic inference produced byte-identical 16-bit PNG output, SHA-256 11dc0d8f92f1f9e490aee01758b56f1bf65fcf69492412a5e89b05b4f7609035.
+        """
+    supersedes [ @raw-autotune.evidence.semantic-sky-feature-off/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.semantic-sky-four-frame-ablation/1 : evidence {
     title "Four-frame RTX 4060 sky-mask ablation"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
@@ -1038,6 +1410,20 @@ record raw-autotune.evidence.semantic-sky-four-frame-ablation/1 : evidence {
     summary """
         RTX 4060 Vulkan processed 4/4 without fallback. Full-resolution masks affected 6.205%-16.926% of pixels and preserved identical exposure decisions; visual inspection found clean sky localization around foliage and wires.
         """
+}
+
+record raw-autotune.evidence.semantic-sky-four-frame-ablation/2 : evidence {
+    title "Four-frame RTX 4060 sky-mask ablation"
+    state verified
+    result pass
+    method command
+    observed_at git:339a2161f88921038a7e1fb01cdacd3113d86372
+    command "WGPU_ADAPTER_NAME=4060 WGPU_REQUIRE_REAL_GPU=1 target/release/raw-autotune raw/raw_3rd_batch/_DSC1272.ARW raw/raw_3rd_batch/_DSC1283.ARW raw/raw_3rd_batch/_DSC1288.ARW raw/raw_3rd_batch/_DSC1289.ARW --semantic --semantic-sky-highlights 1 --sharpen 0 --format png --dump-stages .agent/scratch/sky-ablation/on-dumps --summary .agent/scratch/sky-ablation/on-summary.json"
+    summary """
+        RTX 4060 Vulkan processed 4/4 without fallback. Full-resolution masks affected 6.205%-16.926% of pixels and preserved identical exposure decisions; visual inspection found clean sky localization around foliage and wires.
+        """
+    supersedes [ @raw-autotune.evidence.semantic-sky-four-frame-ablation/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.semantic-sky-mask-tests/1 : evidence {
@@ -1078,7 +1464,7 @@ record raw-autotune.evidence.sky-clippy-20260816-r2/1 : evidence {
 
 record raw-autotune.evidence.sky-corpus-dry-run-20260816/1 : evidence {
     title "Current corpus dry-run"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1089,9 +1475,23 @@ record raw-autotune.evidence.sky-corpus-dry-run-20260816/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.sky-corpus-dry-run-20260816/2 : evidence {
+    title "Current corpus dry-run"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "target/release/raw-autotune raw/raw_3rd_batch --dry-run --jobs 8 --summary .agent/scratch/sky-slice-20260816/corpus-default.json"
+    summary """
+        The 58-frame third-batch corpus completed 58/58 with 0 skipped and 0 failed under the default profile; the dry-run reported 16 independent and 42 preview-guided frames, reconstruction on 51 frames, and full DNG colour on 16 files.
+        """
+    supersedes [ @raw-autotune.evidence.sky-corpus-dry-run-20260816/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.sky-corpus-dry-run-20260816-r2/1 : evidence {
     title "Final-instrumentation corpus dry-run"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1102,9 +1502,23 @@ record raw-autotune.evidence.sky-corpus-dry-run-20260816-r2/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.sky-corpus-dry-run-20260816-r2/2 : evidence {
+    title "Final-instrumentation corpus dry-run"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "target/release/raw-autotune raw/raw_3rd_batch --dry-run --jobs 8 --summary .agent/scratch/sky-slice-20260816/corpus-default.json"
+    summary """
+        The current binary completed all 58 third-batch frames with 0 skipped and 0 failed; guidance was 16 independent and 42 preview-guided, reconstruction ran on 51 frames, and full DNG colour ran on 16 files.
+        """
+    supersedes [ @raw-autotune.evidence.sky-corpus-dry-run-20260816-r2/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.sky-final-output-20260816/1 : evidence {
     title "True-default final diagnostic identity"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1113,6 +1527,20 @@ record raw-autotune.evidence.sky-final-output-20260816/1 : evidence {
     summary """
         With the CLI's true default sharpening enabled, the post-sharpen final diagnostic and normal output have ImageMagick absolute error 0 and exit 0: every encoded RGB16 pixel matches. PNG file hashes may differ only in container metadata; the compared image pixels are identical.
         """
+}
+
+record raw-autotune.evidence.sky-final-output-20260816/2 : evidence {
+    title "True-default final diagnostic identity"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "compare -metric AE .agent/scratch/sky-slice-20260816/default-normal/stages/_DSC1289-final.png .agent/scratch/sky-slice-20260816/default-normal/_DSC1289_auto.png null: 2>&1; printf 'compare_exit=%s\\n' \"$?\""
+    summary """
+        With the CLI's true default sharpening enabled, the post-sharpen final diagnostic and normal output have ImageMagick absolute error 0 and exit 0: every encoded RGB16 pixel matches. PNG file hashes may differ only in container metadata; the compared image pixels are identical.
+        """
+    supersedes [ @raw-autotune.evidence.sky-final-output-20260816/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.sky-format-20260816/1 : evidence {
@@ -1141,7 +1569,7 @@ record raw-autotune.evidence.sky-format-20260816-r2/1 : evidence {
 
 record raw-autotune.evidence.sky-local-tone-hdr-20260816/1 : evidence {
     title "Local-tone and HDR _DSC1289 comparison"
-    state verified
+    state superseded
     result inconclusive
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1152,9 +1580,23 @@ record raw-autotune.evidence.sky-local-tone-hdr-20260816/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.sky-local-tone-hdr-20260816/2 : evidence {
+    title "Local-tone and HDR _DSC1289 comparison"
+    state verified
+    result inconclusive
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "python3 tools/grade_sky.py .agent/scratch/sky-slice-20260816/default .agent/scratch/sky-slice-20260816/reconstruction-off .agent/scratch/sky-slice-20260816/local-tone-035 .agent/scratch/sky-slice-20260816/hdr-050 --reference raw/jpeg --per-frame --json .agent/scratch/sky-slice-20260816/camera-grade.json"
+    summary """
+        The required _DSC1289 arms completed: default sky EV -0.5151, green deficit 27.277%; reconstruction disabled sky EV -0.5836, green deficit 33.459%; local-tone 0.35 sky EV -0.5658, green deficit 28.414%; HDR 0.5 sky EV -0.5666, green deficit 28.573%. Local tone and HDR move luminance/ground exposure only modestly and do not remove the colour deficit, so no promotion or default tone change is evidence-backed; the colour-continuity gate remains open.
+        """
+    supersedes [ @raw-autotune.evidence.sky-local-tone-hdr-20260816/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.sky-local-tone-hdr-20260816-r2/1 : evidence {
     title "Final-instrumentation local-tone and HDR comparison"
-    state verified
+    state superseded
     result inconclusive
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1165,9 +1607,23 @@ record raw-autotune.evidence.sky-local-tone-hdr-20260816-r2/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.sky-local-tone-hdr-20260816-r2/2 : evidence {
+    title "Final-instrumentation local-tone and HDR comparison"
+    state verified
+    result inconclusive
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "python3 tools/grade_sky.py .agent/scratch/sky-slice-20260816/default .agent/scratch/sky-slice-20260816/reconstruction-off .agent/scratch/sky-slice-20260816/local-tone-035 .agent/scratch/sky-slice-20260816/hdr-050 --reference raw/jpeg --per-frame --json .agent/scratch/sky-slice-20260816/camera-grade.json"
+    summary """
+        The four required _DSC1289 arms remain: default sky EV -0.5151 and green deficit 27.277%; reconstruction disabled -0.5836 and 33.459%; local-tone 0.35 -0.5658 and 28.414%; HDR 0.5 -0.5666 and 28.573%. Local tone and HDR do not remove the colour deficit, so no default tone promotion is supported and the colour-continuity gate remains open.
+        """
+    supersedes [ @raw-autotune.evidence.sky-local-tone-hdr-20260816-r2/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.sky-output-determinism-20260816/1 : evidence {
     title "Renderer output determinism"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1178,9 +1634,23 @@ record raw-autotune.evidence.sky-output-determinism-20260816/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.sky-output-determinism-20260816/2 : evidence {
+    title "Renderer output determinism"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "cmp .agent/scratch/sky-slice-20260816/default-jobs1/_DSC1289.png .agent/scratch/sky-slice-20260816/default-jobs8/_DSC1289.png"
+    summary """
+        Default _DSC1289 output with jobs 1 and jobs 8 is byte-identical; both SHA-256 values are cd616b575c7f30141350a685ed725291f8d4886548f7173f11c4a67f13ecdda7.
+        """
+    supersedes [ @raw-autotune.evidence.sky-output-determinism-20260816/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.sky-output-determinism-20260816-r2/1 : evidence {
     title "Final-instrumentation output determinism"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1189,6 +1659,20 @@ record raw-autotune.evidence.sky-output-determinism-20260816-r2/1 : evidence {
     summary """
         Current default _DSC1289 output is byte-identical for jobs 1 and jobs 8; both SHA-256 values are cd616b575c7f30141350a685ed725291f8d4886548f7173f11c4a67f13ecdda7.
         """
+}
+
+record raw-autotune.evidence.sky-output-determinism-20260816-r2/2 : evidence {
+    title "Final-instrumentation output determinism"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "cmp .agent/scratch/sky-slice-20260816/default-jobs1/_DSC1289_auto.png .agent/scratch/sky-slice-20260816/default-jobs8/_DSC1289_auto.png"
+    summary """
+        Current default _DSC1289 output is byte-identical for jobs 1 and jobs 8; both SHA-256 values are cd616b575c7f30141350a685ed725291f8d4886548f7173f11c4a67f13ecdda7.
+        """
+    supersedes [ @raw-autotune.evidence.sky-output-determinism-20260816-r2/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.sky-release-tests-20260816/1 : evidence {
@@ -1230,7 +1714,7 @@ record raw-autotune.evidence.sky-stage-attribution-20260809/1 : evidence {
 
 record raw-autotune.evidence.sky-stage-attribution-20260816/1 : evidence {
     title "Current-head lossless sky stage attribution"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1241,9 +1725,23 @@ record raw-autotune.evidence.sky-stage-attribution-20260816/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.sky-stage-attribution-20260816/2 : evidence {
+    title "Current-head lossless sky stage attribution"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "python3 tools/evaluate_sky_stages.py .agent/scratch/sky-slice-20260816 --json .agent/scratch/sky-slice-20260816/analysis-lossless.json"
+    summary """
+        Current archive-auto-v5 _DSC1289 lossless checkpoints report final diagnostic == normal render true with max 16-bit code delta 0. In the ROI, adjacent OKLab chroma p90 across raw clip-state boundaries is 0.00390 at highlight post, 0.00451 after the tone curve, 0.00441 after chroma, and 0.00344 after both highlight white mix and gamut compression; within-state p90 is 0.00227, 0.00229, 0.00237, and 0.00185 respectively. The first material amplification is the tone curve; gamut compression is inactive for this failure. Clip states are 23,031,920/596,418/371,662/0 for 0/1/2/3.
+        """
+    supersedes [ @raw-autotune.evidence.sky-stage-attribution-20260816/1 ]
+    author "GitHub Uploader"
+}
+
 record raw-autotune.evidence.sky-stage-attribution-20260816-r2/1 : evidence {
     title "Final-checkpoint sky stage attribution"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1252,6 +1750,20 @@ record raw-autotune.evidence.sky-stage-attribution-20260816-r2/1 : evidence {
     summary """
         The current-head lossless evaluator reports final diagnostic == normal render true with maximum encoded-pixel delta 0. Boundary/same-state OKLab chroma p90 is 0.00390/0.00227 at highlight post, 0.00451/0.00229 after the tone curve, 0.00441/0.00237 after chroma, and 0.00344/0.00185 after white mix and gamut compression; the final checkpoint has the same 0.00344/0.00185. The tone curve is the first material amplifier and gamut compression is unchanged.
         """
+}
+
+record raw-autotune.evidence.sky-stage-attribution-20260816-r2/2 : evidence {
+    title "Final-checkpoint sky stage attribution"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "python3 tools/evaluate_sky_stages.py .agent/scratch/sky-slice-20260816 --json .agent/scratch/sky-slice-20260816/analysis-lossless.json"
+    summary """
+        The current-head lossless evaluator reports final diagnostic == normal render true with maximum encoded-pixel delta 0. Boundary/same-state OKLab chroma p90 is 0.00390/0.00227 at highlight post, 0.00451/0.00229 after the tone curve, 0.00441/0.00237 after chroma, and 0.00344/0.00185 after white mix and gamut compression; the final checkpoint has the same 0.00344/0.00185. The tone curve is the first material amplifier and gamut compression is unchanged.
+        """
+    supersedes [ @raw-autotune.evidence.sky-stage-attribution-20260816-r2/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.slice-1-diagnostic-dumps-verify/1 : evidence {
@@ -1306,7 +1818,7 @@ record raw-autotune.evidence.slice-5-critical-boundary-gate-20260816/1 : evidenc
 
 record raw-autotune.evidence.slice-5-dsc1289-archive-boundaries-20260816/1 : evidence {
     title "Archived DSC1289 clip-transition gate"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1315,6 +1827,20 @@ record raw-autotune.evidence.slice-5-dsc1289-archive-boundaries-20260816/1 : evi
     summary """
         Archived _DSC1289 measured 6,954 critical 1↔2 boundary pairs; boundary/same-state OKLab chroma p90 ratio was 0.00000 at highlight-post and 1.18296 after-tone-curve, both <=1.25. 2↔3 was explicitly unavailable because the frame had zero three-channel-clipped pixels.
         """
+}
+
+record raw-autotune.evidence.slice-5-dsc1289-archive-boundaries-20260816/2 : evidence {
+    title "Archived DSC1289 clip-transition gate"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "target/debug/raw-autotune raw/raw_3rd_batch/_DSC1289.ARW --output .agent/scratch/slice5-archive.WOJJpG/default --format png --dump-stages .agent/scratch/slice5-archive.WOJJpG/default/stages --highlight-method harmonic --highlight-reconstruction 1 --no-metadata --overwrite --no-summary && python3 tools/evaluate_sky_stages.py .agent/scratch/slice5-archive.WOJJpG --stages-only --json .agent/scratch/slice5-archive.WOJJpG/archive-report.json"
+    summary """
+        Archived _DSC1289 measured 6,954 critical 1↔2 boundary pairs; boundary/same-state OKLab chroma p90 ratio was 0.00000 at highlight-post and 1.18296 after-tone-curve, both <=1.25. 2↔3 was explicitly unavailable because the frame had zero three-channel-clipped pixels.
+        """
+    supersedes [ @raw-autotune.evidence.slice-5-dsc1289-archive-boundaries-20260816/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.slice-5-format-and-python-checks-20260816/1 : evidence {
@@ -1344,7 +1870,7 @@ record raw-autotune.evidence.slice-5-joint-estimator-production-ownership-202608
 
 record raw-autotune.evidence.slice-5-release-corpus-memory-determinism-20260816/1 : evidence {
     title "Slice 5 release, corpus, memory, and jobs determinism gates"
-    state verified
+    state superseded
     result pass
     method command
     observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
@@ -1353,6 +1879,20 @@ record raw-autotune.evidence.slice-5-release-corpus-memory-determinism-20260816/
     summary """
         Release suite passed 341 library tests plus all integration tests; strict release Clippy passed. Eight rendered Sony frames rebuilt 9,406,312 pixels and were byte-identical between jobs 1 and requested jobs 8. The jobs-8 request was memory-capped to four concurrent images, peaked at 4,879,740 KiB RSS with zero swaps; the 58-file corpus survey completed with zero failures, rebuilt 16,751,522 pixels across 51 frames, and peaked at 5,226,636 KiB with zero swaps.
         """
+}
+
+record raw-autotune.evidence.slice-5-release-corpus-memory-determinism-20260816/2 : evidence {
+    title "Slice 5 release, corpus, memory, and jobs determinism gates"
+    state verified
+    result pass
+    method command
+    observed_at git:e7d714c0d426c2a5e28e755a42ec42bb87f20d7c
+    command "cargo test --release; cargo clippy --lib --bins --release -- -D warnings; /usr/bin/time -v target/release/raw-autotune -j 1 raw/raw_3rd_batch/_DSC1283.ARW raw/raw_3rd_batch/_DSC1284.ARW raw/raw_3rd_batch/_DSC1285.ARW raw/raw_3rd_batch/_DSC1286.ARW raw/raw_3rd_batch/_DSC1287.ARW raw/raw_3rd_batch/_DSC1288.ARW raw/raw_3rd_batch/_DSC1289.ARW raw/raw_3rd_batch/_DSC1290.ARW --output .agent/scratch/slice5-jobs.qzmeWW/jobs1 --format jpeg --no-metadata --no-summary --overwrite; /usr/bin/time -v target/release/raw-autotune -j 8 raw/raw_3rd_batch/_DSC1283.ARW raw/raw_3rd_batch/_DSC1284.ARW raw/raw_3rd_batch/_DSC1285.ARW raw/raw_3rd_batch/_DSC1286.ARW raw/raw_3rd_batch/_DSC1287.ARW raw/raw_3rd_batch/_DSC1288.ARW raw/raw_3rd_batch/_DSC1289.ARW raw/raw_3rd_batch/_DSC1290.ARW --output .agent/scratch/slice5-jobs.qzmeWW/jobs8 --format jpeg --no-metadata --no-summary --overwrite; diff -rq .agent/scratch/slice5-jobs.qzmeWW/jobs1 .agent/scratch/slice5-jobs.qzmeWW/jobs8; /usr/bin/time -v target/release/raw-autotune raw/raw_3rd_batch --dry-run --summary .agent/scratch/slice5-jobs.qzmeWW/corpus-summary.json -j 8"
+    summary """
+        Release suite passed 341 library tests plus all integration tests; strict release Clippy passed. Eight rendered Sony frames rebuilt 9,406,312 pixels and were byte-identical between jobs 1 and requested jobs 8. The jobs-8 request was memory-capped to four concurrent images, peaked at 4,879,740 KiB RSS with zero swaps; the 58-file corpus survey completed with zero failures, rebuilt 16,751,522 pixels across 51 frames, and peaked at 5,226,636 KiB with zero swaps.
+        """
+    supersedes [ @raw-autotune.evidence.slice-5-release-corpus-memory-determinism-20260816/1 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.evidence.slice-6-uncertainty-gated-chroma-verify/1 : evidence {
@@ -1503,6 +2043,53 @@ record raw-autotune.evidence.spatial-aq-live-4060/1 : evidence {
     artifact "examples/semantic-aq.rs"
     summary """
         Linux Vulkan selected the NVIDIA RTX 4060 and emitted a 188x125 HEVC-ready grid with distinct sky, vegetation, and structure layers; sky had 1,829 cells at confidence >=0.5.
+        """
+}
+
+record raw-autotune.evidence.spatial-floor-cost-on-29-arw-20260826/1 : evidence {
+    title "The spatial floor saves 8.9% of CPU on a 29-frame Sony sample, and the saving is bounded"
+    state verified
+    result pass
+    method command
+    observed_at git:2ce6bf6210815faf878df448047f7621cb9903cd
+    command """
+        /usr/bin/time -v ./target/release/raw-autotune $(find raw/arw -iname '*.ARW' | sort | awk 'NR%9==1') --dry-run --jobs 4 --summary S.json   # once on defaults, once with --spatial-highlight-floor 0
+        """
+    artifact "docs/evidence/archive-speed-20260826/spatial-floor-29-arw.json"
+    summary """
+        29 Sony A7C ARWs, every ninth file of raw/arw, dry run at --jobs 4.
+
+        Floor at 1e-5: 1:07.5 wall clock, 136,790 summed per-file elapsed_ms, peak RSS 2,701,532 KB, 6 of 29 frames declined.
+        Floor at 0:    1:26.9 wall clock, 150,085 summed per-file elapsed_ms, peak RSS 2,749,016 KB, 0 declined.
+
+        8.9 percent of summed CPU time, 0.4 to 0.6 s per declined frame, 22 percent of wall clock at this worker count.
+
+        The saving is bounded and that is the point of recording it. Cost is dominated by the heavily clipped frames, which correctly still solve: _DSC1135 at 2,315,411 clipped sites (9.5 percent) takes 45.8 s, against about 0.5 s for a frame with none. The floor makes a clean batch cheap; it does not make a clipped batch cheap, and nothing here should be read as saying the harmonic estimator's cost has been addressed.
+
+        The clipped-site distribution over the sample spans 0 to 2,315,411 sites with a wide empty band between 0 and 177 (7.3e-6), so on this sample the floor's exact position inside that band changes nothing.
+
+        Also observed, and left alone: 9 of the 15 zero-site frames never reach the floor at all because reconstruct_cfa's pre-existing has_reconstruction_authority return fires first, and that return reports the requested method rather than Current. Those frames do no spatial work either, so the cost is already avoided; only the reported method is inconsistent with the declined ones. Changing it would move their output, so it was not changed.
+        """
+}
+
+record raw-autotune.evidence.spatial-floor-declines-to-the-current-path-20260826/1 : evidence {
+    title "A declined frame is byte-identical to --highlight-method current; a frame above the floor is untouched"
+    state verified
+    result pass
+    method command
+    observed_at git:2ce6bf6210815faf878df448047f7621cb9903cd
+    command """
+        ./target/release/raw-autotune raw/arw/_DSC0883.ARW raw/arw/_DSC0928.ARW raw/arw/_DSC0937.ARW raw/arw/_DSC1000.ARW raw/arw/_DSC1045.ARW raw/arw/_DSC1099.ARW raw/arw/_DSC1126.ARW --output OUT --format png --jobs 3   # once on defaults, once with --spatial-highlight-floor 0, once with --highlight-method current; md5sum each
+        """
+    artifact "docs/evidence/archive-speed-20260826/"
+    summary """
+        The floor's designed property, checked on real frames rather than argued.
+
+        Six frames with zero clipped CFA sites (_DSC0883, _DSC0928, _DSC0937, _DSC1000, _DSC1045, _DSC1099) render byte-identically on the floored default and on --highlight-method current, and differently from --spatial-highlight-floor 0. So a declined frame takes the whole Current path, which is the property color::develop's read of the reported method exists to guarantee.
+
+        _DSC1126 carries 1552 clipped CFA sites (6.377e-5, above the 1e-5 floor) and renders byte-identically to --spatial-highlight-floor 0 while differing from --highlight-method current. So the floor does not touch a frame that clears it.
+
+        Amplitude of the change on a declined frame, _DSC0883 16-bit PNG, floored against floor-0: 153 of 30,984,192 samples differ (0.0005%), mean absolute delta 598 and maximum 18529 of 65535. Small in extent, not negligible per affected sample.
         """
 }
 

@@ -1,0 +1,2184 @@
+{
+  "schema_version": 22,
+  "application_version": "0.1.19",
+  "automatic_profile_version": "archive-auto-v6",
+  "preset": "auto",
+  "controller_version": "v1",
+  "raw_color_path": "owned",
+  "working_space": "srgb",
+  "dry_run": false,
+  "total": 10,
+  "completed": 10,
+  "skipped": 0,
+  "failed": 0,
+  "tonal_class_counts": {
+    "HighDynamicRange": 1,
+    "HighKey": 1,
+    "Normal": 8
+  },
+  "exposure_ev": {
+    "count": 10,
+    "min": -0.4256513,
+    "p10": -0.08336365,
+    "median": 0.87161016,
+    "p90": 2.8500688,
+    "max": 2.9347277,
+    "mean": 0.9538215
+  },
+  "colourfulness": {
+    "count": 10,
+    "min": 22.186636,
+    "p10": 24.416458,
+    "median": 28.266624,
+    "p90": 50.563614,
+    "max": 52.881687,
+    "mean": 33.381836
+  },
+  "near_white_fraction": {
+    "count": 10,
+    "min": 0.00020408804,
+    "p10": 0.0010667313,
+    "median": 0.006045005,
+    "p90": 0.019318387,
+    "max": 0.09385026,
+    "mean": 0.015946481
+  },
+  "luminance_entropy": {
+    "count": 10,
+    "min": 5.322081,
+    "p10": 5.4429083,
+    "median": 6.550315,
+    "p90": 7.7169027,
+    "max": 7.847801,
+    "mean": 6.4649596
+  },
+  "average_gradient": {
+    "count": 10,
+    "min": 4.5000224,
+    "p10": 4.511515,
+    "median": 5.508571,
+    "p90": 6.4478035,
+    "max": 9.92878,
+    "mean": 5.7727485
+  },
+  "snr10_ev": {
+    "count": 10,
+    "min": -11.495126,
+    "p10": -5.8945985,
+    "median": -4.844385,
+    "p90": -4.327705,
+    "max": -0.88449323,
+    "mean": -5.223515
+  },
+  "low_light_score": {
+    "count": 10,
+    "min": 0.0,
+    "p10": 0.0,
+    "median": 0.0,
+    "p90": 0.0,
+    "max": 0.9663439,
+    "mean": 0.09663439
+  },
+  "reference_pairs": 0,
+  "reference_center_weighted_key_ev_delta": null,
+  "reference_colourfulness_delta": null,
+  "reference_mean_level_delta": null,
+  "reference_saturation_ratio": null,
+  "reference_highlight_saturation_ratio": null,
+  "reference_hue_median_degrees": null,
+  "reference_hue_p90_degrees": null,
+  "reference_hue_mean_degrees": null,
+  "reference_hue_pairs": 0,
+  "guidance_mode_counts": {
+    "independent": 2,
+    "preview_guided": 8
+  },
+  "independent": {
+    "files": 2,
+    "reference_pairs": 0,
+    "center_weighted_key_ev_delta": null,
+    "saturation_ratio": null,
+    "highlight_saturation_ratio": null,
+    "colourfulness_delta": null,
+    "mean_level_delta": null,
+    "hue_median_degrees": null,
+    "hue_p90_degrees": null,
+    "hue_mean_degrees": null,
+    "hue_pairs": 0
+  },
+  "preview_guided": {
+    "files": 8,
+    "reference_pairs": 0,
+    "center_weighted_key_ev_delta": null,
+    "saturation_ratio": null,
+    "highlight_saturation_ratio": null,
+    "colourfulness_delta": null,
+    "mean_level_delta": null,
+    "hue_median_degrees": null,
+    "hue_p90_degrees": null,
+    "hue_mean_degrees": null,
+    "hue_pairs": 0
+  },
+  "clip_altered_fraction": {
+    "count": 10,
+    "min": 0.003142315,
+    "p10": 0.017638007,
+    "median": 0.08314807,
+    "p90": 0.5352794,
+    "max": 0.63917905,
+    "mean": 0.17338452
+  },
+  "clip_mean_abs_delta": {
+    "count": 10,
+    "min": 8.070821e-7,
+    "p10": 0.00024460064,
+    "median": 0.0016993728,
+    "p90": 0.006650321,
+    "max": 0.019366434,
+    "mean": 0.004101783
+  },
+  "nondeterministic_illuminant_files": 0,
+  "pooled_groups": {},
+  "files": [
+    {
+      "input": "raw/raw_old/dng/20260219_221018.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/dng/20260219_221018_auto.jpg",
+      "camera": "samsung Galaxy S24+",
+      "status": "completed",
+      "elapsed_ms": 6321,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 221771,
+        "sample_stride": 15,
+        "p005_ev": -7.389516,
+        "p05_ev": -6.27867,
+        "p50_ev": -5.0664215,
+        "p95_ev": -3.067656,
+        "p995_ev": 0.29665735,
+        "center_median_ev": -4.5853643,
+        "measured_dynamic_range_ev": 7.6861734,
+        "key_score": -0.24494356,
+        "target_median_ev": -3.1434255,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.0044325003,
+        "near_white_fraction": 0.002371816,
+        "clipped_1_fraction": 0.0007575382,
+        "clipped_2_fraction": 0.00032916837,
+        "clipped_3_fraction": 0.0013256918,
+        "mean_chroma": 0.00965064,
+        "capture_ev100": 6.017922,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 1.6343617,
+        "black_input_ev": -6.155154,
+        "white_input_ev": 2.3310192,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1532488,
+        "shadow_power": 0.9819618,
+        "highlight_power": 1.0962912,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -8.778267
+      },
+      "measured": {
+        "colourfulness": 27.768461,
+        "clipped_fraction": 0.00006774231,
+        "near_white_fraction": 0.006045005,
+        "crushed_fraction": 0.0005259991,
+        "mean_level": 34.35739,
+        "mean_saturation": 0.5321442,
+        "mean_saturation_highlight": 0.25331092,
+        "highlight_pixels": 1969,
+        "luminance_entropy": 5.920881,
+        "average_gradient": 6.4478035,
+        "sampled_pixels": 250951
+      },
+      "noise": {
+        "shot_slope": 0.068308175,
+        "read_variance": 2.7037685,
+        "snr1_ev": -8.778267,
+        "snr10_ev": -5.188754,
+        "tiles_used": 779450,
+        "saturation": 4095.0
+      },
+      "noise_floor": {
+        "snr1_ev": -8.778267,
+        "snr10_ev": -5.188754,
+        "shot_slope": 0.068308175,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 50,
+        "exposure_time": 0.1,
+        "f_number": 1.8
+      },
+      "preview": {
+        "width": 8160,
+        "height": 6120,
+        "source": "jpeg_strip",
+        "center_weighted_key_display_ev": -6.57395,
+        "p05_display_ev": -8.381539,
+        "p50_display_ev": -6.8489537,
+        "p95_display_ev": -4.5345254,
+        "sampled_pixels": 221883
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.1010707,
+        "mean_correction": 0.004565926
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          2.8149338,
+          -0.35292578,
+          -0.3769341,
+          -0.4796447,
+          1.468279,
+          -0.40217236,
+          -0.15605453,
+          -0.95396894,
+          4.001557
+        ],
+        "camera_channels": 3,
+        "clip_cost": {
+          "negative_fraction": 0.080992185,
+          "negative_luminance_fraction": 0.00029541922,
+          "above_one_fraction": 0.002342088,
+          "altered_fraction": 0.08314807,
+          "mean_abs_delta": 0.00024460064,
+          "max_abs_delta": 0.88568676
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 1,
+          "repeat_height": 1,
+          "repeat_cpp": 3,
+          "repeat_colors": [],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0,
+          "max_normalized": 1.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 84100,
+          "reconstructed_pixels": 86827,
+          "near_white_pixels": 0,
+          "fully_clipped_pixels": 0,
+          "clipped_1_pixels": 84100,
+          "clipped_2_pixels": 0,
+          "clipped_3_pixels": 0,
+          "max_lift": 0.0,
+          "clipped_cfa_sites": 0,
+          "reconstructed_cfa_sites": 0,
+          "affected_output_pixels": 86827,
+          "connected_regions": 0,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.0,
+          "fully_clipped_cores": 0,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 4486.387,
+          "weight_illuminant1": 0.64954585,
+          "interpolation_weights": [
+            0.64954585,
+            0.35045418
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_old/dng/20260219_222633.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/dng/20260219_222633_auto.jpg",
+      "camera": "samsung Galaxy S24+",
+      "status": "completed",
+      "elapsed_ms": 1581,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 194837,
+        "sample_stride": 8,
+        "p005_ev": -8.809479,
+        "p05_ev": -7.0092006,
+        "p50_ev": -4.8824797,
+        "p95_ev": -3.1560802,
+        "p995_ev": 0.07432686,
+        "center_median_ev": -4.7319727,
+        "measured_dynamic_range_ev": 8.883805,
+        "key_score": 0.1038954,
+        "target_median_ev": -3.9205656,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.02375832,
+        "near_white_fraction": 0.002248033,
+        "clipped_1_fraction": 0.0008879217,
+        "clipped_2_fraction": 0.000559442,
+        "clipped_3_fraction": 0.0008519942,
+        "mean_chroma": 0.010708215,
+        "capture_ev100": 6.017922,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 0.87161016,
+        "black_input_ev": -7.9967265,
+        "white_input_ev": 1.5,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1350589,
+        "shadow_power": 1.2556347,
+        "highlight_power": 0.6943313,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -8.868337
+      },
+      "measured": {
+        "colourfulness": 24.416458,
+        "clipped_fraction": 0.00007457063,
+        "near_white_fraction": 0.0042779995,
+        "crushed_fraction": 0.00085952465,
+        "mean_level": 29.59217,
+        "mean_saturation": 0.5609817,
+        "mean_saturation_highlight": 0.18627207,
+        "highlight_pixels": 1240,
+        "luminance_entropy": 5.78489,
+        "average_gradient": 4.578378,
+        "sampled_pixels": 254792
+      },
+      "noise": {
+        "shot_slope": 0.022963872,
+        "read_variance": 2.4513888,
+        "snr1_ev": -8.868337,
+        "snr10_ev": -5.451284,
+        "tiles_used": 194785,
+        "saturation": 4095.0
+      },
+      "noise_floor": {
+        "snr1_ev": -8.868337,
+        "snr10_ev": -5.451284,
+        "shot_slope": 0.022963872,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 50,
+        "exposure_time": 0.1,
+        "f_number": 1.8
+      },
+      "preview": {
+        "width": 4080,
+        "height": 3060,
+        "source": "jpeg_strip",
+        "center_weighted_key_display_ev": -6.578993,
+        "p05_display_ev": -9.432235,
+        "p50_display_ev": -6.6793404,
+        "p95_display_ev": -4.6338167,
+        "sampled_pixels": 195097
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.123531096,
+        "mean_correction": 0.003162877
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          2.6816487,
+          -0.29989073,
+          -0.48192865,
+          -0.50383645,
+          1.4676031,
+          -0.41890538,
+          -0.20978633,
+          -1.0398872,
+          4.922354
+        ],
+        "camera_channels": 3,
+        "clip_cost": {
+          "negative_fraction": 0.13281454,
+          "negative_luminance_fraction": 0.0010521595,
+          "above_one_fraction": 0.00231906,
+          "altered_fraction": 0.13458133,
+          "mean_abs_delta": 0.00049531396,
+          "max_abs_delta": 1.1736975
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 1,
+          "repeat_height": 1,
+          "repeat_cpp": 3,
+          "repeat_colors": [],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0,
+          "max_normalized": 1.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 15831,
+          "reconstructed_pixels": 16768,
+          "near_white_pixels": 0,
+          "fully_clipped_pixels": 0,
+          "clipped_1_pixels": 15831,
+          "clipped_2_pixels": 0,
+          "clipped_3_pixels": 0,
+          "max_lift": 0.0,
+          "clipped_cfa_sites": 0,
+          "reconstructed_cfa_sites": 0,
+          "affected_output_pixels": 16768,
+          "connected_regions": 0,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.0,
+          "fully_clipped_cores": 0,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 4055.1548,
+          "weight_illuminant1": 0.52924395,
+          "interpolation_weights": [
+            0.52924395,
+            0.47075605
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_old/dng/20260223_192940.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/dng/20260223_192940_auto.jpg",
+      "camera": "samsung Galaxy S24+",
+      "status": "completed",
+      "elapsed_ms": 2234,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 178309,
+        "sample_stride": 7,
+        "p005_ev": -9.677843,
+        "p05_ev": -7.520899,
+        "p50_ev": -3.4905915,
+        "p95_ev": -1.1831377,
+        "p995_ev": 1.8451209,
+        "center_median_ev": -3.295705,
+        "measured_dynamic_range_ev": 11.5229645,
+        "key_score": 0.27183944,
+        "target_median_ev": -3.3607597,
+        "tonal_class": "high_dynamic_range",
+        "near_black_fraction": 0.052263208,
+        "near_white_fraction": 0.0034995428,
+        "clipped_1_fraction": 0.0013852357,
+        "clipped_2_fraction": 0.0021928225,
+        "clipped_3_fraction": 0.0000056082417,
+        "mean_chroma": 0.019749938,
+        "capture_ev100": 5.0179224,
+        "low_light_score": 0.9663439
+      },
+      "parameters": {
+        "exposure_ev": 0.012899876,
+        "black_input_ev": -7.507999,
+        "white_input_ev": 2.2580209,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1302116,
+        "shadow_power": 1.1738608,
+        "highlight_power": 1.0407461,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -5.4204354
+      },
+      "measured": {
+        "colourfulness": 22.186636,
+        "clipped_fraction": 0.0,
+        "near_white_fraction": 0.0010667313,
+        "crushed_fraction": 0.0,
+        "mean_level": 21.561869,
+        "mean_saturation": 0.6595359,
+        "mean_saturation_highlight": 0.17698497,
+        "highlight_pixels": 698,
+        "luminance_entropy": 5.322081,
+        "average_gradient": 5.1419134,
+        "sampled_pixels": 255922
+      },
+      "noise": {
+        "shot_slope": 3.3972287,
+        "read_variance": 237.75694,
+        "snr1_ev": -5.4204354,
+        "snr10_ev": -0.88449323,
+        "tiles_used": 155847,
+        "saturation": 4095.0
+      },
+      "noise_floor": {
+        "snr1_ev": -5.4204354,
+        "snr10_ev": -0.88449323,
+        "shot_slope": 3.3972287,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 1600,
+        "exposure_time": 0.011111111,
+        "f_number": 2.4
+      },
+      "preview": {
+        "width": 3648,
+        "height": 2736,
+        "source": "jpeg_strip",
+        "center_weighted_key_display_ev": -4.9696465,
+        "p05_display_ev": -8.702007,
+        "p50_display_ev": -5.155377,
+        "p95_display_ev": -1.721135,
+        "sampled_pixels": 203660
+      },
+      "hdr": {
+        "strength": 0.84561336,
+        "guided_radius_px": 43,
+        "guided_eps": 0.02,
+        "base_compression": 0.5,
+        "detail_retention": 1.0,
+        "shadow_limit_ev": 0.6,
+        "highlight_limit_ev": 0.9,
+        "base_span_ev": 29.336754,
+        "compressed_base_span_ev": 16.932978,
+        "correction_min_ev": -0.761052,
+        "correction_median_ev": 0.0,
+        "correction_max_ev": 0.012694809,
+        "correction_p90_abs_ev": 0.72147244,
+        "shadow_lift_fraction": 0.0,
+        "highlight_compression_fraction": 0.42910337,
+        "noise_limited_fraction": 0.49952048
+      },
+      "chroma_denoise": {
+        "strength": 0.9549321,
+        "radius": 6,
+        "guided": true,
+        "snr10_ev": -0.88449323,
+        "mean_chroma_before": 0.020802187,
+        "mean_chroma_after": 0.0067773247
+      },
+      "luma_denoise": {
+        "strength": 0.9363149,
+        "radius": 3,
+        "epsilon": 33.48204,
+        "snr10_ev": -0.88449323,
+        "mean_abs_correction_ev": 0.86082643
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "preserve",
+        "reasons": [
+          "raw_low_light_signal"
+        ]
+      },
+      "sharpen": {
+        "amount": 0.03380093,
+        "radius": 1,
+        "headroom_limited_fraction": 0.19758283,
+        "mean_correction": 0.00021579955
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          2.4020355,
+          -0.23880471,
+          -0.38036668,
+          -0.46062353,
+          1.4850385,
+          -0.44851592,
+          -0.13615718,
+          -1.0060673,
+          4.3967776
+        ],
+        "camera_channels": 3,
+        "clip_cost": {
+          "negative_fraction": 0.63531446,
+          "negative_luminance_fraction": 0.048188604,
+          "above_one_fraction": 0.004219247,
+          "altered_fraction": 0.63917905,
+          "mean_abs_delta": 0.0032994216,
+          "max_abs_delta": 1.5492523
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 1,
+          "repeat_height": 1,
+          "repeat_cpp": 3,
+          "repeat_colors": [],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0,
+          "max_normalized": 1.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 26123,
+          "reconstructed_pixels": 27707,
+          "near_white_pixels": 0,
+          "fully_clipped_pixels": 0,
+          "clipped_1_pixels": 26123,
+          "clipped_2_pixels": 0,
+          "clipped_3_pixels": 0,
+          "max_lift": 0.0,
+          "clipped_cfa_sites": 0,
+          "reconstructed_cfa_sites": 0,
+          "affected_output_pixels": 27707,
+          "connected_regions": 0,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.0,
+          "fully_clipped_cores": 0,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 3912.9355,
+          "weight_illuminant1": 0.4837542,
+          "interpolation_weights": [
+            0.4837542,
+            0.51624584
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_old/dng/20260409_175254.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/dng/20260409_175254_auto.jpg",
+      "camera": "samsung Galaxy S24+",
+      "status": "completed",
+      "elapsed_ms": 1698,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 195330,
+        "sample_stride": 8,
+        "p005_ev": -4.9007936,
+        "p05_ev": -3.8557608,
+        "p50_ev": -2.2057505,
+        "p95_ev": -0.39294875,
+        "p995_ev": 2.4739,
+        "center_median_ev": -2.002501,
+        "measured_dynamic_range_ev": 7.374694,
+        "key_score": -0.047011323,
+        "target_median_ev": -2.125971,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.000025597707,
+        "near_white_fraction": 0.014467823,
+        "clipped_1_fraction": 0.0059335483,
+        "clipped_2_fraction": 0.0024471406,
+        "clipped_3_fraction": 0.0064250245,
+        "mean_chroma": 0.03210786,
+        "capture_ev100": 8.187847,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": -0.042170286,
+        "black_input_ev": -5.3429637,
+        "white_input_ev": 2.83173,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1588554,
+        "shadow_power": 0.85653305,
+        "highlight_power": 1.3382529,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -8.452287
+      },
+      "measured": {
+        "colourfulness": 24.955736,
+        "clipped_fraction": 0.0002080128,
+        "near_white_fraction": 0.004219128,
+        "crushed_fraction": 0.0,
+        "mean_level": 51.6965,
+        "mean_saturation": 0.28608117,
+        "mean_saturation_highlight": 0.12857333,
+        "highlight_pixels": 4945,
+        "luminance_entropy": 6.550315,
+        "average_gradient": 4.976249,
+        "sampled_pixels": 254792
+      },
+      "noise": {
+        "shot_slope": 0.038467586,
+        "read_variance": 4.3476787,
+        "snr1_ev": -8.452287,
+        "snr10_ev": -5.0107746,
+        "tiles_used": 193988,
+        "saturation": 4095.0
+      },
+      "noise_floor": {
+        "snr1_ev": -8.452287,
+        "snr10_ev": -5.0107746,
+        "shot_slope": 0.038467586,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 50,
+        "exposure_time": 0.022222223,
+        "f_number": 1.8
+      },
+      "preview": {
+        "width": 4080,
+        "height": 3060,
+        "source": "jpeg_strip",
+        "center_weighted_key_display_ev": -3.0727258,
+        "p05_display_ev": -5.5984845,
+        "p50_display_ev": -3.2603054,
+        "p95_display_ev": -0.2771719,
+        "sampled_pixels": 195330
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.013686723,
+        "mean_correction": 0.0034072192
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          2.8580136,
+          -0.40306056,
+          -0.29214188,
+          -0.44170582,
+          1.468918,
+          -0.37800783,
+          -0.09943722,
+          -0.87274927,
+          3.2362673
+        ],
+        "camera_channels": 3,
+        "clip_cost": {
+          "negative_fraction": 0.0052265953,
+          "negative_luminance_fraction": 0.0000014417532,
+          "above_one_fraction": 0.014066866,
+          "altered_fraction": 0.017638007,
+          "mean_abs_delta": 0.0016993728,
+          "max_abs_delta": 1.1592679
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 1,
+          "repeat_height": 1,
+          "repeat_cpp": 3,
+          "repeat_colors": [],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0,
+          "max_normalized": 1.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 105908,
+          "reconstructed_pixels": 112411,
+          "near_white_pixels": 0,
+          "fully_clipped_pixels": 0,
+          "clipped_1_pixels": 105908,
+          "clipped_2_pixels": 0,
+          "clipped_3_pixels": 0,
+          "max_lift": 0.0,
+          "clipped_cfa_sites": 0,
+          "reconstructed_cfa_sites": 0,
+          "affected_output_pixels": 112411,
+          "connected_regions": 0,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.0,
+          "fully_clipped_cores": 0,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 4987.7915,
+          "weight_illuminant1": 0.7632689,
+          "interpolation_weights": [
+            0.7632689,
+            0.23673113
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_old/dng/20260409_175306.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/dng/20260409_175306_auto.jpg",
+      "camera": "samsung Galaxy S24+",
+      "status": "completed",
+      "elapsed_ms": 6491,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 221952,
+        "sample_stride": 15,
+        "p005_ev": -4.474968,
+        "p05_ev": -3.3631735,
+        "p50_ev": -1.6661435,
+        "p95_ev": 0.16503243,
+        "p995_ev": 2.47386,
+        "center_median_ev": -1.4587485,
+        "measured_dynamic_range_ev": 6.9488277,
+        "key_score": -0.038021017,
+        "target_median_ev": -1.6250702,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.0,
+        "near_white_fraction": 0.019743007,
+        "clipped_1_fraction": 0.0059066825,
+        "clipped_2_fraction": 0.0017886751,
+        "clipped_3_fraction": 0.012363033,
+        "mean_chroma": 0.03951463,
+        "capture_ev100": 7.6028843,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": -0.08336365,
+        "black_input_ev": -4.9583316,
+        "white_input_ev": 2.7904963,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1665211,
+        "shadow_power": 0.8001305,
+        "highlight_power": 1.3274896,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -7.966331
+      },
+      "measured": {
+        "colourfulness": 27.189098,
+        "clipped_fraction": 0.00024706018,
+        "near_white_fraction": 0.0043394924,
+        "crushed_fraction": 0.0,
+        "mean_level": 62.49667,
+        "mean_saturation": 0.27503008,
+        "mean_saturation_highlight": 0.09361369,
+        "highlight_pixels": 6096,
+        "luminance_entropy": 6.791792,
+        "average_gradient": 4.5000224,
+        "sampled_pixels": 250951
+      },
+      "noise": {
+        "shot_slope": 0.067178935,
+        "read_variance": 8.488481,
+        "snr1_ev": -7.966331,
+        "snr10_ev": -4.4950747,
+        "tiles_used": 771580,
+        "saturation": 4095.0
+      },
+      "noise_floor": {
+        "snr1_ev": -7.966331,
+        "snr10_ev": -4.4950747,
+        "shot_slope": 0.067178935,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 50,
+        "exposure_time": 0.033333335,
+        "f_number": 1.8
+      },
+      "preview": {
+        "width": 8160,
+        "height": 6120,
+        "source": "jpeg_strip",
+        "center_weighted_key_display_ev": -2.177743,
+        "p05_display_ev": -4.9483147,
+        "p50_display_ev": -2.383323,
+        "p95_display_ev": 0.4724038,
+        "sampled_pixels": 221952
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.007293449,
+        "mean_correction": 0.003077917
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          2.9525127,
+          -0.41246772,
+          -0.28690526,
+          -0.44774443,
+          1.4690379,
+          -0.3849912,
+          -0.091562085,
+          -0.85750943,
+          3.2062447
+        ],
+        "camera_channels": 3,
+        "clip_cost": {
+          "negative_fraction": 0.0038625167,
+          "negative_luminance_fraction": 6.808279e-7,
+          "above_one_fraction": 0.01949046,
+          "altered_fraction": 0.02249075,
+          "mean_abs_delta": 0.0014566784,
+          "max_abs_delta": 0.6639424
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 1,
+          "repeat_height": 1,
+          "repeat_cpp": 3,
+          "repeat_colors": [],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0,
+          "max_normalized": 1.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 699221,
+          "reconstructed_pixels": 724364,
+          "near_white_pixels": 0,
+          "fully_clipped_pixels": 0,
+          "clipped_1_pixels": 699221,
+          "clipped_2_pixels": 0,
+          "clipped_3_pixels": 0,
+          "max_lift": 0.0,
+          "clipped_cfa_sites": 0,
+          "reconstructed_cfa_sites": 0,
+          "affected_output_pixels": 724364,
+          "connected_regions": 0,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.0,
+          "fully_clipped_cores": 0,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 5094.629,
+          "weight_illuminant1": 0.7846076,
+          "interpolation_weights": [
+            0.7846076,
+            0.21539241
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_old/dng/20260409_180356.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/dng/20260409_180356_auto.jpg",
+      "camera": "samsung Galaxy S24+",
+      "status": "completed",
+      "elapsed_ms": 1329,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 202838,
+        "sample_stride": 7,
+        "p005_ev": -8.051885,
+        "p05_ev": -6.78003,
+        "p50_ev": -4.526737,
+        "p95_ev": -0.92369825,
+        "p995_ev": 2.287035,
+        "center_median_ev": -4.417673,
+        "measured_dynamic_range_ev": 10.33892,
+        "key_score": -0.23047644,
+        "target_median_ev": -3.9513817,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.017472072,
+        "near_white_fraction": 0.022101382,
+        "clipped_1_fraction": 0.017940426,
+        "clipped_2_fraction": 0.0037764127,
+        "clipped_3_fraction": 0.00070006604,
+        "mean_chroma": 0.059130725,
+        "capture_ev100": 9.33985,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 0.50991726,
+        "black_input_ev": -7.9419675,
+        "white_input_ev": 3.1969523,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1054994,
+        "shadow_power": 1.2145609,
+        "highlight_power": 1.4412912,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -8.455016
+      },
+      "measured": {
+        "colourfulness": 52.881687,
+        "clipped_fraction": 0.0007033393,
+        "near_white_fraction": 0.019318387,
+        "crushed_fraction": 0.0056579737,
+        "mean_level": 31.527473,
+        "mean_saturation": 0.68187106,
+        "mean_saturation_highlight": 0.4839376,
+        "highlight_pixels": 3231,
+        "luminance_entropy": 6.0677624,
+        "average_gradient": 6.1734276,
+        "sampled_pixels": 255922
+      },
+      "noise": {
+        "shot_slope": 0.26187167,
+        "read_variance": 3.8618538,
+        "snr1_ev": -8.455016,
+        "snr10_ev": -4.327705,
+        "tiles_used": 155444,
+        "saturation": 4095.0
+      },
+      "noise_floor": {
+        "snr1_ev": -8.455016,
+        "snr10_ev": -4.327705,
+        "shot_slope": 0.26187167,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 80,
+        "exposure_time": 0.011111111,
+        "f_number": 2.4
+      },
+      "preview": {
+        "width": 3648,
+        "height": 2736,
+        "source": "jpeg_strip",
+        "center_weighted_key_display_ev": -6.2049417,
+        "p05_display_ev": -9.017365,
+        "p50_display_ev": -6.2881713,
+        "p95_display_ev": -0.58242965,
+        "sampled_pixels": 203384
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.17274897,
+        "mean_correction": 0.0041551376
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          2.829868,
+          -0.33930776,
+          -0.21120842,
+          -0.42970532,
+          1.4823819,
+          -0.4272704,
+          -0.049052756,
+          -0.8289277,
+          3.053239
+        ],
+        "camera_channels": 3,
+        "clip_cost": {
+          "negative_fraction": 0.21704485,
+          "negative_luminance_fraction": 0.00063871813,
+          "above_one_fraction": 0.021926017,
+          "altered_fraction": 0.2226815,
+          "mean_abs_delta": 0.0064073745,
+          "max_abs_delta": 0.70037395
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 1,
+          "repeat_height": 1,
+          "repeat_cpp": 3,
+          "repeat_colors": [],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0,
+          "max_normalized": 1.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 39273,
+          "reconstructed_pixels": 41432,
+          "near_white_pixels": 0,
+          "fully_clipped_pixels": 0,
+          "clipped_1_pixels": 39273,
+          "clipped_2_pixels": 0,
+          "clipped_3_pixels": 0,
+          "max_lift": 0.0,
+          "clipped_cfa_sites": 0,
+          "reconstructed_cfa_sites": 0,
+          "affected_output_pixels": 41432,
+          "connected_regions": 0,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.0,
+          "fully_clipped_cores": 0,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 5003.851,
+          "weight_illuminant1": 0.7665346,
+          "interpolation_weights": [
+            0.7665346,
+            0.23346537
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_old/dng/20260609_121157.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/dng/20260609_121157_auto.jpg",
+      "camera": "samsung SM-S926U1",
+      "status": "completed",
+      "elapsed_ms": 3645,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 193548,
+        "sample_stride": 8,
+        "p005_ev": -4.1592855,
+        "p05_ev": -3.3794274,
+        "p50_ev": -1.1155753,
+        "p95_ev": 0.6558877,
+        "p995_ev": 1.2380962,
+        "center_median_ev": -1.2504524,
+        "measured_dynamic_range_ev": 5.397382,
+        "key_score": 0.122019984,
+        "target_median_ev": 0.07931299,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.0,
+        "near_white_fraction": 0.0026815054,
+        "clipped_1_fraction": 0.0006096679,
+        "clipped_2_fraction": 0.0020873374,
+        "clipped_3_fraction": 0.000005166677,
+        "mean_chroma": 0.042681072,
+        "capture_ev100": 8.692088,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 1.2758147,
+        "black_input_ev": -3.283471,
+        "white_input_ev": 2.9139109,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.18,
+        "shadow_power": 0.5359791,
+        "highlight_power": 1.4022173,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -11.488241
+      },
+      "measured": {
+        "colourfulness": 38.3723,
+        "clipped_fraction": 0.000027726506,
+        "near_white_fraction": 0.0087140445,
+        "crushed_fraction": 0.0,
+        "mean_level": 122.38927,
+        "mean_saturation": 0.24091159,
+        "mean_saturation_highlight": 0.13818067,
+        "highlight_pixels": 53094,
+        "luminance_entropy": 7.7169027,
+        "average_gradient": 4.511515,
+        "sampled_pixels": 252466
+      },
+      "noise": {
+        "shot_slope": 0.2405214,
+        "read_variance": 0.0,
+        "snr1_ev": -11.488241,
+        "snr10_ev": -4.844385,
+        "tiles_used": 48669,
+        "saturation": 3838.72
+      },
+      "noise_floor": {
+        "snr1_ev": -11.488241,
+        "snr10_ev": -4.844385,
+        "shot_slope": 0.2405214,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 47,
+        "exposure_time": 0.0166674,
+        "f_number": 1.8
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.003287738,
+        "mean_correction": 0.003364293
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          2.78273,
+          -0.3720585,
+          -0.33512238,
+          -0.45711887,
+          1.4685229,
+          -0.3848319,
+          -0.13206553,
+          -0.9229734,
+          3.613152
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "ppg",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -4.844385,
+          "alias_score": 0.034199785,
+          "reason": "alias_guard"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.00046213606,
+          "negative_luminance_fraction": 0.0,
+          "above_one_fraction": 0.0026966694,
+          "altered_fraction": 0.003142315,
+          "mean_abs_delta": 0.0013975061,
+          "max_abs_delta": 1.3634253
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            256.28,
+            256.28,
+            256.28,
+            256.28
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "GREEN",
+            "BLUE",
+            "RED",
+            "GREEN"
+          ],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0020110873,
+          "max_normalized": 1.0
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 12484800,
+          "hot": 3,
+          "dead": 4,
+          "max_correction": 0.8122499
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 30706,
+          "reconstructed_pixels": 38624,
+          "near_white_pixels": 22672,
+          "fully_clipped_pixels": 16637,
+          "clipped_1_pixels": 8034,
+          "clipped_2_pixels": 6035,
+          "clipped_3_pixels": 16637,
+          "max_lift": 1.1027069,
+          "clipped_cfa_sites": 23708,
+          "reconstructed_cfa_sites": 17761,
+          "affected_output_pixels": 38624,
+          "connected_regions": 150,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.6831902,
+          "fully_clipped_cores": 111,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 4665.3667,
+          "weight_illuminant1": 0.69294554,
+          "interpolation_weights": [
+            0.69294554,
+            0.30705446
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        },
+        "lens_correction": {
+          "source": "dng_opcode_list3",
+          "opcodes_declared": 1,
+          "opcodes_applied": 1,
+          "rectilinear_warps": 1,
+          "radial_vignette_corrections": 0,
+          "optional_opcodes_skipped": 0,
+          "required_opcodes_unsupported": 0,
+          "clipped_channels": 50061,
+          "max_displacement_pixels": 9.959379,
+          "max_gain": 1.0,
+          "corrections_applied": 1,
+          "distortion_corrections": 1,
+          "transverse_chromatic_aberration_corrections": 0
+        }
+      },
+      "guidance_mode": "independent"
+    },
+    {
+      "input": "raw/raw_old/files_2026-07-27_16-48-01/camera-promode1.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/files_2026-07-27_16-48-01/camera-promode1_auto.jpg",
+      "camera": "samsung Galaxy S24+",
+      "status": "completed",
+      "elapsed_ms": 1610,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 195330,
+        "sample_stride": 8,
+        "p005_ev": -1.4506235,
+        "p05_ev": -1.0473285,
+        "p50_ev": 2.4131591,
+        "p95_ev": 2.4753761,
+        "p995_ev": 2.5057797,
+        "center_median_ev": 2.4339795,
+        "measured_dynamic_range_ev": 3.9564033,
+        "key_score": 0.96467656,
+        "target_median_ev": 2.0,
+        "tonal_class": "high_key",
+        "near_black_fraction": 0.0,
+        "near_white_fraction": 0.5372856,
+        "clipped_1_fraction": 0.0452977,
+        "clipped_2_fraction": 0.087559514,
+        "clipped_3_fraction": 0.4115548,
+        "mean_chroma": 0.14153285,
+        "capture_ev100": 7.6617775,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": -0.4256513,
+        "black_input_ev": -2.3980732,
+        "white_input_ev": 2.6019268,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.18,
+        "shadow_power": 0.45,
+        "highlight_power": 1.2520859,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -8.328683
+      },
+      "measured": {
+        "colourfulness": 37.21775,
+        "clipped_fraction": 0.0,
+        "near_white_fraction": 0.00020408804,
+        "crushed_fraction": 0.0,
+        "mean_level": 177.09195,
+        "mean_saturation": 0.13275105,
+        "mean_saturation_highlight": 0.073203415,
+        "highlight_pixels": 168121,
+        "luminance_entropy": 5.4429083,
+        "average_gradient": 9.92878,
+        "sampled_pixels": 254792
+      },
+      "noise": {
+        "shot_slope": 0.1267024,
+        "read_variance": 4.965883,
+        "snr1_ev": -8.328683,
+        "snr10_ev": -4.642957,
+        "tiles_used": 114677,
+        "saturation": 4095.0
+      },
+      "noise_floor": {
+        "snr1_ev": -8.328683,
+        "snr10_ev": -4.642957,
+        "shot_slope": 0.1267024,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 200,
+        "exposure_time": 0.008,
+        "f_number": 1.8
+      },
+      "preview": {
+        "width": 4080,
+        "height": 3060,
+        "source": "jpeg_strip",
+        "center_weighted_key_display_ev": 2.4395924,
+        "p05_display_ev": -1.3831117,
+        "p50_display_ev": 2.4380865,
+        "p95_display_ev": 2.4711993,
+        "sampled_pixels": 195330
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.07475635,
+        "mean_correction": 0.005168942
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          3.0692327,
+          -0.45882958,
+          -0.23274513,
+          -0.42252788,
+          1.4696287,
+          -0.37452936,
+          -0.039254762,
+          -0.7824019,
+          2.7275398
+        ],
+        "camera_channels": 3,
+        "clip_cost": {
+          "negative_fraction": 0.016780484,
+          "negative_luminance_fraction": 0.0,
+          "above_one_fraction": 0.5351709,
+          "altered_fraction": 0.5352794,
+          "mean_abs_delta": 0.019366434,
+          "max_abs_delta": 1.1714576
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 1,
+          "repeat_height": 1,
+          "repeat_cpp": 3,
+          "repeat_colors": [],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0,
+          "max_normalized": 1.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 6241108,
+          "reconstructed_pixels": 6414143,
+          "near_white_pixels": 0,
+          "fully_clipped_pixels": 0,
+          "clipped_1_pixels": 6241108,
+          "clipped_2_pixels": 0,
+          "clipped_3_pixels": 0,
+          "max_lift": 0.0,
+          "clipped_cfa_sites": 0,
+          "reconstructed_cfa_sites": 0,
+          "affected_output_pixels": 6414143,
+          "connected_regions": 0,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.0,
+          "fully_clipped_cores": 0,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 5695.915,
+          "weight_illuminant1": 0.8897724,
+          "interpolation_weights": [
+            0.8897724,
+            0.110227615
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_old/files_2026-07-27_16-48-01/expertraw.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/files_2026-07-27_16-48-01/expertraw_auto.jpg",
+      "camera": "samsung Galaxy S24+",
+      "status": "completed",
+      "elapsed_ms": 2178,
+      "baseline_exposure_ev": 3.0,
+      "analysis": {
+        "sampled_pixels": 244665,
+        "sample_stride": 10,
+        "p005_ev": -9.507625,
+        "p05_ev": -8.25514,
+        "p50_ev": -5.279713,
+        "p95_ev": -0.2865851,
+        "p995_ev": 0.7454586,
+        "center_median_ev": -5.2663517,
+        "measured_dynamic_range_ev": 10.253083,
+        "key_score": -0.25320786,
+        "target_median_ev": -2.4216278,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.13742873,
+        "near_white_fraction": 0.0,
+        "clipped_1_fraction": 0.0,
+        "clipped_2_fraction": 0.0,
+        "clipped_3_fraction": 0.0,
+        "mean_chroma": 0.0077428287,
+        "capture_ev100": 13.6617775,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 2.8500688,
+        "black_input_ev": -7.0575557,
+        "white_input_ev": 3.9955275,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1070445,
+        "shadow_power": 1.0808166,
+        "highlight_power": 1.8038327,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -14.84275
+      },
+      "measured": {
+        "colourfulness": 28.266624,
+        "clipped_fraction": 0.0,
+        "near_white_fraction": 0.017429668,
+        "crushed_fraction": 0.0031791208,
+        "mean_level": 64.580894,
+        "mean_saturation": 0.3303113,
+        "mean_saturation_highlight": 0.13511159,
+        "highlight_pixels": 25657,
+        "luminance_entropy": 7.20426,
+        "average_gradient": 5.508571,
+        "sampled_pixels": 252271
+      },
+      "noise": {
+        "shot_slope": 0.0015858905,
+        "read_variance": 0.16052665,
+        "snr1_ev": -14.84275,
+        "snr10_ev": -11.495126,
+        "tiles_used": 381983,
+        "saturation": 65535.0
+      },
+      "noise_floor": {
+        "snr1_ev": -14.84275,
+        "snr10_ev": -11.495126,
+        "shot_slope": 0.0015858905,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 50,
+        "exposure_time": 0.0005,
+        "f_number": 1.8
+      },
+      "preview": {
+        "width": 5712,
+        "height": 4284,
+        "source": "jpeg_strip",
+        "center_weighted_key_display_ev": -2.8929539,
+        "p05_display_ev": -7.0428658,
+        "p50_display_ev": -2.9172187,
+        "p95_display_ev": 1.8817658,
+        "sampled_pixels": 244693
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.05586581,
+        "mean_correction": 0.0040846667
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          3.1318376,
+          -0.45765412,
+          -0.2383159,
+          -0.43223688,
+          1.4696138,
+          -0.38170767,
+          -0.041476466,
+          -0.7843062,
+          2.7891908
+        ],
+        "camera_channels": 3,
+        "clip_cost": {
+          "negative_fraction": 0.021523723,
+          "negative_luminance_fraction": 0.000012954528,
+          "above_one_fraction": 0.0,
+          "altered_fraction": 0.021523723,
+          "mean_abs_delta": 8.070821e-7,
+          "max_abs_delta": 0.0021008921
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "white_levels": [
+            65535.0,
+            65535.0,
+            65535.0
+          ],
+          "repeat_width": 1,
+          "repeat_height": 1,
+          "repeat_cpp": 3,
+          "repeat_colors": [],
+          "sub_black_fraction": 0.0,
+          "min_normalized": 0.0,
+          "max_normalized": 0.08462653
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 0,
+          "reconstructed_pixels": 0,
+          "near_white_pixels": 0,
+          "fully_clipped_pixels": 0,
+          "clipped_1_pixels": 0,
+          "clipped_2_pixels": 0,
+          "clipped_3_pixels": 0,
+          "max_lift": 0.0,
+          "clipped_cfa_sites": 0,
+          "reconstructed_cfa_sites": 0,
+          "affected_output_pixels": 0,
+          "connected_regions": 0,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.0,
+          "fully_clipped_cores": 0,
+          "solver_fallbacks": 0
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 5678.9214,
+          "weight_illuminant1": 0.887106,
+          "interpolation_weights": [
+            0.887106,
+            0.11289397
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_old/files_2026-07-27_16-48-01/proshot.dng",
+      "output": ".agent/scratch/floor-evidence/floored/raw_old/files_2026-07-27_16-48-01/proshot_auto.jpg",
+      "camera": "samsung SM-S926U1",
+      "status": "completed",
+      "elapsed_ms": 22278,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 193546,
+        "sample_stride": 8,
+        "p005_ev": -8.475487,
+        "p05_ev": -7.307379,
+        "p50_ev": -3.1809096,
+        "p95_ev": 1.7850034,
+        "p995_ev": 2.4985483,
+        "center_median_ev": -2.8706234,
+        "measured_dynamic_range_ev": 10.974035,
+        "key_score": -0.09232384,
+        "target_median_ev": -0.060010493,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.038693644,
+        "near_white_fraction": 0.037525963,
+        "clipped_1_fraction": 0.020517087,
+        "clipped_2_fraction": 0.01793372,
+        "clipped_3_fraction": 0.000108501335,
+        "mean_chroma": 0.053513728,
+        "capture_ev100": 12.973915,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 2.9347277,
+        "black_input_ev": -5.940759,
+        "white_input_ev": 5.8332763,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.0940673,
+        "shadow_power": 0.89912206,
+        "highlight_power": 2.6026375,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -10.651424
+      },
+      "measured": {
+        "colourfulness": 50.563614,
+        "clipped_fraction": 0.000011882788,
+        "near_white_fraction": 0.09385026,
+        "crushed_fraction": 0.0,
+        "mean_level": 106.59846,
+        "mean_saturation": 0.3457185,
+        "mean_saturation_highlight": 0.26377007,
+        "highlight_pixels": 45831,
+        "luminance_entropy": 7.847801,
+        "average_gradient": 5.960825,
+        "sampled_pixels": 252466
+      },
+      "noise": {
+        "shot_slope": 0.104108885,
+        "read_variance": 0.13983077,
+        "snr1_ev": -10.651424,
+        "snr10_ev": -5.8945985,
+        "tiles_used": 48060,
+        "saturation": 3838.75
+      },
+      "noise_floor": {
+        "snr1_ev": -10.651424,
+        "snr10_ev": -5.8945985,
+        "shot_slope": 0.104108885,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 25,
+        "exposure_time": 0.001610896,
+        "f_number": 1.8
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.036311023,
+        "mean_correction": 0.004762163
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "Unknown",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "cam_to_working": [
+          3.0782864,
+          -0.4474489,
+          -0.24774888,
+          -0.43419334,
+          1.4694837,
+          -0.38111576,
+          -0.05294812,
+          -0.80083895,
+          2.8676558
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "ppg",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -5.8945985,
+          "alias_score": 0.031104274,
+          "reason": "alias_guard"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.017088363,
+          "negative_luminance_fraction": 0.000010185262,
+          "above_one_fraction": 0.037094563,
+          "altered_fraction": 0.054181065,
+          "mean_abs_delta": 0.006650321,
+          "max_abs_delta": 1.2259328
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            256.25,
+            256.25,
+            256.25,
+            256.25
+          ],
+          "white_levels": [
+            4095.0,
+            4095.0,
+            4095.0,
+            4095.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "GREEN",
+            "BLUE",
+            "RED",
+            "GREEN"
+          ],
+          "sub_black_fraction": 0.0009776688,
+          "min_normalized": -0.00058612827,
+          "max_normalized": 1.0
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 12484800,
+          "hot": 79,
+          "dead": 30,
+          "max_correction": 0.9328557
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 327895,
+          "reconstructed_pixels": 452548,
+          "near_white_pixels": 47099,
+          "fully_clipped_pixels": 16977,
+          "clipped_1_pixels": 280796,
+          "clipped_2_pixels": 30122,
+          "clipped_3_pixels": 16977,
+          "max_lift": 1.318927,
+          "clipped_cfa_sites": 177750,
+          "reconstructed_cfa_sites": 122162,
+          "affected_output_pixels": 452548,
+          "connected_regions": 1637,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.7755119,
+          "fully_clipped_cores": 167,
+          "solver_fallbacks": 2
+        },
+        "dng_color": {
+          "illuminant1": "D65",
+          "illuminant2": "A",
+          "estimated_cct": 5535.5405,
+          "weight_illuminant1": 0.86395705,
+          "interpolation_weights": [
+            0.86395705,
+            0.13604295
+          ],
+          "calibration_count": 2,
+          "camera_channels": 3,
+          "white_balance_source": "as_shot_neutral",
+          "used_camera_calibration": true,
+          "used_forward_matrix": true,
+          "used_reduction_matrix": false
+        },
+        "lens_correction": {
+          "source": "dng_opcode_list3",
+          "opcodes_declared": 1,
+          "opcodes_applied": 1,
+          "rectilinear_warps": 1,
+          "radial_vignette_corrections": 0,
+          "optional_opcodes_skipped": 0,
+          "required_opcodes_unsupported": 0,
+          "clipped_channels": 286268,
+          "max_displacement_pixels": 9.946588,
+          "max_gain": 1.0,
+          "corrections_applied": 1,
+          "distortion_corrections": 1,
+          "transverse_chromatic_aberration_corrections": 0
+        }
+      },
+      "guidance_mode": "independent"
+    }
+  ]
+}

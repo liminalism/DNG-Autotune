@@ -1,8 +1,29 @@
 # Status and handoff — raw-autotune 0.1.19
 
-Updated 2026-07-31. Scope as stated: the program has to work on **Samsung S24+
+Updated 2026-08-26. Scope as stated: the program has to work on **Samsung S24+
 Expert RAW**, **ProShot** output, and **Sony A7C ARW**. This records how far
 that is, what to run, and what is left.
+
+**Most of this document was written on 2026-07-31 and its measurements are as of
+that date. Read every number here as version-stamped, not current.** Work landed
+since then — automatic night tone and luma denoising (2026-08-13), opt-in
+semantic scene masks (2026-08-13), the Slice 5 joint raw-domain
+log-chromaticity estimator (2026-08-23), and the archive-speed spatial-highlight
+floor plus the in-memory EXIF/ICC surface (2026-08-26) — is recorded in
+`CHANGELOG.md` and in the AKR ledger, and is reflected here only where a section
+below says so explicitly. `REPORT_SCHEMA_VERSION` is now 22 (23/24 for the
+semantic sidecars) and `AUTO_PROFILE_VERSION` is `archive-auto-v6`.
+
+Two things below are known to disagree with each other or with the code, and are
+called out here rather than silently left:
+
+- the ISO 8000+ chroma residual. The 0.1.15 section says the guided-filter stage
+  took the saturation ratio to 1.27; the acceptance table at the end still
+  expects 1.35 to 1.45. One of the two is stale and neither has been
+  re-measured. Do not quote either as settled.
+- `docs/PURPLE_SKY_PROBLEM_SCOPE.md` predates the Slice 5 merge and is now
+  marked "needs re-verification" rather than "unresolved". Nothing here should
+  be read as saying the lavender-sky defect is closed.
 
 ## Short answer
 
@@ -652,14 +673,31 @@ the missing denoiser.
 
 ## What is deliberately not done
 
-- **No semantic local control.** Local tone has no face, sky, skin or subject
-  awareness and does not reproduce a phone's multi-frame image pipeline.
-- **No luma denoising or guessed lens profiles.** Standard DNG lens opcodes,
-  hot/dead CFA suppression, chroma denoising and output sharpening are
-  automatic. Proprietary RAWs without portable lens coefficients are left
-  geometrically unchanged. Luma noise is left alone deliberately because it is
-  the part that destroys texture, and the camera's own high-ISO JPEGs are
-  visibly mushier than ours.
+- **No semantic local control _by default_.** Local tone has no face, sky, skin
+  or subject awareness and does not reproduce a phone's multi-frame image
+  pipeline. Since 2026-08-13 an opt-in `--semantic` path does derive scene masks,
+  but it is observational by construction — it writes masks and region evidence
+  to the sidecar and leaves output pixels untouched. Its two experimental
+  operators, `--semantic-sky-highlights` and `--semantic-sky-chroma`, both
+  default to 0 and require `--semantic`.
+- ~~**No luma denoising.**~~ **Done 2026-08-13** (`src/luma.rs`). Automatic and
+  noise-model driven like the chroma filter, it engages only on frames noisy
+  enough to need it — roughly ISO 1600 and up — so clean frames render
+  identically either way. `--luma-denoise 0` disables it. This reverses the
+  earlier position that luma grain was left alone because it is the part that
+  destroys texture: on the ISO 12800 night pairs the measured result was
+  markedly reduced grain with cloud and edge detail preserved. The regression
+  gate holds — with `--night-tone 0 --luma-denoise 0` the changed binary
+  reproduces the pre-change default byte-for-byte.
+- **No guessed lens profiles.** Standard DNG lens opcodes, hot/dead CFA
+  suppression, chroma denoising and output sharpening are automatic.
+  Proprietary RAWs without portable lens coefficients are left geometrically
+  unchanged.
+- **Night rendering is automatic since 2026-08-13.** `--night-tone` (default on)
+  applies an edge-aware single-frame local tone map to frames the raw statistics
+  detect as low-light, compressing bright light sources and locally lifting
+  shadows without globally raising exposure. It is pixel-inert on daylight
+  frames and is ignored when `--hdr` or `--local-tone` is set explicitly.
 - ~~**No EXIF/ICC in the output.**~~ **Done in 0.1.17.** All three formats carry
   the copied EXIF and a generated sRGB v2 ICC profile; `--no-metadata` restores
   the old bytes exactly. Two gaps remain deliberately: MakerNotes are not copied
@@ -718,9 +756,15 @@ it takes.
 **`luminance` is signed and several call sites clamp it.** `analyze::luminance` is
 `0.2126r + 0.7152g + 0.0722b` with no absolute value, so it goes negative on
 out-of-gamut input. Every `.max(1e-8)` and `.clamp(0.0, 1.0)` applied to it hides
-that sign rather than handling it, and the two in `render_pixel_local` (lines 176
-and 211) are inconsistent with each other: `mapped_norm` is floored at
-`black_output_linear`, `mapped_luminance` at 0.
+that sign rather than handling it, so treat any such clamp as a place the sign
+was hidden rather than handled.
+
+The specific inconsistency this entry used to name — `mapped_norm` floored at
+`black_output_linear` while `mapped_luminance` was floored at 0 — **has been
+fixed**. Both now floor at `black_output_linear`, so the curve and the chroma
+anchor agree about where black is; see the comment above the
+`mapped_luminance` binding in `src/tone.rs`. The general warning stands, the
+worked example no longer does.
 
 **`preview::MIN_PREVIEW_PIXELS` is a policy value, not a sanity check.** Since
 0.1.13 it is the sole thing deciding which files the automatic exposure oracle

@@ -1,8 +1,31 @@
 # Residual lavender/purple skies: problem scope and external-review brief
 
-Status: **unresolved**
+Status: **needs re-verification against `e42d481`**
 Prepared: 2026-08-08
 Project: `raw-autotune` 0.1.19 working tree, based on commit `ff74d3b248f65ea98bde93578a3b95c80a647181`
+
+> **Read this first (2026-08-26).** Everything below was written against
+> `ff74d3b`, before the Slice 5 joint raw-domain log-chromaticity estimator
+> landed in `e42d481` (merged 2026-08-23). That estimator was aimed at part of
+> what this document describes: it replaced the hand-off from raw harmonic
+> reconstruction to a second post-demosaic `(u'v')` transport model, which
+> `CHANGELOG.md` records as "the source of the visible `1<->2` clip-state
+> discontinuity in skies". On `_DSC1289` it moved rendered output by 0.286%
+> RMSE.
+>
+> **What that does *not* establish is whether the defect this document is about
+> is gone.** No visual pass over `_DSC1282`, `_DSC1283`, `_DSC1288`, `_DSC1289`
+> and `_DSC1290` has been recorded since the merge, and the broad lavender cast
+> and the edge-localized purple fringing were always described here as two
+> populations with different causes — the clip-state discontinuity is at most
+> one of them. So the status is not "resolved" and not the "unresolved" it used
+> to claim: it is unverified. Before acting on anything below, re-render those
+> five frames on the current default and look, and record the result as AKR
+> evidence. `raw-autotune.question.purple-sky-standing-after-slice-5` tracks
+> this.
+>
+> Sections that describe *failed approaches* and *the shape of the question*
+> are unaffected by the merge and remain accurate.
 
 ## Purpose
 

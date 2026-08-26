@@ -1,6 +1,68 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.work.archive-speed-highlight-floor-and-encoder-metadata-surface/1 : work {
+    title "Archive-speed spatial highlight floor and the in-memory EXIF/ICC/colour-space surface"
+    state completed
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "docs/BUILD_STATUS.md",
+        path "docs/KNOWN_LIMITATIONS.md",
+        path "src/api.rs",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/metadata.rs",
+        path "src/pipeline.rs",
+        path "src/raw_highlight.rs",
+        path "src/types.rs",
+        path "tests/in_memory_api.rs"
+    ]
+    intent """
+        Make the unattended archive profile stop paying the spatial highlight solver's full-image cost on frames that have nothing clipped to reconstruct, and give an in-process encoder everything it needs to write a faithful archive file without reopening the source RAW.
+
+        Two pieces, both landing under one profile advance to archive-auto-v6.
+
+        Highlight floor. reconstruct_cfa already counts clipped CFA sites in one cheap pass before any of build_grid, build_pyramid, pyramid_prediction or the sensor-knee pass. Decline the solve below DEFAULT_SPATIAL_CLIPPED_FLOOR of clipped sites and report HighlightMethod::Current; color::develop reads the reported method rather than the requested one so the declined frame takes the whole Current path, byte-identically to an explicit --highlight-method current run. --spatial-highlight-floor is the control and 0 always solves. This moves default rendered pixels on declined frames, which is why the profile version advances.
+
+        In-memory metadata surface. RenderedRgb16Image and RenderedImage gain color_space, exif and icc. The EXIF blob comes from SourceMetadata::exif_payload, the same and only builder output.rs uses, so no second EXIF path exists to drift. OutputColorSpace states the output encoding rather than letting a consumer assume it, and is deliberately not WorkingSpace: WorkingSpace::to_display converts a Rec.2020 working space back to sRGB primaries before the tone curve, so the answer is Srgb in every current configuration. All three fields are additive; openarc's existing render_file_rgb16 call is unaffected.
+        """
+    acceptance {
+        check declined-frames-are-exactly-the-current-path {
+            statement """
+                On real frames with zero clipped CFA sites the floored default is byte-identical to --highlight-method current and differs from --spatial-highlight-floor 0, while a frame above the floor is byte-identical to --spatial-highlight-floor 0 and differs from current.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.spatial-floor-declines-to-the-current-path-20260826/1
+            ]
+        }
+        check the-floor-is-cheaper-and-the-saving-is-quantified {
+            statement """
+                The floor reduces wall clock and summed per-file elapsed_ms on a Sony ARW sample without changing which heavily clipped frames solve, and the size of the saving is recorded rather than asserted.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.spatial-floor-cost-on-29-arw-20260826/1 ]
+        }
+        check the-in-memory-surface-matches-the-file-writers {
+            statement """
+                render_file_rgb16 returns an EXIF payload byte-identical to SourceMetadata::exif_payload at the rendered dimensions, the cached sRGB ICC profile, and an explicit colour space; metadata false returns None for both and leaves pixels identical.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.in-memory-metadata-matches-the-file-writers-20260826/1
+            ]
+        }
+        check the-tree-is-clean {
+            statement """
+                cargo check --all-targets, cargo clippy --all-targets --release and cargo fmt --check are clean, and cargo test --release passes in full.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.archive-speed-tree-clean-20260826/1 ]
+        }
+    }
+}
+
 record raw-autotune.work.compression-aware-highlight-ratio-promotion/1 : work {
     title "Promote compression-aware highlight ratios without white blowout"
     state superseded
@@ -1795,7 +1857,7 @@ record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/3 : work {
 
 record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/4 : work {
     title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
-    state active
+    state superseded
     scope [
         path "src/localtone.rs",
         path "src/pipeline.rs",
@@ -1831,6 +1893,47 @@ record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/4 : work {
         }
     }
     supersedes [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/3 ]
+}
+
+record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 : work {
+    title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
+    state active
+    scope [
+        path "src/localtone.rs",
+        path "src/pipeline.rs",
+        path "src/tone.rs",
+        path "tools/**"
+    ]
+    intent """
+        Attribute the visible sky failure to an exact pipeline boundary before changing the default render. Keep the existing local-tone and HDR evaluations for scene-luminance compression, but do not use either operator to conceal a colour-estimation discontinuity.
+
+        Add renderer-exact, lossless diagnostic checkpoints after the tone curve, chroma scale, highlight white mix, and gamut compression. The normal render and the final diagnostic checkpoint must share one implementation and remain byte-identical. On `_DSC1289.ARW`, compare the default against reconstruction disabled, `--local-tone 0.35`, and `--hdr 0.5`; measure adjacent OKLab chroma steps across raw clip-state boundaries and within the same clip state.
+
+        The current attribution found that reconstruction introduces clip-cohort plateaus and that the max-channel-weighted tone shoulder is the main discontinuity amplifier. Local tone and HDR do not repair the colour estimate, gamut compression is effectively inactive in the measured sky, and the peak-preserving path toward white reduces rather than creates the boundary. Continue evaluating local tone/HDR only after the reconstruction estimator and its end-to-end ground-truth bench can distinguish recovered detail from invented colour.
+        """
+    note """
+        Current-head evidence is lossless and renderer-exact. The shared stage checkpoints remain after tone curve, chroma scale, highlight white mix (gamut-pre), and gamut compression (gamut-post); a new final checkpoint is written from the exact post-sharpen RGB16 buffer, so the true default CLI output and final diagnostic have zero encoded-pixel error. On _DSC1289 the first material increase in adjacent OKLab chroma across raw clip-state boundaries is after the tone curve (p90 0.00390 to 0.00451), while chroma changes it to 0.00441 and white mix/gamut reduce it to 0.00344; within-state p90 is 0.00227, 0.00229, 0.00237, and 0.00185. The current harmonic/raw reconstruction path is unchanged across the pre/post snapshots in this ROI, and reconstruction disabled is worse in the camera-grade comparison. Local tone 0.35 and HDR 0.5 adjust luminance modestly but retain the green deficit. No evidence-backed default tone change is indicated; leave the colour-continuity gate open and keep local-tone/HDR evaluation luminance-only.
+        """
+    acceptance {
+        check local-tone-hdr-remain-colour-neutral {
+            statement """
+                Local-tone or HDR promotion is decided on luminance separation and halo behaviour only after highlight colour continuity passes the ground-truth reconstruction gate.
+                """
+            method command
+        }
+        check renderer-exact-stage-attribution {
+            statement """
+                Lossless checkpoints use production renderer exact arithmetic, leave normal output byte-identical, isolate first stage materially amplifies clip-boundary colour steps.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.sky-final-output-20260816,
+                @raw-autotune.evidence.sky-stage-attribution-20260816-r2
+            ]
+        }
+    }
+    supersedes [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/4 ]
+    author "GitHub Uploader"
 }
 
 record raw-autotune.work.spatial-semantic-aq-api/1 : work {

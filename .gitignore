@@ -25,3 +25,9 @@ models/artifacts/
 # Python tooling caches are local build products.
 __pycache__/
 *.pyc
+
+# Session outputs and agent scratch (never tracked)
+/night2
+/output-tests
+/agent-pack
+/.agent/

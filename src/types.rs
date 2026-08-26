@@ -268,6 +268,10 @@ pub struct RunOptions {
     /// Experimental mask-gated positive-Oklab-a reduction for bright sky.
     /// This is not a semantic white-point estimate and is zero by default.
     pub semantic_sky_chroma: f32,
+    /// Run the YuNet face detector under `--semantic`. Off: it produced zero
+    /// true positives over the 74-image corpus and nothing consumes its mask.
+    /// See [`crate::scene::FACE_DETECTION_DEFAULT`].
+    pub semantic_faces: bool,
     /// Directory containing prepared scene_image ONNX graphs.
     pub semantic_model_dir: PathBuf,
     /// Copy the source EXIF into the output and embed the sRGB ICC profile.
@@ -315,6 +319,13 @@ pub struct RunOptions {
     pub highlight_reconstruction: f32,
     /// Highlight estimator used by automatic and explicitly configured renders.
     pub highlight_method: crate::raw_highlight::HighlightMethod,
+    /// Fraction of clipped CFA sites a frame must carry before a spatial
+    /// highlight estimator is run at all. Below it the frame develops on the
+    /// post-demosaic `Current` estimator, which is byte-identical to
+    /// `--highlight-method current` and costs neither the solver's ~20 s nor its
+    /// ~1.3 GB. `0` always solves. See
+    /// [`crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR`].
+    pub spatial_highlight_floor: f32,
     /// Use the DNG matrix model (ForwardMatrix/ColorMatrix, CameraCalibration,
     /// AnalogBalance, ReductionMatrix, and up to three illuminants) on files
     /// that carry it. On by default and owned colour path only; safely falls
@@ -326,7 +337,13 @@ pub struct RunOptions {
 }
 
 impl RunOptions {
-    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v5";
+    /// `v6` adds the archive-speed spatial-highlight floor: a frame whose
+    /// clipped CFA fraction is below
+    /// [`crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR`] develops on the
+    /// post-demosaic `Current` estimator instead of the harmonic solver. That
+    /// deliberately moves default rendered pixels on frames with essentially no
+    /// clipping, so the profile version advances with it.
+    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v6";
 
     /// The unattended archive profile shared by the flag CLI and the minimal
     /// interactive front-end. Callers change only explicit user overrides.
@@ -356,6 +373,7 @@ impl RunOptions {
             semantic: false,
             semantic_sky_highlights: 0.0,
             semantic_sky_chroma: 0.0,
+            semantic_faces: crate::scene::FACE_DETECTION_DEFAULT,
             semantic_model_dir: PathBuf::from(crate::scene::DEFAULT_MODEL_DIR),
             write_metadata: true,
             noise_scan: None,
@@ -374,6 +392,7 @@ impl RunOptions {
             hot_pixels: 0.5,
             highlight_reconstruction: 1.0,
             highlight_method: crate::raw_highlight::HighlightMethod::Harmonic,
+            spatial_highlight_floor: crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR,
             full_dng_color: true,
             lens_correction: crate::lens::LensCorrectionMode::Embedded,
         }

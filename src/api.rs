@@ -35,9 +35,10 @@ impl PixelFormat {
 
 /// Automatic render controls useful to an embedding crate.
 ///
-/// [`Default`] is the same `archive-auto-v4` image policy used by the command
-/// line. The file/output-management members of [`RunOptions`] are intentionally
-/// absent: this API writes nothing.
+/// [`Default`] is the same unattended image policy the command line uses —
+/// [`RunOptions::AUTO_PROFILE_VERSION`], named rather than spelled out here so
+/// the two cannot drift. The file/output-management members of [`RunOptions`]
+/// are intentionally absent: this API writes no image files.
 #[derive(Debug, Clone)]
 pub struct RenderOptions {
     pub pixel_format: PixelFormat,
@@ -71,8 +72,19 @@ pub struct RenderOptions {
     pub hot_pixels: f32,
     pub highlight_reconstruction: f32,
     pub highlight_method: crate::raw_highlight::HighlightMethod,
+    /// Fraction of clipped CFA sites below which the spatial highlight solver
+    /// is declined and the frame develops on the post-demosaic `Current`
+    /// estimator. This is what keeps an unclipped frame off the ~20 s / ~1.3 GB
+    /// path. `0.0` always solves. See
+    /// [`crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR`].
+    pub spatial_highlight_floor: f32,
     pub full_dng_color: bool,
     pub lens_correction: crate::lens::LensCorrectionMode,
+    /// Build the EXIF payload and ICC profile on [`RenderedRgb16Image`], the
+    /// same bytes the CLI writers embed. `false` leaves both `None` and skips
+    /// the one extra metadata parse of the source file; it never changes pixels.
+    /// Mirrors the CLI's `--no-metadata`, inverted.
+    pub metadata: bool,
     /// Collect observational scene evidence without changing returned pixels.
     pub semantic: bool,
     /// Experimental dense-mask sky highlight luminance compression, 0 to 1.
@@ -81,6 +93,9 @@ pub struct RenderOptions {
     /// Experimental mask-gated removal of measured sky magenta, 0 to 1.
     /// Does not infer a white point or neutralize the blue/yellow axis.
     pub semantic_sky_chroma: f32,
+    /// Run the YuNet face detector under `semantic`. Off; see
+    /// [`crate::scene::FACE_DETECTION_DEFAULT`].
+    pub semantic_faces: bool,
     /// Directory containing prepared scene_image ONNX graphs.
     pub semantic_model_dir: std::path::PathBuf,
 }
@@ -123,11 +138,14 @@ impl RenderOptions {
             hot_pixels: options.hot_pixels,
             highlight_reconstruction: options.highlight_reconstruction,
             highlight_method: options.highlight_method,
+            spatial_highlight_floor: options.spatial_highlight_floor,
             full_dng_color: options.full_dng_color,
             lens_correction: options.lens_correction,
+            metadata: options.write_metadata,
             semantic: options.semantic,
             semantic_sky_highlights: options.semantic_sky_highlights,
             semantic_sky_chroma: options.semantic_sky_chroma,
+            semantic_faces: options.semantic_faces,
             semantic_model_dir: options.semantic_model_dir.clone(),
         }
     }
@@ -221,6 +239,11 @@ impl RenderOptions {
             !self.highlight_method.is_spatial() || self.highlight_reconstruction == 1.0,
             "spatial highlight methods require highlight_reconstruction 1"
         );
+        ensure!(
+            self.spatial_highlight_floor.is_finite()
+                && (0.0..=1.0).contains(&self.spatial_highlight_floor),
+            "spatial_highlight_floor must be between 0 and 1"
+        );
         Ok(())
     }
 }
@@ -302,6 +325,12 @@ pub struct RenderedImage {
     pub row_stride: usize,
     pub pixel_format: PixelFormat,
     pub data: Vec<u8>,
+    /// See [`RenderedRgb16Image::color_space`].
+    pub color_space: crate::metadata::OutputColorSpace,
+    /// See [`RenderedRgb16Image::exif`].
+    pub exif: Option<Vec<u8>>,
+    /// See [`RenderedRgb16Image::icc`].
+    pub icc: Option<Vec<u8>>,
     pub report: RenderReport,
 }
 
@@ -315,12 +344,18 @@ impl RenderedImage {
     }
 }
 
-/// Self-describing native-endian 16-bit sRGB image for direct in-process use.
+/// Self-describing native-endian 16-bit image for direct in-process use.
 ///
 /// Unlike [`RenderedImage`], this keeps the renderer's native `Vec<u16>`
 /// allocation intact. Consumers such as high-bit-depth image encoders can
 /// borrow `data` directly without an endian packing pass or an intermediate
 /// image file.
+///
+/// `color_space`, `exif` and `icc` are the cross-repo handoff contract: they
+/// carry everything an encoder needs to write a faithful archive file without
+/// re-opening the source RAW, and without assuming a colour space. All three
+/// are additive — a consumer that reads only `width`/`height`/`data` behaves
+/// exactly as it did before they existed.
 #[derive(Debug, Clone)]
 pub struct RenderedRgb16Image {
     pub width: u32,
@@ -328,6 +363,28 @@ pub struct RenderedRgb16Image {
     /// Number of `u16` samples between adjacent rows.
     pub row_stride: usize,
     pub data: Vec<u16>,
+    /// The colour space `data` is encoded in. Signal this to the encoder rather
+    /// than assuming sRGB; see [`crate::metadata::OutputColorSpace`], which also
+    /// explains why this is *not* simply `--working-space`.
+    pub color_space: crate::metadata::OutputColorSpace,
+    /// EXIF as a standalone TIFF structure, with every internal offset relative
+    /// to the start of this buffer.
+    ///
+    /// **This is the bare TIFF blob, with no `Exif\0\0` header and no JPEG
+    /// `APP1` framing.** It is byte-identical to what
+    /// [`crate::metadata::SourceMetadata::exif_payload`] hands the CLI writers,
+    /// i.e. exactly what goes into a PNG `eXIf` chunk verbatim, into a JPEG
+    /// `APP1` segment after the six-byte header, and into a JPEG XL encoder's
+    /// `with_exif`. Orientation is already normalized to `1` and the dimensions
+    /// are the rendered ones, because the pixels are upright.
+    ///
+    /// `None` when `RenderOptions::metadata` is false, or when the source
+    /// carried nothing worth writing.
+    pub exif: Option<Vec<u8>>,
+    /// The ICC profile for `color_space`. Generated, v2.1 matrix-shaper, and
+    /// byte-identical to the profile the CLI embeds. `None` when
+    /// `RenderOptions::metadata` is false.
+    pub icc: Option<Vec<u8>>,
     pub report: RenderReport,
 }
 
@@ -349,6 +406,9 @@ pub fn render_file(path: impl AsRef<Path>, options: &RenderOptions) -> Result<Re
         row_stride,
         pixel_format: options.pixel_format,
         data,
+        color_space: rendered.color_space,
+        exif: rendered.exif,
+        icc: rendered.icc,
         report: rendered.report,
     })
 }
@@ -404,6 +464,7 @@ pub fn render_file_rgb16(
                 hot_pixels: options.hot_pixels,
                 highlight_reconstruction: options.highlight_reconstruction,
                 highlight_method: options.highlight_method,
+                spatial_highlight_floor: options.spatial_highlight_floor,
                 demosaic: options.demosaic,
                 snr10_ev: noise_floor.as_ref().map(|floor| floor.snr10_ev),
                 full_dng_color: options.full_dng_color,
@@ -453,6 +514,7 @@ pub fn render_file_rgb16(
             noise_floor.as_ref().map(|floor| floor.snr10_ev),
             preview_semantic_eligible,
             &options.semantic_model_dir,
+            options.semantic_faces,
         )?;
         let sky_map = if options.semantic_sky_highlights > 0.0 {
             let map = crate::scene::build_sky_highlight_map(
@@ -607,11 +669,32 @@ pub fn render_file_rgb16(
     let data = rendered.into_raw();
     let row_stride = width as usize * 3;
 
+    // The same builder the CLI writers use, at the same output dimensions, so a
+    // consumer that embeds this blob produces the EXIF `raw-autotune --format
+    // png` would have written. Best effort: a source whose metadata will not
+    // serialize must not fail a render that already succeeded.
+    let color_space =
+        crate::metadata::OutputColorSpace::of_render(options.working_space, options.raw_color_path);
+    let (exif, icc) = if options.metadata {
+        // Not gated on `SourceMetadata::is_empty`, matching `pipeline.rs`: a
+        // file whose EXIF cannot be parsed still gets Software, Orientation,
+        // ColorSpace and the output dimensions, which is what a library needs
+        // least wrongly.
+        let source = crate::metadata::SourceMetadata::read(path);
+        let exif = source.exif_payload(width, height).ok();
+        (exif, Some(color_space.icc_profile().to_vec()))
+    } else {
+        (None, None)
+    };
+
     Ok(RenderedRgb16Image {
         width,
         height,
         row_stride,
         data,
+        color_space,
+        exif,
+        icc,
         report: RenderReport {
             automatic_profile_version: RunOptions::AUTO_PROFILE_VERSION,
             camera,

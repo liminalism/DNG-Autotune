@@ -93,7 +93,7 @@ raw-autotune
 ```
 
 It asks only for one or more RAW files/folders and an output directory, then
-starts. The versioned `archive-auto-v4` profile chooses colour, harmonic
+starts. The versioned `archive-auto-v6` profile chooses colour, harmonic
 highlight reconstruction,
 corrections, tone, metadata, JPEG settings and safe concurrency. Passing any
 argument uses the non-interactive CLI, with the same defaults and optional
@@ -124,7 +124,7 @@ memory the machine reports free and the size of the largest input, and the run
 header says what it chose and why:
 
 ```
-raw-autotune v0.1.19 | 376 file(s) | profile=archive-auto-v4 | preset=auto | concurrent images=5 \
+raw-autotune v0.1.19 | 376 file(s) | profile=archive-auto-v6 | preset=auto | concurrent images=5 \
   (auto: 22.76 GiB available, 2.67 GiB per image at 49.9 MP)
 ```
 
@@ -177,6 +177,35 @@ In-process high-bit-depth encoders should use `api::render_file_rgb16` instead.
 It returns the tone renderer's native-endian `Vec<u16>` allocation directly,
 without byte packing, an image-file intermediate, or another RGB conversion.
 
+It also returns everything such an encoder needs to write a faithful archive
+file without reopening the source RAW:
+
+```rust,no_run
+use raw_autotune::api::{RenderOptions, render_file_rgb16};
+
+let image = render_file_rgb16("photo.ARW", &RenderOptions::automatic())?;
+
+// The colour space is stated rather than assumed. `--working-space` selects the
+// *intermediate* space and is converted back before the tone curve, so this is
+// `Srgb` in every current configuration — read the field, do not hardcode it.
+let space = image.color_space;
+
+// A bare EXIF TIFF structure: no `Exif\0\0` header, no APP1 framing, all
+// offsets relative to the start of the buffer. Byte-identical to what the file
+// writers embed, with orientation already normalized. This is what a JPEG XL
+// encoder's `with_exif` expects.
+if let Some(exif) = image.exif.as_deref() { /* encoder.with_exif(exif) */ }
+
+// The generated matrix-shaper ICC profile for `space`.
+if let Some(icc) = image.icc.as_deref() { /* encoder.with_icc(icc) */ }
+# let _ = (space,);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+`RenderOptions::metadata = false` leaves both `None` and skips the one extra
+metadata parse; it never changes a pixel. `render_file` carries the same three
+fields.
+
 Survey a large batch quickly — measures every file, writes no images:
 
 ```bash
@@ -226,11 +255,31 @@ raw-autotune photo.ARW --highlight-method harmonic \
   --highlight-reconstruction 1
 ```
 
-`current` remains the default. The spatial methods are CLI-only evaluation
-paths: they keep trusted Bayer sites exact, preserve the original raw clip map
-for downstream uncertainty, and are not part of the automatic profile. A
-partial reconstruction strength is rejected because blending two estimators can
-recreate the very clip-boundary contour these methods are meant to measure.
+**`harmonic` is the default** — this paragraph used to say `current` was, which
+stopped being true when the harmonic estimator was promoted. `current` remains
+available and is what a frame falls back to when the spatial solve is declined.
+The spatial methods keep trusted Bayer sites exact and preserve the original raw
+clip map for downstream uncertainty. A partial reconstruction strength is
+rejected because blending two estimators can recreate the very clip-boundary
+contour these methods are meant to measure.
+
+The spatial solvers cost roughly 6 to 46 seconds and 1.3 GB on a 24 MP frame,
+and most of that is paid whether or not anything in the frame is clipped. So the
+archive profile does not run one on a frame that has essentially no clipped
+sites:
+
+```bash
+# The default: skip the solve below 0.001% clipped CFA sites.
+raw-autotune photo.ARW
+
+# Always solve, whatever the frame looks like.
+raw-autotune photo.ARW --spatial-highlight-floor 0
+```
+
+A declined frame is byte-identical to `--highlight-method current` on the same
+file. `clipped_cfa_sites` in the sidecar is the statistic the floor is compared
+against, so a batch survey shows exactly which frames would be affected. See
+`docs/KNOWN_LIMITATIONS.md` for what the floor does and does not buy.
 
 Override the archive JPEG quality:
 

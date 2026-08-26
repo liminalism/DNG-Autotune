@@ -4,8 +4,11 @@
 The stage dumps are lossless 16-bit RGB PNGs.  Pillow exposes those files as
 8-bit ``RGB`` images, which is convenient for a contact sheet but not enough
 for a boundary measurement.  This evaluator reads the raw 16-bit sample stream
-through ImageMagick, then compares the production checkpoints in linear light
-and OKLab.
+through the ``probe-png16`` example, which decodes with the same `image` crate
+the program encodes with, then compares the production checkpoints in linear
+light and OKLab.  Build it first::
+
+    cargo build --release --example probe-png16
 
 Expected input layout::
 
@@ -26,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -35,39 +39,69 @@ import numpy as np
 SRGB_BREAK = 0.04045
 
 
-def read_rgb16_png(path: Path, crop: tuple[int, int, int, int] | None = None) -> np.ndarray:
-    """Read raw 16-bit RGB samples through ImageMagick without an 8-bit cast.
+def probe_png16_command() -> list[str]:
+    """Locate the `probe-png16` example binary that decodes the stage dumps.
 
-    The repository already uses ImageMagick for lossless inspection of the
-    generated PNGs.  Its raw ``RGB`` writer is little-endian for 16-bit samples
-    on this host; using that stream avoids Pillow's silent 16-bit-RGB-to-8-bit
-    conversion and avoids maintaining a second PNG decoder in the evaluation
-    tool.
+    Override with ``RAW_AUTOTUNE_PROBE_PNG16`` when running against a build in a
+    non-default target directory.
     """
 
-    command = ["convert", str(path)]
+    override = os.environ.get("RAW_AUTOTUNE_PROBE_PNG16")
+    if override:
+        return [override]
+    root = Path(__file__).resolve().parent.parent
+    for name in ("probe-png16.exe", "probe-png16"):
+        candidate = root / "target" / "release" / "examples" / name
+        if candidate.is_file():
+            return [str(candidate)]
+    raise RuntimeError(
+        "evaluate_sky_stages.py needs the probe-png16 example. Build it with:\n"
+        "    cargo build --release --example probe-png16\n"
+        "or point RAW_AUTOTUNE_PROBE_PNG16 at the binary."
+    )
+
+
+def read_rgb16_png(path: Path, crop: tuple[int, int, int, int] | None = None) -> np.ndarray:
+    """Read raw 16-bit RGB samples through `probe-png16` without an 8-bit cast.
+
+    The stage dumps are 16-bit RGB and the whole point of this tool is exact
+    encoded-sample arithmetic, so the reader has to be lossless.  Pillow is not
+    an option: its PNG reader silently narrows 16-bit RGB to 8-bit, so 30000 and
+    30001 both come back as 117 and every pixel delta and OKLab statistic below
+    would be quantized to 8 bits without announcing it.
+
+    This used to shell out to ImageMagick (``convert -depth 16 RGB:-``), which is
+    a second image stack to install and keep working, and is simply absent on
+    some development hosts.  ``examples/probe-png16.rs`` decodes through the same
+    `image` crate the program writes its PNGs with, so the dumps are read back by
+    the counterpart of the encoder that produced them.
+
+    The probe emits a little-endian ``u32`` width, ``u32`` height, then
+    ``width * height * 3`` ``u16`` samples in RGB order.
+    """
+
+    command = probe_png16_command() + [str(path)]
     if crop is not None:
         x0, y0, width, height = crop
         if x0 < 0 or y0 < 0 or width <= 0 or height <= 0:
             raise ValueError(f"invalid crop {crop}")
-        command.extend(["-crop", f"{width}x{height}+{x0}+{y0}", "+repage"])
-    else:
-        identify = subprocess.run(
-            ["identify", "-format", "%w %h", str(path)],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout.split()
-        width, height = (int(value) for value in identify)
-    command.extend(["-depth", "16", "RGB:-"])
-    try:
-        raw = subprocess.run(command, check=True, capture_output=True).stdout
-    except FileNotFoundError as error:
-        raise RuntimeError("evaluate_sky_stages.py requires ImageMagick's convert command") from error
+        command.extend([str(x0), str(y0), str(width), str(height)])
+    result = subprocess.run(command, check=False, capture_output=True)
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", "replace").strip()
+        raise RuntimeError(f"probe-png16 failed on {path}: {detail}")
+    raw = result.stdout
+    if len(raw) < 8:
+        raise ValueError(f"{path}: probe-png16 emitted no header")
+    width = int.from_bytes(raw[0:4], "little")
+    height = int.from_bytes(raw[4:8], "little")
     expected = width * height * 3 * 2
-    if len(raw) != expected:
-        raise ValueError(f"{path}: convert emitted {len(raw)} bytes, expected {expected}")
-    return np.frombuffer(raw, dtype="<u2").reshape(height, width, 3).copy()
+    body = raw[8:]
+    if len(body) != expected:
+        raise ValueError(
+            f"{path}: probe-png16 emitted {len(body)} sample bytes, expected {expected}"
+        )
+    return np.frombuffer(body, dtype="<u2").reshape(height, width, 3).copy()
 
 
 def srgb_to_linear(encoded: np.ndarray) -> np.ndarray:
