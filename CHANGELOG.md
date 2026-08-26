@@ -2,6 +2,47 @@
 
 ## Unreleased — a standalone front-end
 
+### CamSDD scene classifier: hand review closes the training loop
+
+The user reviewed all 384 corpus predictions class by class
+(`@raw-autotune.observation.corpus-per-class-precision-hand-review`),
+producing per-class *precision on our domain* — the number CamSDD accuracy
+can't provide. Trust tiers now on record for phase-4 policy wiring: Indoor
+catches every true indoor frame but runs ~50% precision (C5 CCT
+corroboration is mandatory, as the plan's §4 already required — now
+quantified); Kids/Underwater/Computer_Screens/Snow are blocklisted from
+gating anything (all Snow verdicts on this corpus were pale-scene false
+positives); Macro, Food, Text_Documents, Night_shot and the outdoor
+classes are precision-clean enough for mild render/encoder hints.
+
+Two consequences landed immediately. Gate 2 was re-authored to the metric
+the Rust mapping layer actually consumes — per-policy-class **top-3 recall
+≥ 95%** (top-1 ≥ 80% floor) — because argmax is single-label by
+construction while real frames belong to several classes; the shipping
+model passes (worst policy top-3 95.0%, worst top-1 87.5%). And the one
+hand-review-caught mislabel among the 44 training pseudo-labels (a
+snowless winter road labeled Snow) was dropped; retraining on the reviewed
+43 (`runs/adapt1`) recovered the full 97.50% CamSDD baseline that the
+mislabeled round had dipped by one image. `camsdd_resnet50_192.onnx`
+re-exported from adapt1, op screen clean. Details in
+`tools/scene_models/TRAINING.md`.
+
+### `--dump-scene-proxy`: the semantic proxy becomes inspectable
+
+New diagnostic flag (requires `--semantic`): writes the 512-px semantic proxy's
+content region as an sRGB PNG per file — the exact pixels every scene model
+sees, produced by `scene::build_proxy` itself rather than a re-derivation that
+could drift. Off by default and diagnostic-only, so rendered output is
+untouched by construction; clippy and the full test suite pass.
+
+First use (2026-08-26): dumping all 384 corpus RAWs for the CamSDD classifier's
+domain-adaptation and observational phases (`tools/scene_models/TRAINING.md`).
+The run immediately produced a load-bearing negative finding, recorded as
+`@raw-autotune.observation.night-invisible-in-fixed-tone-proxy`: the fixed
+neutral analysis tone renders high-ISO night/dusk frames at normal brightness,
+so "night" is not visually present in classifier input — empirical confirmation
+that `low_light_score` must remain the sole night authority.
+
 ### The archive profile stops solving highlights it has no highlights to solve
 
 `archive-auto-v5` ran the harmonic estimator on every Bayer frame. Almost all of

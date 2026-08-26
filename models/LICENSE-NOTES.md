@@ -9,6 +9,7 @@ and whether those files can be redistributed with this crate.
 | MobileOne-S0 fused ImageNet checkpoint | Apple ml-mobileone | Apple sample-code license | **Do not ship** until audited |
 | `ekzhang/fastseg` MobileV3-Large Cityscapes | ekzhang/fastseg | MIT | Yes, with notice |
 | torchvision LR-ASPP MobileNetV3-Large COCO | torchvision | BSD-3-Clause | Yes, with notice |
+| CamSDD-trained scene classifier (`camsdd_resnet50`) | trained in-repo on CamSDD (ETH Zurich) | CC BY-NC-SA 4.0 (inherited from dataset) | **Only** under BY-NC-SA terms: attribution to CamSDD, non-commercial, share-alike. See `tools/scene_models/TRAINING.md`. |
 
 Prepared ONNX files inherit the upstream weight license. `models/manifest.json`
 pins hashes after a successful fetch; empty `sha256` fields mean “not yet

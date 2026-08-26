@@ -26,6 +26,13 @@ models/artifacts/
 __pycache__/
 *.pyc
 
+# CamSDD training dataset (CC BY-NC-SA 4.0, ~10K images) and training
+# products stay local; only the scripts and TRAINING.md are tracked.
+/CamSDD/
+/CamSDD.zip
+/.venv-train/
+tools/scene_models/runs/
+
 # Session outputs and agent scratch (never tracked)
 /night2
 /output-tests
