@@ -2,6 +2,25 @@
 
 ## Unreleased — a standalone front-end
 
+### C5 illuminant estimator ported to ONNX (Model B, phase 2)
+
+`tools/scene_models/c5_port.py` exports the neural half of C5 (Apache-2.0,
+mahmoudnafifi/C5) — the encoders/decoders that emit the CCC filter and bias
+from a 1×7×4×64×64 log-uv histogram stack — as
+`models/artifacts/c5_m7_h64.onnx`. The FFT application step stays outside
+the graph (lege-gpu has no FFT; on a 64×64 histogram it is cheap Rust-side
+post-processing). Three unsupported ops were decomposed numerically
+faithfully (LeakyReLU→PRelu, InstanceNorm→ReduceMean/Sub/Pow/Sqrt/Div,
+cross-pool ReduceMax→chained Max): worst torch-vs-ONNX gap over 30
+inferences is 0.0001° end to end. Determinism decision, measured: upstream
+feeds six *random* sibling images as extra context, which would break the
+"a file develops identically alone or in a batch" invariant; duplicating
+the frame's own histogram scores 3.22° mean angular error on the 30
+in-repo IMX135 ground-truth frames vs 3.25° with sibling context — the
+deterministic mode costs nothing. 17.8 ms CPU per frame. Rust-side
+histogram + CCT recording is the remaining half
+(`@raw-autotune.work.port-c5-illuminant-estimator`).
+
 ### CamSDD scene classifier: hand review closes the training loop
 
 The user reviewed all 384 corpus predictions class by class
