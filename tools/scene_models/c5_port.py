@@ -230,6 +230,49 @@ def export_stage(args, net):
         opset_version=17,
         dynamo=False,
     )
+
+    # Three value-preserving rewrites, in this order, so lege-gpu's compiled
+    # graph can accept what torch emitted:
+    #   1. onnxsim folds the constant shape-plumbing torch generates for
+    #      `Conv(padding_mode=...)` — including a reverse-step `Slice` the
+    #      bridge's own constant folder declines to evaluate;
+    #   2. the encoder's `x[:, i]` frame selection exports as a scalar-index
+    #      `Gather`, for which the bridge has no kernel, and which is exactly a
+    #      one-element `Slice` plus a `Squeeze`;
+    #   3. the convolutions pad by replication, which exports as an edge-mode
+    #      `Pad` the bridge has no kernel for, and which is a Slice+Concat of
+    #      the border planes;
+    #   4. the normalization blocks reduce over both spatial axes at once,
+    #      which the bridge takes only as a GlobalAveragePool;
+    #   5. every remaining literal is still a `Constant` node, and the bridge
+    #      expects initializers.
+    import onnx
+
+    from prepare import (
+        lift_constants,
+        rewrite_edge_pad,
+        rewrite_gather_to_slice,
+        rewrite_spatial_reducemean,
+        simplify,
+    )
+
+    # `simplify` degrades to a warning when onnxsim is missing, which would
+    # leave a graph the later rewrites cannot fix and lege-gpu silently
+    # rejects at load. Fail here instead, where the cause is obvious.
+    import onnxsim  # noqa: F401
+
+    model = simplify(onnx.load(str(out)))
+    gathers = rewrite_gather_to_slice(model)
+    edge_pads = rewrite_edge_pad(model)
+    means = rewrite_spatial_reducemean(model)
+    lifted = lift_constants(model)
+    onnx.checker.check_model(model)
+    onnx.save(model, str(out))
+    print(f"simplified; rewrote {gathers} Gather node(s) to Slice+Squeeze, "
+          f"{edge_pads} edge Pad node(s) to Slice+Concat, {means} spatial "
+          f"ReduceMean node(s) to GlobalAveragePool, and lifted "
+          f"{lifted} Constant node(s) into initializers")
+
     print(f"exported {out} (1x4x{HIST_SIZE}x{HIST_SIZE} -> duplicated to "
           f"1x{DATA_NUM}x4x{HIST_SIZE}x{HIST_SIZE} inside the graph -> "
           f"F 1x2x{HIST_SIZE}x{HIST_SIZE}, B 1x{HIST_SIZE}x{HIST_SIZE})")

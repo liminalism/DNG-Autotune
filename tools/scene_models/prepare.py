@@ -159,6 +159,232 @@ def rewrite_clip(model) -> int:
     return rewritten
 
 
+def lift_constants(model) -> int:
+    """Move `Constant` nodes into the initializer list.
+
+    lege-gpu's compiled graph has no `Constant` op: it expects every constant
+    to arrive as an initializer, which is what its shape-inference and
+    constant-folding passes read. A torch export emits `Constant` nodes for
+    every shape-plumbing literal instead, so a graph that is otherwise entirely
+    supported is rejected at load with "shape inference is not implemented for
+    op Constant".
+
+    The rewrite is value-preserving by construction — a `Constant` node *is* an
+    initializer with extra steps — and only handles the `value` attribute form;
+    a sparse or generated Constant is left alone and will still be rejected,
+    which is the honest outcome.
+
+    Returns the number of nodes lifted.
+    """
+    _require_onnx()
+
+    graph = model.graph
+    kept = []
+    lifted = 0
+    for node in graph.node:
+        value = None
+        if node.op_type == "Constant" and len(node.output) == 1:
+            for attr in node.attribute:
+                if attr.name == "value":
+                    value = attr.t
+        if value is None:
+            kept.append(node)
+            continue
+        tensor = graph.initializer.add()
+        tensor.CopyFrom(value)
+        tensor.name = node.output[0]
+        lifted += 1
+
+    if lifted:
+        del graph.node[:]
+        graph.node.extend(kept)
+    return lifted
+
+
+def rewrite_gather_to_slice(model) -> int:
+    """Replace scalar-index `Gather` with `Slice` + `Squeeze`.
+
+    `x[:, i]` on a data tensor exports as `Gather(data, scalar, axis=k)`, which
+    lege-gpu has no kernel for. On a scalar index it is exactly a one-element
+    slice followed by dropping that axis, both of which the bridge supports, and
+    the substitution is value-identical rather than an approximation.
+
+    Only scalar-index Gathers whose index is a constant initializer are
+    rewritten; a vector index or a computed one is left alone, since it is not
+    the same operation.
+
+    Returns the number of nodes rewritten.
+    """
+    _onnx, tensor_proto, helper, numpy_helper = _require_onnx()
+    import numpy as np
+
+    graph = model.graph
+    constants = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
+    new_nodes = []
+    rewritten = 0
+
+    def const(name: str, values):
+        tensor = numpy_helper.from_array(np.asarray(values, dtype=np.int64), name=name)
+        graph.initializer.append(tensor)
+        return name
+
+    for node in graph.node:
+        index = constants.get(node.input[1]) if node.op_type == "Gather" else None
+        if index is None or index.ndim != 0:
+            new_nodes.append(node)
+            continue
+        axis = 0
+        for attr in node.attribute:
+            if attr.name == "axis":
+                axis = int(attr.i)
+        start = int(index)
+        if start < 0:
+            # A negative index needs the axis length to turn into an end bound;
+            # the exports in this repo never produce one, so leave it be.
+            new_nodes.append(node)
+            continue
+
+        prefix = f"__gather{rewritten}_"
+        sliced = prefix + "sliced"
+        new_nodes.append(
+            helper.make_node(
+                "Slice",
+                [
+                    node.input[0],
+                    const(prefix + "starts", [start]),
+                    const(prefix + "ends", [start + 1]),
+                    const(prefix + "axes", [axis]),
+                ],
+                [sliced],
+                name=prefix + "slice",
+            )
+        )
+        new_nodes.append(
+            helper.make_node(
+                "Squeeze",
+                [sliced, const(prefix + "squeeze_axes", [axis])],
+                [node.output[0]],
+                name=prefix + "squeeze",
+            )
+        )
+        rewritten += 1
+
+    if rewritten:
+        del graph.node[:]
+        graph.node.extend(new_nodes)
+    del tensor_proto
+    return rewritten
+
+
+def rewrite_edge_pad(model) -> int:
+    """Replace `Pad(mode='edge')` with `Slice` + `Concat` of the border planes.
+
+    `nn.Conv2d(padding_mode='replicate')` exports as an edge-mode `Pad`, which
+    lege-gpu's bridge does not implement (it has constant and reflect kernels
+    only). Replicating a border is exactly concatenating copies of the first and
+    last slab along that axis, so the substitution is value-identical.
+
+    Requires statically known shapes and constant pads — both true after
+    `simplify` — and rewrites one axis at a time so a pad on several axes
+    chains. A dynamic or negative pad is left alone.
+
+    Returns the number of `Pad` nodes rewritten.
+    """
+    onnx, _tensor_proto, helper, numpy_helper = _require_onnx()
+    import numpy as np
+
+    inferred = onnx.shape_inference.infer_shapes(model)
+    shapes = {}
+    for value in list(inferred.graph.value_info) + list(inferred.graph.input):
+        dims = value.type.tensor_type.shape.dim
+        if all(dim.HasField("dim_value") for dim in dims):
+            shapes[value.name] = [dim.dim_value for dim in dims]
+
+    graph = model.graph
+    constants = {init.name: numpy_helper.to_array(init) for init in graph.initializer}
+    new_nodes = []
+    rewritten = 0
+
+    def const(name: str, values):
+        tensor = numpy_helper.from_array(np.asarray(values, dtype=np.int64), name=name)
+        graph.initializer.append(tensor)
+        return name
+
+    for node in graph.node:
+        mode = None
+        for attr in node.attribute:
+            if attr.name == "mode":
+                mode = attr.s.decode()
+        pads = constants.get(node.input[1]) if len(node.input) > 1 else None
+        shape = shapes.get(node.input[0])
+        if (
+            node.op_type != "Pad"
+            or mode != "edge"
+            or pads is None
+            or shape is None
+            or len(pads) != 2 * len(shape)
+            or any(int(pad) < 0 for pad in pads)
+        ):
+            new_nodes.append(node)
+            continue
+
+        rank = len(shape)
+        current = node.input[0]
+        current_shape = list(shape)
+        prefix = f"__edgepad{rewritten}_"
+        step = 0
+        for axis in range(rank):
+            before, after = int(pads[axis]), int(pads[axis + rank])
+            if before == 0 and after == 0:
+                continue
+            length = current_shape[axis]
+            parts = []
+
+            def slab(start: int, end: int, tag: str):
+                name = f"{prefix}{step}_{tag}"
+                new_nodes.append(
+                    helper.make_node(
+                        "Slice",
+                        [
+                            current,
+                            const(name + "_starts", [start]),
+                            const(name + "_ends", [end]),
+                            const(name + "_axes", [axis]),
+                        ],
+                        [name],
+                        name=name,
+                    )
+                )
+                return name
+
+            if before:
+                parts += [slab(0, 1, "first")] * before
+            parts.append(current)
+            if after:
+                parts += [slab(length - 1, length, "last")] * after
+
+            joined = f"{prefix}{step}_joined"
+            new_nodes.append(
+                helper.make_node("Concat", parts, [joined], axis=axis, name=joined)
+            )
+            current = joined
+            current_shape[axis] = length + before + after
+            step += 1
+
+        # The last Concat has to carry the Pad's own output name; rename it
+        # rather than adding an Identity the bridge would have to lower.
+        if current == node.input[0]:
+            new_nodes.append(node)
+            continue
+        new_nodes[-1].output[0] = node.output[0]
+        rewritten += 1
+
+    if rewritten:
+        del graph.node[:]
+        graph.node.extend(new_nodes)
+    return rewritten
+
+
 def rewrite_spatial_reducemean(model) -> int:
     """Rewrite NCHW ReduceMean(axes=[2,3], keepdims=1) to GlobalAveragePool."""
     _onnx, _tensor_proto, helper, _numpy_helper = _require_onnx()

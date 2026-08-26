@@ -331,6 +331,30 @@ fn choose_matrix(raw: &RawImage) -> Option<(Illuminant, &Vec<f32>)> {
         .map(|(illuminant, matrix)| (*illuminant, matrix))
 }
 
+/// Camera space to CIE XYZ, straight from the file's calibration matrix.
+///
+/// Deliberately *not* [`ColorTransform::cam_to_working`]: that matrix is
+/// row-normalized so the as-shot neutral lands on working white, which bakes the
+/// camera's own white-balance assumption into the conversion. Pushing an
+/// estimated illuminant through it would return the camera's neutral no matter
+/// what the estimator said — a measurement that always agrees with the thing it
+/// is supposed to be checking. Only the three-colour case is handled; a
+/// four-channel sensor never reaches [`crate::illuminant`], whose proxy is built
+/// from the three-channel branch of `develop`.
+pub(crate) fn camera_to_xyz(raw: &RawImage) -> Option<(Illuminant, Matrix3)> {
+    let (illuminant, flat) = choose_matrix(raw)?;
+    if flat.len() < 9 {
+        return None;
+    }
+    let mut xyz_to_cam = [[0.0_f32; 3]; 3];
+    for (channel, row) in xyz_to_cam.iter_mut().enumerate() {
+        for (axis, cell) in row.iter_mut().enumerate() {
+            *cell = flat[channel * 3 + axis];
+        }
+    }
+    invert3(xyz_to_cam).map(|matrix| (illuminant, matrix))
+}
+
 /// Everything needed to take one camera-RGB pixel into the working space.
 #[derive(Debug, Clone)]
 pub struct ColorTransform {
@@ -1158,14 +1182,29 @@ pub struct DevelopOptions {
     /// Where to write per-stage scene-linear dumps, when asked for.
     /// `None` disables the extra highlight diagnostics.
     pub dump_stages: Option<std::path::PathBuf>,
+    /// Capture the pre-white-balance camera-RGB proxy the illuminant estimator
+    /// needs. Observational: `false` costs nothing and changes nothing, and the
+    /// proxy is read by [`crate::illuminant`] alone — never by the render.
+    pub illuminant_proxy: bool,
 }
+
+/// What [`develop`] hands back: the scene-linear image, what the colour path
+/// did, the per-pixel highlight-reconstruction uncertainty when one was
+/// computed, and the pre-white-balance proxy when `illuminant_proxy` asked for
+/// it.
+pub type Developed = (
+    Image<SceneLinear>,
+    ColorReport,
+    Option<Vec<f32>>,
+    Option<crate::illuminant::CameraProxy>,
+);
 
 /// Develop to scene-linear working-space RGB through the owned colour path.
 pub fn develop(
     raw: &RawImage,
     path: &std::path::Path,
     options: DevelopOptions,
-) -> Result<(Image<SceneLinear>, ColorReport, Option<Vec<f32>>)> {
+) -> Result<Developed> {
     // The DNG matrix transform is tried first when asked for. Incomplete or
     // unsupported profiles fall back to the decoder camera matrix.
     let mut dng_color = None;
@@ -1408,11 +1447,26 @@ pub fn develop(
         }
     }
 
+    // The last point in the pipeline where the pixels are still what the sensor
+    // recorded: demosaiced and corrected, black/white normalized, but not yet
+    // white balanced or matrixed. The illuminant estimator wants exactly this —
+    // one step later the illuminant it is looking for has been divided out.
+    let mut illuminant_proxy = None;
+
     let image: Image<SceneLinear> = match camera {
         // In place: the camera-RGB buffer becomes the scene-linear one rather
         // than being collected into a second allocation of the same size. See
         // `Image::map_into`.
         CameraImage::Three(image) => {
+            if options.illuminant_proxy {
+                match crate::illuminant::build_camera_proxy(&image) {
+                    Ok(proxy) => illuminant_proxy = Some(proxy),
+                    Err(error) => eprintln!(
+                        "ILLUM illuminant proxy unavailable for {}: {error:#}",
+                        path.display()
+                    ),
+                }
+            }
             if transform.channels != 3 {
                 bail!(
                     "the sensor demosaiced to three colour channels but its DNG calibration \
@@ -1476,7 +1530,7 @@ pub fn develop(
         lens_correction: lens_correction.map(crate::lens::LensCorrection::into_report),
     };
 
-    Ok((image, report, highlight_uncertainty))
+    Ok((image, report, highlight_uncertainty, illuminant_proxy))
 }
 
 /// Measure what Rawler's clip would have cost this frame.

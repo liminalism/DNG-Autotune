@@ -6,6 +6,12 @@ graph before the Rust session does.
 
 from __future__ import annotations
 
+# Registered lege-gpu `ModelTarget` input names (`load.rs::TARGETS`). A graph
+# whose primary input is not one of these is rejected by the Rust session
+# before a single op runs, so exports must use the registered name verbatim.
+SCENE_INPUT_NAME = "scene_image"
+C5_INPUT_NAME = "chroma_histograms"
+
 HARD_REJECT = frozenset(
     {
         "QuantizeLinear",

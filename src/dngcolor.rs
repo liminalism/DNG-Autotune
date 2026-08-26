@@ -248,8 +248,32 @@ const TEMPERATURE_LINES: [[f64; 4]; 31] = [
     [600.0, 0.33724, 0.36051, -116.45],
 ];
 
+/// CIE xy chromaticity of an XYZ triplet, or `None` when it falls outside the
+/// diagram.
+///
+/// Crate-visible so [`crate::illuminant`] can place an estimated illuminant on
+/// the same diagram this module's own white points live on, rather than growing
+/// a second copy of the conversion and its validity rule.
+pub(crate) fn chromaticity(xyz: &[f64; 3]) -> Option<(f64, f64)> {
+    let xy = xyz_to_xy(xyz);
+    valid_xy(xy).then_some(xy)
+}
+
 /// Correlated colour temperature from CIE xy via Robertson's method.
 fn correlated_temperature(x: f64, y: f64) -> Option<f64> {
+    temperature_and_duv(x, y).map(|(temperature, _)| temperature)
+}
+
+/// Robertson's method, also returning the signed distance from the Planckian
+/// locus in CIE 1960 `uv` — the usual `Duv` tint measure, positive above the
+/// locus (green) and negative below it (magenta).
+///
+/// The locus point is interpolated linearly between the two bracketing
+/// isotemperature lines, using the same fraction the temperature interpolation
+/// uses. That is an approximation of a curve by a chord over at most 25
+/// reciprocal-megakelvin, which is well inside the precision this is reported
+/// at; it is not accurate enough to drive a render, and nothing does.
+pub(crate) fn temperature_and_duv(x: f64, y: f64) -> Option<(f64, f64)> {
     let denominator = 1.5 - x + 6.0 * y;
     if !denominator.is_finite() || denominator.abs() < 1e-12 {
         return None;
@@ -272,12 +296,17 @@ fn correlated_temperature(x: f64, y: f64) -> Option<f64> {
             } else {
                 distance / (previous_distance + distance)
             };
-            let previous_reciprocal = TEMPERATURE_LINES[index - 1][0];
-            let interpolated = previous_reciprocal * fraction + reciprocal * (1.0 - fraction);
+            let previous = TEMPERATURE_LINES[index - 1];
+            let interpolated = previous[0] * fraction + reciprocal * (1.0 - fraction);
             if !interpolated.is_finite() || interpolated <= 0.0 {
                 return None;
             }
-            return Some(1.0e6 / interpolated);
+            let locus_u = previous[1] * fraction + line_u * (1.0 - fraction);
+            let locus_v = previous[2] * fraction + line_v * (1.0 - fraction);
+            let offset_u = u - locus_u;
+            let offset_v = v - locus_v;
+            let duv = offset_v.signum() * (offset_u * offset_u + offset_v * offset_v).sqrt();
+            return Some((1.0e6 / interpolated, duv));
         }
         previous_distance = distance;
     }

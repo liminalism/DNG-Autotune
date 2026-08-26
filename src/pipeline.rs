@@ -105,9 +105,9 @@ fn develop(
     options: &RunOptions,
     snr10_ev: Option<f32>,
     highlight_method: crate::raw_highlight::HighlightMethod,
-) -> Result<(LinearImage, ColorReport, Option<Vec<f32>>)> {
+) -> Result<crate::color::Developed> {
     match options.raw_color_path {
-        RawColorPath::Rawler => Ok((develop_linear(raw)?, ColorReport::rawler(raw), None)),
+        RawColorPath::Rawler => Ok((develop_linear(raw)?, ColorReport::rawler(raw), None, None)),
         RawColorPath::Owned => crate::color::develop(
             raw,
             path,
@@ -123,6 +123,7 @@ fn develop(
                 full_dng_color: options.full_dng_color,
                 lens_correction: options.lens_correction,
                 dump_stages: options.dump_stages.clone(),
+                illuminant_proxy: options.illuminant,
             },
         ),
     }
@@ -186,8 +187,7 @@ fn dump_scene_proxy(directory: &Path, input: &Path, proxy: &crate::scene::Semant
         // Content region only: the letterbox padding is a proxy-geometry
         // artifact, not scene pixels, and downstream consumers letterbox for
         // their own input shapes.
-        let mut rgb =
-            image::RgbImage::new(proxy.content_width as u32, proxy.content_height as u32);
+        let mut rgb = image::RgbImage::new(proxy.content_width as u32, proxy.content_height as u32);
         for y in 0..proxy.content_height {
             for x in 0..proxy.content_width {
                 let offset = ((proxy.content_y + y) * proxy.width + proxy.content_x + x) * 3;
@@ -378,6 +378,7 @@ fn process_job_inner(
             chroma_denoise: None,
             luma_denoise: None,
             scene: None,
+            illuminant: None,
             encoder_hints: None,
             sharpen: None,
             reference: None,
@@ -518,13 +519,21 @@ fn process_job_inner(
     };
     let source_orientation = raw.orientation;
 
-    let (mut linear, color, mut highlight_uncertainty) = develop(
+    let (mut linear, color, mut highlight_uncertainty, illuminant_proxy) = develop(
         &raw,
         &job.input,
         options,
         noise_floor.as_ref().map(|floor| floor.snr10_ev),
         highlight_method,
     )?;
+
+    // Observational, and taken here because this is the last moment `raw` is
+    // alive: the estimate reads the pre-white-balance proxy `develop` captured
+    // and the file's own calibration matrix, and nothing downstream consults it.
+    let illuminant = illuminant_proxy
+        .as_ref()
+        .map(|proxy| crate::illuminant::observe(proxy, &raw, &options.semantic_model_dir));
+    drop(illuminant_proxy);
     drop(raw);
 
     // `None` whenever the working space already has sRGB primaries, which is the
@@ -1038,6 +1047,7 @@ fn process_job_inner(
             chroma_denoise,
             luma_denoise: luma_denoise.clone(),
             scene,
+            illuminant,
             encoder_hints: Some(encoder_hints),
             sharpen: None,
             reference,
@@ -1157,6 +1167,7 @@ fn process_job_inner(
             schema_version: crate::types::report_schema_version(
                 options.semantic,
                 options.semantic_sky_highlights > 0.0 || options.semantic_sky_chroma > 0.0,
+                options.illuminant,
             ),
             application: "raw-autotune".to_string(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1179,6 +1190,7 @@ fn process_job_inner(
             chroma_denoise: chroma_denoise.clone(),
             luma_denoise: luma_denoise.clone(),
             scene: scene.clone(),
+            illuminant: illuminant.clone(),
             encoder_hints: encoder_hints.clone(),
             sharpen: sharpen.clone(),
             preview: preview.clone(),
@@ -1215,6 +1227,7 @@ fn process_job_inner(
         chroma_denoise,
         luma_denoise,
         scene,
+        illuminant,
         encoder_hints: Some(encoder_hints),
         sharpen,
         reference,

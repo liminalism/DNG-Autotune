@@ -237,9 +237,19 @@ pub struct Cli {
     #[arg(long, requires = "semantic")]
     pub semantic_faces: bool,
 
-    /// Directory containing prepared scene_image ONNX graphs.
-    #[arg(long, value_name = "DIR", requires = "semantic")]
+    /// Directory containing the prepared ONNX graph pack. Used by --semantic
+    /// and by --illuminant, so the constraint that one of them be on is
+    /// checked in `validate` rather than declared as a clap `requires`.
+    #[arg(long, value_name = "DIR")]
     pub semantic_model_dir: Option<PathBuf>,
+
+    /// Run the C5 illuminant estimator and record the camera-space illuminant,
+    /// its CIE xy, correlated colour temperature and Duv in the sidecar. Purely
+    /// observational: it changes no exposure, tone, colour or output pixel, and
+    /// with it off every sidecar is byte-identical. The graph is looked up in
+    /// --semantic-model-dir (default `models/artifacts`).
+    #[arg(long)]
+    pub illuminant: bool,
 
     /// Do not copy the source EXIF or embed an sRGB ICC profile in the output.
     /// The pixels are unaffected either way; this only strips the tags, which
@@ -445,6 +455,10 @@ impl Cli {
             "--semantic-sky-chroma requires --semantic"
         );
         ensure!(
+            self.semantic_model_dir.is_none() || self.semantic || self.illuminant,
+            "--semantic-model-dir requires --semantic or --illuminant"
+        );
+        ensure!(
             self.preview_exposure
                 .is_none_or(|value| value.is_finite() && (0.0..=1.0).contains(&value)),
             "--preview-exposure must be between 0 and 1"
@@ -593,6 +607,7 @@ impl Cli {
         if let Some(directory) = self.semantic_model_dir {
             options.semantic_model_dir = directory;
         }
+        options.illuminant = self.illuminant;
         options.write_metadata = !self.no_metadata;
         options.noise_scan = self.noise_scan;
         options.noise_profile = self.noise_profile;

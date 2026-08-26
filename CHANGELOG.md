@@ -2,6 +2,35 @@
 
 ## Unreleased — a standalone front-end
 
+### `--illuminant`: the C5 estimator runs in the pipeline (observational)
+
+New opt-in flag: `src/illuminant.rs` builds C5's 4-plane log-chroma
+histogram stack from a **pre-white-balance** 384×256 camera-RGB proxy
+captured inside `color::develop` — one step later the illuminant being
+estimated has been divided out, which is why the existing post-WB semantic
+proxy could not be reused. The lege-gpu session runs the ONNX heads
+(CPU-pinned by design), and Rust owns the application step: a hand-rolled
+64-point radix-2 FFT circular convolution (0.4 ms), softmax expectation,
+then camera-RGB → XYZ via the file's calibration matrix (deliberately not
+`cam_to_working`, whose row normalization would silently return the
+camera's own neutral) → CCT + Duv via the existing Robertson code in
+`dngcolor.rs`. Sidecar gains an optional `illuminant` block (schema 25
+when enabled; byte-identical otherwise — verified against the pre-change
+HEAD binary over 21 frames).
+
+Measurements that justify it: golden fixtures match the Python reference
+to 1.9e-9 (chroma histogram) and 5e-6° (illuminant); on the new paired
+`raw/indoor_tungsten` batch the tungsten cluster (2936–3398 K, negative
+duv) separates from the daylight corpus control (4339–7941 K) with zero
+overlap, and `as_shot_angular_error_deg` spans 0.9–12.1° — the estimate
+is not a read-back of the camera's neutral. ~80–130 ms/frame when on,
+zero when off; repeated `--jobs 8` runs identical. Full table:
+`tools/scene_models/c5-acceptance-20260826.md`. lege-gpu gained one
+additive `ModelTarget` (`chroma_histograms`, a histogram stack, not an
+image); the four graph-prep rewrites C5 needed (constant lifting,
+Gather→Slice, edge-Pad, ReduceMean split) live in `prepare.py` on the
+export side.
+
 ### C5 illuminant estimator ported to ONNX (Model B, phase 2)
 
 `tools/scene_models/c5_port.py` exports the neural half of C5 (Apache-2.0,

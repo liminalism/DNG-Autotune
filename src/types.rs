@@ -53,14 +53,26 @@ pub const REPORT_SCHEMA_VERSION: u32 = 22;
 /// 24 additionally records an explicitly enabled semantic render experiment.
 pub const SEMANTIC_REPORT_SCHEMA_VERSION: u32 = 23;
 pub const SEMANTIC_POLICY_REPORT_SCHEMA_VERSION: u32 = 24;
+/// Schema 25 carries the observational `illuminant` block from the C5
+/// estimator. It says nothing about whether semantic evidence is also present:
+/// the two features are independent and the fields are omitted when absent, so
+/// the version is the highest of the ones that apply rather than a matrix of
+/// combinations. A reader that wants to know what a file contains must look at
+/// the fields; the version only promises that nothing below it changed meaning.
+pub const ILLUMINANT_REPORT_SCHEMA_VERSION: u32 = 25;
 
-pub const fn report_schema_version(semantic: bool, semantic_policy: bool) -> u32 {
-    if semantic_policy {
+pub const fn report_schema_version(semantic: bool, semantic_policy: bool, illuminant: bool) -> u32 {
+    let without_illuminant = if semantic_policy {
         SEMANTIC_POLICY_REPORT_SCHEMA_VERSION
     } else if semantic {
         SEMANTIC_REPORT_SCHEMA_VERSION
     } else {
         REPORT_SCHEMA_VERSION
+    };
+    if illuminant && ILLUMINANT_REPORT_SCHEMA_VERSION > without_illuminant {
+        ILLUMINANT_REPORT_SCHEMA_VERSION
+    } else {
+        without_illuminant
     }
 }
 
@@ -277,6 +289,11 @@ pub struct RunOptions {
     pub semantic_faces: bool,
     /// Directory containing prepared scene_image ONNX graphs.
     pub semantic_model_dir: PathBuf,
+    /// Run the C5 illuminant estimator and record its estimate. Observational:
+    /// it changes no exposure, tone, colour or output pixel, and with it off
+    /// the sidecar is byte-identical. Reuses `semantic_model_dir` to find the
+    /// graph, so a run that relocates the model pack relocates both.
+    pub illuminant: bool,
     /// Copy the source EXIF into the output and embed the sRGB ICC profile.
     /// On by default: `docs/PLAN.md` criterion 2 counts this as the product,
     /// not polish, because a photo library with no capture metadata sorts an
@@ -379,6 +396,7 @@ impl RunOptions {
             semantic_sky_chroma: 0.0,
             semantic_faces: crate::scene::FACE_DETECTION_DEFAULT,
             semantic_model_dir: PathBuf::from(crate::scene::DEFAULT_MODEL_DIR),
+            illuminant: false,
             write_metadata: true,
             noise_scan: None,
             noise_profile: None,
@@ -643,6 +661,10 @@ pub struct Sidecar {
     /// inference was requested.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scene: Option<crate::scene::SceneEvidence>,
+    /// Optional observational illuminant estimate. Omitted entirely unless
+    /// `--illuminant` requested one; nothing in the render reads it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub illuminant: Option<crate::illuminant::IlluminantEvidence>,
     /// Render-neutral guidance for a downstream encoder. Dense confidence
     /// bytes remain available through the in-memory API, not duplicated here.
     pub encoder_hints: crate::encoder_hints::EncoderProfileHints,
@@ -674,14 +696,30 @@ mod tests {
 
     #[test]
     fn encoder_profile_report_schema_is_explicit() {
-        assert_eq!(report_schema_version(false, false), REPORT_SCHEMA_VERSION);
         assert_eq!(
-            report_schema_version(true, false),
+            report_schema_version(false, false, false),
+            REPORT_SCHEMA_VERSION
+        );
+        assert_eq!(
+            report_schema_version(true, false, false),
             SEMANTIC_REPORT_SCHEMA_VERSION
         );
         assert_eq!(
-            report_schema_version(true, true),
+            report_schema_version(true, true, false),
             SEMANTIC_POLICY_REPORT_SCHEMA_VERSION
+        );
+    }
+
+    #[test]
+    fn illuminant_evidence_takes_the_highest_applicable_schema() {
+        assert_eq!(
+            report_schema_version(false, false, true),
+            ILLUMINANT_REPORT_SCHEMA_VERSION
+        );
+        // Independent features, so asking for both cannot land below either.
+        assert_eq!(
+            report_schema_version(true, true, true),
+            ILLUMINANT_REPORT_SCHEMA_VERSION
         );
     }
 
@@ -748,6 +786,8 @@ pub struct ProcessReport {
     pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
     /// Scene evidence when optional inference was requested.
     pub scene: Option<crate::scene::SceneEvidence>,
+    /// Illuminant estimate when `--illuminant` requested one. Observational.
+    pub illuminant: Option<crate::illuminant::IlluminantEvidence>,
     /// Encoder guidance when the file reached analysis.
     pub encoder_hints: Option<crate::encoder_hints::EncoderProfileHints>,
     /// Output sharpening, when one was applied.
@@ -793,6 +833,9 @@ pub struct SummaryEntry {
     pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scene: Option<crate::scene::SceneEvidence>,
+    /// Observational illuminant estimate; omitted unless `--illuminant` ran.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub illuminant: Option<crate::illuminant::IlluminantEvidence>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoder_hints: Option<crate::encoder_hints::EncoderProfileHints>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -781,7 +781,7 @@ fn infer(proxy: &SemanticProxy, model_dir: &Path, faces: bool, evidence: &mut Sc
     }
 }
 
-fn model_provenance(
+pub(crate) fn model_provenance(
     path: &Path,
     role: &str,
     preprocessing: &str,

@@ -98,6 +98,9 @@ pub struct RenderOptions {
     pub semantic_faces: bool,
     /// Directory containing prepared scene_image ONNX graphs.
     pub semantic_model_dir: std::path::PathBuf,
+    /// Run the C5 illuminant estimator observationally. It changes no returned
+    /// pixel; the estimate is reported and nothing else.
+    pub illuminant: bool,
 }
 
 impl Default for RenderOptions {
@@ -147,6 +150,7 @@ impl RenderOptions {
             semantic_sky_chroma: options.semantic_sky_chroma,
             semantic_faces: options.semantic_faces,
             semantic_model_dir: options.semantic_model_dir.clone(),
+            illuminant: options.illuminant,
         }
     }
 
@@ -266,6 +270,9 @@ pub struct RenderReport {
     pub luma_denoise: Option<crate::luma::LumaDenoiseReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scene: Option<crate::scene::SceneEvidence>,
+    /// Observational illuminant estimate, when `illuminant` asked for one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub illuminant: Option<crate::illuminant::IlluminantEvidence>,
     /// Versioned, render-neutral guidance for a downstream encoder.
     pub encoder_hints: crate::encoder_hints::EncoderProfileHints,
     pub sharpen: Option<crate::sharpen::SharpenReport>,
@@ -454,26 +461,35 @@ pub fn render_file_rgb16(
     let noise_floor = crate::noiseprofile::frame_floor(noise.as_ref());
     let shot = crate::shotinfo::read(path);
 
-    let (mut linear, color, mut highlight_uncertainty) = match options.raw_color_path {
-        RawColorPath::Owned => crate::color::develop(
-            &raw,
-            path,
-            DevelopOptions {
-                working_space: options.working_space,
-                sub_black: options.sub_black,
-                hot_pixels: options.hot_pixels,
-                highlight_reconstruction: options.highlight_reconstruction,
-                highlight_method: options.highlight_method,
-                spatial_highlight_floor: options.spatial_highlight_floor,
-                demosaic: options.demosaic,
-                snr10_ev: noise_floor.as_ref().map(|floor| floor.snr10_ev),
-                full_dng_color: options.full_dng_color,
-                lens_correction: options.lens_correction,
-                dump_stages: None,
-            },
-        )?,
-        RawColorPath::Rawler => (develop_rawler(&raw)?, ColorReport::rawler(&raw), None),
-    };
+    let (mut linear, color, mut highlight_uncertainty, illuminant_proxy) =
+        match options.raw_color_path {
+            RawColorPath::Owned => crate::color::develop(
+                &raw,
+                path,
+                DevelopOptions {
+                    working_space: options.working_space,
+                    sub_black: options.sub_black,
+                    hot_pixels: options.hot_pixels,
+                    highlight_reconstruction: options.highlight_reconstruction,
+                    highlight_method: options.highlight_method,
+                    spatial_highlight_floor: options.spatial_highlight_floor,
+                    demosaic: options.demosaic,
+                    snr10_ev: noise_floor.as_ref().map(|floor| floor.snr10_ev),
+                    full_dng_color: options.full_dng_color,
+                    lens_correction: options.lens_correction,
+                    dump_stages: None,
+                    illuminant_proxy: options.illuminant,
+                },
+            )?,
+            RawColorPath::Rawler => (develop_rawler(&raw)?, ColorReport::rawler(&raw), None, None),
+        };
+
+    // Observational: the estimate is read off the pre-white-balance proxy and
+    // reported. Nothing below this line consults it.
+    let illuminant = illuminant_proxy
+        .as_ref()
+        .map(|proxy| crate::illuminant::observe(proxy, &raw, &options.semantic_model_dir));
+    drop(illuminant_proxy);
     drop(raw);
 
     if correction.baseline_exposure_ev.abs() > 0.001 {
@@ -710,6 +726,7 @@ pub fn render_file_rgb16(
             chroma_denoise,
             luma_denoise,
             scene,
+            illuminant,
             encoder_hints,
             sharpen,
             color,
