@@ -1,0 +1,32 @@
+akr 0.1
+project raw-autotune
+
+record raw-autotune.observation.camsdd-dataset-local-and-licensed/1 : observation {
+    title "CamSDD is local and licensed CC BY-NC-SA 4.0"
+    state verified
+    statement """
+        The CamSDD dataset is present locally at CamSDD/CamSDD with 9,898 training, 600 validation and 600 test JPEGs across the 30 challenge classes at the native 576x384 resolution, and it ships its licence in-tree: CC BY-NC-SA 4.0 (CamSDD/CamSDD/LICENSE.md). This resolves the lighting plan's phase-1 licence question: local training and use are unrestricted; redistributing trained weights is permitted only under BY-NC-SA-compatible terms (attribution, non-commercial, share-alike), a restriction the AGPL binary itself does not carry. Commercial-grade weights would require retraining on a permissively licensed set.
+        """
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    method manual
+}
+
+record raw-autotune.observation.corpus-per-class-precision-hand-review/1 : observation {
+    title "Hand-reviewed per-class precision of the scene classifier on the own corpus"
+    state verified
+    statement """
+        User hand-reviewed the phase-3e classifier predictions over the full 384-frame own corpus (review.html contact sheet, 2026-08-26), giving per-class PRECISION on our domain — the number argmax accuracy on CamSDD cannot provide. Precision-trusted classes: Beach, Blue_Sky, Text_Documents, Mountain, Landscape, Waterfall (each ~100 percent, a few errors), Flower, Food, Macro, Night_shot, Portrait, and the outdoor/greenery group. High-recall/low-precision classes needing corroboration: Indoor (catches every true indoor shot but roughly 50 percent precision — half its verdicts are not indoors) and Architecture (correct grabs plus confident false positives such as a camper RV and a porta-potty, DSC1114). Unusable-on-this-corpus classes: Kids (0 percent), Underwater (0 percent), Computer_Screens (1 of 4), Snow (all 36 verdicts false — the corpus has no snow; pale winter roads and dusk scenes trigger it, the same pale-scene confusion as the night finding, and the one conf>=0.90 Snow pseudo-label _DSC0887 was verified a snowless winter road and dropped from the reviewed training csv). Structural observations: Macro and Food separate cleanly, and no image is duplicated between categories — argmax is single-label by construction, which is exactly why the inference-time mapping must consume the top-k probability vector (images genuinely belong to multiple categories). Consequences for phase-4 policy wiring: Indoor may gate policy only with C5 CCT corroboration (the plan's rule, now empirically quantified); Night_shot verdicts are precise but low_light_score remains the detection authority (night is invisible in the proxy); Macro/Food/Text_Documents are reliable enough to key mild render/encoder hints; Snow policy requires measured corroboration; Kids/Underwater/Computer_Screens are blocklisted from ever gating anything.
+        """
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    method manual
+}
+
+record raw-autotune.observation.night-invisible-in-fixed-tone-proxy/1 : observation {
+    title "Night is not visually present in the fixed-tone proxy; low_light_score stays sole night authority"
+    state verified
+    statement """
+        Phase 3e observational run over all 384 corpus RAWs (scores in .agent/scratch/camsdd-adapt/labels/scores.jsonl, via the new --dump-scene-proxy flag): the class distribution is archive-plausible (Greenery 47, Indoor 44, Architecture 42, Snow 36, Text_Documents 29 — a sampled Text_Documents frame verified genuinely a photographed cookbook page). Load-bearing negative finding: the raw_at_night batch does NOT classify as Night_shot (it scatters to Snow/Indoor/Sunset), because the semantic proxy's deliberately fixed neutral tone renders high-ISO night and dusk frames at normal brightness — night is not visually present in the classifier's input. This empirically confirms the plan's fusion rule that low_light_score remains the sole night authority, and adds a corollary: Snow verdicts on pale dusk scenes are a confusion mode, so any future snow policy also needs measured corroboration. Median top-1 confidence on the corpus is 0.65 versus near-1.0 on CamSDD val — the Flickr-JPEG-to-proxy domain gap is real and hand review of the pseudo-label sheet is the main lever against it.
+        """
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    method command
+}

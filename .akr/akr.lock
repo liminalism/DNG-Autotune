@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:a2d51f38a38674ccff4f588fdc29f4e95524f7e8dac9a8a8c0470f8ed7a90718"
+    source_graph "sha256:d957b9b907de4a7fea386e1010f1b66fea1aac1285779cfef70875575657f21d"
 }
 
 source ".akr/project.akr" {
@@ -19,13 +19,18 @@ source ".akr/records/raw-autotune/assessments.akr" {
 }
 
 source ".akr/records/raw-autotune/decisions.akr" {
-    hash "sha256:7ab6448e01130d27d94a368a283adab6001ffbe83fabcc684647c4a161300772"
-    records 9
+    hash "sha256:19034b121591e69962e858a5fecc5136b9bba5ac93e438d8654483626e745aca"
+    records 10
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:70bf3ee34e3caa1e017a24305fe4ae8688c3a1b20ad6dc484178eb28b500bd0f"
-    records 158
+    hash "sha256:2d464cb0f31c1d8aad9cf5eb88cbf02dcaf30ca5f2a9dbb3a884766a2bb288cc"
+    records 166
+}
+
+source ".akr/records/raw-autotune/observations.akr" {
+    hash "sha256:d0e6e6b5972c4ae934b245f4673d597de4c62ca3efd0331e131d2db9f255006c"
+    records 3
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
@@ -49,8 +54,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:eb9a7edae52cfd802bede8c5345079c1c70cffde832c97211aa4124b006eee4c"
-    records 51
+    hash "sha256:24786f5bb19968b86e02aafbebf9980d0faf68d4dcc90cac4d18824bd3c2f2ba"
+    records 54
 }
 
 resolution @raw-autotune.assessment.scene-evidence-usefulness/3 {
@@ -69,6 +74,12 @@ resolution @raw-autotune.assessment.scene-evidence-usefulness/3 {
     slot supported_by
     to @raw-autotune.evidence.scene-visual-audit/2
     hash "sha256:2532923c4ff2a8ae79d818c865982ac176e9f0cfe4525ae83cf7ae37d5547cbe"
+}
+
+resolution @raw-autotune.decision.scene-classifier-training-stack/1 {
+    slot supported_by
+    to @raw-autotune.observation.camsdd-dataset-local-and-licensed/1
+    hash "sha256:1bab2a18d00d4f7aadf2516ca75cdf84a9cba0662c95d55bf1ca2f299113aa16"
 }
 
 resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
@@ -317,6 +328,24 @@ resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 {
     hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
 }
 
+resolution @raw-autotune.work.train-camsdd-scene-classifier/1 {
+    slot implements
+    to @raw-autotune.decision.scene-classifier-training-stack/1
+    hash "sha256:7147fda80207369d30ad7de4c5301be4db49d40dcc50cd26fd33d7c3ef6a2556"
+}
+
+resolution @raw-autotune.work.train-camsdd-scene-classifier/2 {
+    slot implements
+    to @raw-autotune.decision.scene-classifier-training-stack/1
+    hash "sha256:7147fda80207369d30ad7de4c5301be4db49d40dcc50cd26fd33d7c3ef6a2556"
+}
+
+resolution @raw-autotune.work.train-camsdd-scene-classifier/3 {
+    slot implements
+    to @raw-autotune.decision.scene-classifier-training-stack/1
+    hash "sha256:7147fda80207369d30ad7de4c5301be4db49d40dcc50cd26fd33d7c3ef6a2556"
+}
+
 seal @raw-autotune.assessment.scene-evidence-usefulness/1 {
     state superseded
     hash "sha256:ca03c29a0c31bd2b0d09b8edc8544eda047fe091cf547c39267b960895ab992a"
@@ -360,6 +389,46 @@ seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 {
 seal @raw-autotune.evidence.blown-sky-renders-white-again/1 {
     state verified
     hash "sha256:461e672a7e37d2c4968dd22b3717d6bfb54ff1dc621ba5a4c4a951b41e27eeb2"
+}
+
+seal @raw-autotune.evidence.camsdd-ablation-winner-20260826/1 {
+    state verified
+    hash "sha256:2fb03bff5f7efb7fa8b2f202581ecb913adc39f8969e28e5bfa99475fa8e4158"
+}
+
+seal @raw-autotune.evidence.camsdd-adapt1-reviewed-20260826/1 {
+    state verified
+    hash "sha256:d3380422977240aa070f62700889dd20946aa3953beb5a2842c3abc1604dd8d9"
+}
+
+seal @raw-autotune.evidence.camsdd-gate-0-probe-20260826/1 {
+    state verified
+    hash "sha256:a852a4e02acfef769b0b4542dee9276074f828160e3044245a49e9e70d168b9b"
+}
+
+seal @raw-autotune.evidence.camsdd-gate-1-finetune-20260826/1 {
+    state verified
+    hash "sha256:5e71c37590254b4cc9280e00993f500c80b06ff78eaf1a1accaf134169d8b6d3"
+}
+
+seal @raw-autotune.evidence.camsdd-gate-2-policy-recall-20260826/1 {
+    state verified
+    hash "sha256:7b4011e069fff67eeec00c306cdc2d37852725ebdb7dc7ac94b23b9e1b3d373c"
+}
+
+seal @raw-autotune.evidence.camsdd-gate-2-topk-20260826/1 {
+    state verified
+    hash "sha256:0985a3a8a5110d98dbd14df14ac9b7822ec5bab253531c712323deb0abe49c86"
+}
+
+seal @raw-autotune.evidence.camsdd-gate-3-export-runtime-20260826/1 {
+    state verified
+    hash "sha256:48fd67e9875fa38d96c22111564e0985bce17effdc9fcc11f95becd8acb7e3bf"
+}
+
+seal @raw-autotune.evidence.camsdd-gate-4-adapt-20260826/1 {
+    state verified
+    hash "sha256:e2c7223acdb839d7f83059a39e8400780ccf37fa994e20a296f2aef77e1b99f9"
 }
 
 seal @raw-autotune.evidence.cityscapes-lraspp-lege-gpu-cpu-probe/1 {
@@ -1132,6 +1201,21 @@ seal @raw-autotune.evidence.yunet-lege-gpu-cpu-probe/1 {
     hash "sha256:d879d4c46e0381a109c9c5019be51e5d170295c7df6ee1bb632621bd72028a9e"
 }
 
+seal @raw-autotune.observation.camsdd-dataset-local-and-licensed/1 {
+    state verified
+    hash "sha256:1bab2a18d00d4f7aadf2516ca75cdf84a9cba0662c95d55bf1ca2f299113aa16"
+}
+
+seal @raw-autotune.observation.corpus-per-class-precision-hand-review/1 {
+    state verified
+    hash "sha256:c3543e758507f0f62010f79ac9cac0c94f27304ce0f614573ee0902bada0067c"
+}
+
+seal @raw-autotune.observation.night-invisible-in-fixed-tone-proxy/1 {
+    state verified
+    hash "sha256:bafd4bee22b8b66b4793a3dd1e8141e26db27bf01e39007f259005aa30cca63d"
+}
+
 seal @raw-autotune.papercut.a-chained-focused-test-build-command-exceeded/1 {
     state verified
     hash "sha256:6379df805b543af9fc3f194f67fc6b5d3b8198dddb2a5962597a4391970679e7"
@@ -1695,4 +1779,19 @@ seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 {
 seal @raw-autotune.work.spatial-semantic-aq-api/1 {
     state completed
     hash "sha256:608d4603cd961c8da6a54e2e9c394d003fd987ab2a0a48a551a52c7f1038e9fa"
+}
+
+seal @raw-autotune.work.train-camsdd-scene-classifier/1 {
+    state superseded
+    hash "sha256:45ba48c460af483d41a0589b59511bf23233362b119729603c39451f68ae7c4f"
+}
+
+seal @raw-autotune.work.train-camsdd-scene-classifier/2 {
+    state superseded
+    hash "sha256:a660f121dd20297c0ba8380b27950583880facdea47f40d38e0729b14e18daf0"
+}
+
+seal @raw-autotune.work.train-camsdd-scene-classifier/3 {
+    state active
+    hash "sha256:1f82a2083ea761cbbb38938fb7c601143749fc266d26502a0d6293be1b6e8e69"
 }

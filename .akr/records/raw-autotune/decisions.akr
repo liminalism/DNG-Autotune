@@ -128,6 +128,22 @@ record raw-autotune.decision.profile-experiments-remain-opt-in/1 : decision {
         """
 }
 
+record raw-autotune.decision.scene-classifier-training-stack/1 : decision {
+    title "Model A trains in PyTorch and ships as ONNX; Burn rejected for training"
+    state proposed
+    scope [ path "models/**", path "tools/scene_models/**" ]
+    decision """
+        Model A (the CamSDD 30-way scene/lighting classifier) is trained in PyTorch and shipped as ONNX through the existing lege-gpu path; Burn is rejected as the training stack. Deciding points: (1) Burn's headline benefit — retiring the ONNX runtime — is void because Model B (C5) ships as ONNX regardless, so Burn inference would add a second inference stack rather than remove one; (2) option asymmetry — Burn imports ONNX but cannot export it, so PyTorch training keeps both shipping paths open (lege-gpu now, burn-import later) while Burn training forecloses ONNX, which matters in a workflow that explicitly budgets for failed drafts and rewrites; (3) the workload is recipe experiments, where torchvision/AMP/pretrained-zoo iteration is near-mechanical and Burn requires hand-rolled augmentation before experiment one; (4) the >=94% accuracy gate is calibrated against Python-stack challenge results, and the repo's model tooling (export.py, prepare.py, report.py) is already PyTorch+ONNX shaped.
+        """
+    context """
+        research/LIGHTING_DETECTION_PLAN.md rev 2 section 3 assessed Burn as feasible with a bounded backbone menu and left the stack choice as a phase-3 decision, naming PyTorch->ONNX as the fallback. The deciding review was asked to determine which stack is actually better for this use.
+        """
+    consequences """
+        Training lives in tools/scene_models/train_camsdd.py inside a .venv-train PyTorch environment (BSD-licensed toolchain, irrelevant to AGPL shipping). ResNet-50 exports a clean lege-gpu op set. Burn remains available later as an inference-only consumer via ONNX import if a pure-Rust classifier path is ever wanted.
+        """
+    supported_by [ @raw-autotune.observation.camsdd-dataset-local-and-licensed ]
+}
+
 record raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1 : decision {
     title "Perception layer uses default lege-gpu prepared graphs"
     state proposed

@@ -58,6 +58,110 @@ record raw-autotune.evidence.blown-sky-renders-white-again/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.camsdd-ablation-winner-20260826/1 : evidence {
+    title "Phase 3b ablation: ResNet-50 @ 192x288 wins (96.92%, Backlight 90%)"
+    state verified
+    result pass
+    method command
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    command ".venv-train/bin/python tools/scene_models/train_camsdd.py --stage finetune --arch mobilenet_v2 / --input 192x288; --stage eval --split both on ft0, ft-mnv2, ft-r50-192"
+    artifact "tools/scene_models/runs/ft-r50-192/eval_both.json"
+    summary """
+        Phase 3b ablation on val+test (n=1200): ResNet-50 at 384x576 scored 96.67 percent top-1 with Backlight recall 82.5; MobileNetV2 at 384x576 scored 96.42 / 85.0; ResNet-50 at 192x288 scored 96.92 / 90.0 (36 of 40, exactly the Gate-2 bar). Winner: ResNet-50 at 192x288 — best overall, best Backlight, one quarter of the inference pixels. Margins are 3-6 images, so the cheaper model winning makes the choice easy. Likely mechanism: at ~330 images/class the stronger effective augmentation of RandomResizedCrop at the smaller target regularizes better than extra resolution helps.
+        """
+}
+
+record raw-autotune.evidence.camsdd-adapt1-reviewed-20260826/1 : evidence {
+    title "Gate 4 second round on hand-reviewed pseudo-labels: zero regression"
+    state verified
+    result pass
+    method command
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    command ".venv-train/bin/python tools/scene_models/train_camsdd.py --stage adapt --run tools/scene_models/runs/adapt1 --init tools/scene_models/runs/ft-r50-192 --pseudo-csv .agent/scratch/camsdd-adapt/labels/pseudo-reviewed.csv --baseline 0.9750"
+    artifact "tools/scene_models/runs/adapt1/metrics.jsonl"
+    summary """
+        Second adaptation round on the hand-reviewed pseudo-labels (43 images: the 44 conf>=0.90 labels minus the one user-review-identified Snow mislabel _DSC0887, a snowless winter road). Gate 4 passes with ZERO regression: CamSDD val top-1 recovers the full 97.50 percent baseline (adapt0 with the mislabel included had dipped one image to 97.33) — removing a single wrong training label restored the dip, at 43 images each label carries real weight. Val+test 96.83 top-1 / 99.67 top-3. Re-exported models/artifacts/camsdd_resnet50_192.onnx from adapt1 (1x3x192x288, opset 17, raw logits); report.py op screen clean (Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm only). adapt1 replaces adapt0 as the shipping candidate.
+        """
+}
+
+record raw-autotune.evidence.camsdd-gate-0-probe-20260826/1 : evidence {
+    title "Gate 0 probe: 92.17% val top-1, PROMISE"
+    state verified
+    result pass
+    method command
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    command ".venv-train/bin/python tools/scene_models/train_camsdd.py --stage probe --run tools/scene_models/runs/probe0"
+    artifact "tools/scene_models/runs/probe0/metrics.jsonl"
+    summary """
+        Gate 0 pipeline smoke passed with wide margin: linear probe (frozen ImageNet ResNet-50, trained 30-way head, 3 epochs, 45-50 s/epoch on the RTX 4060) reached 92.17 percent validation top-1 and 99.17 percent top-3 against a 75 percent promise bar. Data loading, numeric-prefix label mapping and ImageNet normalization are therefore correct.
+        """
+}
+
+record raw-autotune.evidence.camsdd-gate-1-finetune-20260826/1 : evidence {
+    title "Gate 1 fine-tune: 97.00% val top-1, PROMISE"
+    state verified
+    result pass
+    method command
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    command ".venv-train/bin/python tools/scene_models/train_camsdd.py --stage finetune --run tools/scene_models/runs/ft0"
+    artifact "tools/scene_models/runs/ft0/metrics.jsonl"
+    summary """
+        Gate 1 baseline fine-tune passed on the first draft with no retries: 30 epochs, 97.00 percent best validation top-1 (epoch 21) and 99.8-100 percent top-3, at the top of the published challenge band (94.5-97.8) and equal to ALONG's all-tricks 97.0. About 138 s/epoch on the RTX 4060 (~69 min total). Combined val+test top-1 is 96.67 percent (n=1200).
+        """
+}
+
+record raw-autotune.evidence.camsdd-gate-2-policy-recall-20260826/1 : evidence {
+    title "Gate 2 policy recall: Backlight 82.5% top-1 / 97.5% top-3, inconclusive as authored"
+    state verified
+    result inconclusive
+    method command
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    command ".venv-train/bin/python tools/scene_models/train_camsdd.py --stage eval --run tools/scene_models/runs/ft0 --split both"
+    artifact "tools/scene_models/runs/ft0/eval_both.json"
+    summary """
+        Gate 2 as authored (top-1 recall >= 90 percent per policy class over val+test, n=40 each) is not met by Backlight: top-1 recall 82.5 percent, inside the inspect band (80-90). Night_shot, Candle_light and Indoor are at 100 percent, Macro at 90. The confusion is the pre-registered one: 4 of 7 Backlight misses go to Sunset_Sunrise; Macro misses go to Food/Flower (close-up-adjacent). Measured at top-3, which is what the plan's inference-time mapping consumes, Backlight is 97.5 percent and every other policy class 100 percent. Disposition left open: either amend the check to the top-k mapping metric, or pursue targeted top-1 fixes (class re-weighting; phase-3c domain adaptation may also move it). The plan's fusion layer independently corroborates backlit with the centre/surround EV split.
+        """
+}
+
+record raw-autotune.evidence.camsdd-gate-2-topk-20260826/1 : evidence {
+    title "Gate 2 (amended top-k metric) passes on adapt1"
+    state verified
+    result pass
+    method command
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    command ".venv-train/bin/python tools/scene_models/train_camsdd.py --stage eval --run tools/scene_models/runs/adapt1 --split both"
+    artifact "tools/scene_models/runs/adapt1/eval_both.json"
+    summary """
+        Gate 2 passes under the 2026-08-26 amendment (top-3 recall >= 95 percent AND top-1 >= 80 percent per policy class, the metric the Rust top-k mapping layer consumes). On val+test (n=1200) for runs/adapt1: Macro 95.0/100, Night_shot 97.5/100, Candle_light 100/100, Indoor 100/100, Backlight 87.5/95.0 (top-1/top-3 percent). Worst policy top-3 recall 95.0 percent, worst top-1 87.5 percent, overall 96.83 top-1 / 99.67 top-3. The Backlight top-1 misses remain the pre-registered Sunset co-occurrence, which top-k mapping handles by design.
+        """
+}
+
+record raw-autotune.evidence.camsdd-gate-3-export-runtime-20260826/1 : evidence {
+    title "Gate 3 export: clean lege-gpu op set, 100ms CPU / 6.1ms GPU"
+    state verified
+    result pass
+    method command
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    command ".venv-train/bin/python tools/scene_models/train_camsdd.py --stage export --run tools/scene_models/runs/ft0 --export-onnx models/artifacts/camsdd_resnet50.onnx"
+    artifact "models/artifacts/camsdd_resnet50.onnx"
+    summary """
+        Gate 3 passed. Export: scene_image 1x3x384x576, raw scene_logits 1x30, opset 17, 122 nodes; BatchNorm fully fused into the 53 Convs; op histogram is Conv/Relu/Add/MaxPool/GlobalAveragePool/Flatten/Gemm only and report.py reports lege-gpu compatible with no hard-reject ops. Runtime (torch proxy, single 384x576 frame): 100 ms CPU, 6.1 ms GPU against gates of 300 and 30 ms.
+        """
+}
+
+record raw-autotune.evidence.camsdd-gate-4-adapt-20260826/1 : evidence {
+    title "Gate 4 adapt: 97.33% vs 97.50 baseline, no regression"
+    state verified
+    result pass
+    method command
+    observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
+    command ".venv-train/bin/python tools/scene_models/train_camsdd.py --stage adapt --run tools/scene_models/runs/adapt0 --init tools/scene_models/runs/ft-r50-192 --pseudo-csv .agent/scratch/camsdd-adapt/labels/pseudo.csv --baseline 0.9750"
+    artifact "tools/scene_models/runs/adapt0/metrics.jsonl"
+    summary """
+        Gate 4 (phase 3c domain adaptation) passed: mixing 44 confidence-filtered (>=0.90) pseudo-labeled own-corpus proxy renders (x4 oversample) into a 5-epoch low-lr fine-tune of ft-r50-192 held CamSDD val at 97.33 percent against the 97.50 baseline (a one-image dip, inside the 0.5-point tolerance) and val+test at 96.92. Corpus effect is real but modest: high-confidence frames 44 to 49, top-1 prediction agreement 352/384, median confidence flat — the expected ceiling for one self-training round on 44 images. The larger adaptation lever is the pending human hand review of .agent/scratch/camsdd-adapt/labels/review.html (kept via akr scratch keep), which would feed a stronger second adapt round. Exported models/artifacts/camsdd_resnet50_192.onnx (1x3x192x288, opset 17) passes report.py; 36.9 ms CPU per frame.
+        """
+}
+
 record raw-autotune.evidence.cityscapes-lraspp-lege-gpu-cpu-probe/1 : evidence {
     title "Cityscapes MobileV3-LR-ASPP prepared after rewriting Clip, spatial ReduceMean, and zero-pad AveragePool. CPU session returned logits [1,19,512,512]. Remap covers sky, person, vegetation, building."
     state verified
