@@ -775,6 +775,34 @@ record raw-autotune.work.open-questions/1 : work {
     }
 }
 
+record raw-autotune.work.port-c5-illuminant-estimator/1 : work {
+    title "Port C5 illuminant estimator (Model B) to ONNX + Rust integration"
+    state active
+    scope [ path "models/**", path "src/**", path "tools/scene_models/**" ]
+    intent """
+        Phase 2 of the lighting-detection plan: port Model B, the C5 cross-camera illuminant estimator (ICCV 2021, Apache-2.0, github.com/mahmoudnafifi/C5), into the pipeline as an ONNX model plus Rust-owned pre/post-processing, then run it observationally over the corpus recording CCT/tint per frame as sidecar evidence only.
+
+        Step 1 (done 2026-08-26, tools/scene_models/c5_port.py): the exported graph contains only the neural half — encoder/bottleneck/decoders emitting the CCC filter F (1x2x64x64) and bias B (1x64x64) from a 1x7x4x64x64 histogram stack. The FFT-based application step (circular convolution, softmax, soft-argmax to illuminant rgb) stays outside the graph as cheap deterministic post-processing the Rust side owns, because lege-gpu has no FFT. Three upstream ops lege-gpu rejects were decomposed numerically faithfully: LeakyReLU to PRelu, InstanceNorm2d to ReduceMean/Sub/Pow/Sqrt/Div, and the cross-pooling ReduceMax to a chain of elementwise Max — worst torch-vs-ONNX angular gap 0.0001 degrees end to end. Determinism decision: upstream fills the six additional m=7 input slots with RANDOM sibling images of the same sensor, which would violate the a-file-develops-identically-alone-or-in-a-batch invariant; we duplicate the frame's own histogram stack instead, measured on the 30 in-repo Sony IMX135 ground-truth frames at 3.22 degrees mean angular error versus 3.25 for sibling context — the deterministic mode costs nothing. Artifact models/artifacts/c5_m7_h64.onnx passes report.py; 17.8 ms CPU per frame (above the plan's sub-5 ms guess — seven encoder towers — but noise inside seconds-per-RAW develops).
+
+        Remaining: Rust-side integration — build the 64-bin log-uv chroma + edge histograms from pre-white-balance scene-linear RGB inside the pipeline (mirroring upstream ops.py semantics: soft binning, pixel-norm weighting, sqrt normalization, mean-abs-8-neighbor edges), run the ONNX heads through the lege-gpu path, apply F/B and the soft-argmax in Rust, convert illuminant rgb to CCT/tint, and record them in the sidecar (REPORT_SCHEMA_VERSION bump) behind an observational flag. Acceptance per the plan: CCT separates the known tungsten/daylight corpus frames; no runtime-budget regression.
+        """
+    acceptance {
+        check c5-cct-separates-known-illuminants {
+            statement """
+                Run observationally over the paired corpus, the recorded CCT separates the known tungsten/indoor frames from daylight frames, and the pipeline's runtime budget shows no regression with the estimator enabled.
+                """
+            method command
+        }
+        check c5-onnx-parity {
+            statement """
+                The exported ONNX heads reproduce the upstream torch model end to end (through the shared post-processing) within 0.01 degrees angular error on the in-repo sample frames, using only ops in the lege-gpu supported set, and the deterministic duplicate-own-histogram input mode is measured against sibling-context mode on ground-truth frames.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.c5-onnx-parity-20260826/1 ]
+        }
+    }
+}
+
 record raw-autotune.work.profiled-purple-sky-experiment/1 : work {
     title "Profiled purple-sky and compression-ratio experiment"
     state completed

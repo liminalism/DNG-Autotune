@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:d957b9b907de4a7fea386e1010f1b66fea1aac1285779cfef70875575657f21d"
+    source_graph "sha256:f4346a8a904a0a69947d740be3a3dd6a51e3939089e22ac8784a69481b369882"
 }
 
 source ".akr/project.akr" {
@@ -24,8 +24,8 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:2d464cb0f31c1d8aad9cf5eb88cbf02dcaf30ca5f2a9dbb3a884766a2bb288cc"
-    records 166
+    hash "sha256:30f51b0c19d79cd301ffaf9396b65da68b8bb70de1fe1bac12c83b1a13373a91"
+    records 167
 }
 
 source ".akr/records/raw-autotune/observations.akr" {
@@ -54,8 +54,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:24786f5bb19968b86e02aafbebf9980d0faf68d4dcc90cac4d18824bd3c2f2ba"
-    records 54
+    hash "sha256:a16e7b99f6d0c8ba34af18f058896a038697b81cd7f474a2f891539727593afc"
+    records 55
 }
 
 resolution @raw-autotune.assessment.scene-evidence-usefulness/3 {
@@ -389,6 +389,11 @@ seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 {
 seal @raw-autotune.evidence.blown-sky-renders-white-again/1 {
     state verified
     hash "sha256:461e672a7e37d2c4968dd22b3717d6bfb54ff1dc621ba5a4c4a951b41e27eeb2"
+}
+
+seal @raw-autotune.evidence.c5-onnx-parity-20260826/1 {
+    state verified
+    hash "sha256:fc4a3ab32a9164abb34b73dd86695383d7a8f88c02df9eaf3349a085bae299b7"
 }
 
 seal @raw-autotune.evidence.camsdd-ablation-winner-20260826/1 {
@@ -1639,6 +1644,11 @@ seal @raw-autotune.work.night-low-light-rendering/1 {
 seal @raw-autotune.work.night-low-light-rendering/2 {
     state completed
     hash "sha256:73bfd99bbcd7afa4642d370494a7d14f6afa49aafe4040d603410c6149b9be03"
+}
+
+seal @raw-autotune.work.port-c5-illuminant-estimator/1 {
+    state active
+    hash "sha256:476d9c9845f637390c35725b50dd3f4a8ed69619aad5b83f3a9c90828abfa4e6"
 }
 
 seal @raw-autotune.work.profiled-purple-sky-experiment/1 {

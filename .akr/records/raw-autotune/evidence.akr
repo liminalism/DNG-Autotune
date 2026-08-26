@@ -58,6 +58,19 @@ record raw-autotune.evidence.blown-sky-renders-white-again/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.c5-onnx-parity-20260826/1 : evidence {
+    title "C5 ONNX export parity and determinism-mode measurement"
+    state verified
+    result pass
+    method command
+    observed_at git:4e85079409d78b2072ff0efd51a54c2170fda3f2
+    command ".venv-train/bin/python tools/scene_models/c5_port.py --stage parity"
+    artifact "models/artifacts/c5_m7_h64.onnx"
+    summary """
+        C5 ONNX export parity passes. The lege-gpu-incompatible ops were decomposed (LeakyReLU to PRelu, InstanceNorm2d to ReduceMean/Sub/Pow/Sqrt/Div with biased variance matching torch, cross-pooling ReduceMax to chained elementwise Max); report.py op screen is clean. Against the unpatched upstream torch model, worst end-to-end angular gap over 30 sample inferences is 0.0001 degrees. On the 30 in-repo Sony IMX135 frames with ground-truth illuminants: 3.22 degrees mean angular error in the deterministic duplicate-own-histogram mode versus 3.25 with true sibling context — determinism costs nothing on this set. Runtime 17.8 ms CPU per frame via onnxruntime.
+        """
+}
+
 record raw-autotune.evidence.camsdd-ablation-winner-20260826/1 : evidence {
     title "Phase 3b ablation: ResNet-50 @ 192x288 wins (96.92%, Backlight 90%)"
     state verified
