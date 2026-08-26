@@ -1,0 +1,787 @@
+
+
+===== PAGE 1 =====
+An adaptive (γ-Correction + Deep Learning)-based
+Zero-Reference Approach for Low-Light Images
+Subhasish Rath
+Computer Science & Engineering
+C. V. Raman Global University
+Odisha, Bhubaneswar
+rath4u@gmail.com
+Ashish Ranjan
+Computer Science & Engineering
+C. V. Raman Global University
+Odisha, Bhubaneswar
+ashish.ranjan@cgu-odisha.ac.in
+Ganapati Panda
+Electronics & Comm. Engineering
+C. V. Raman Global University
+Odisha, Bhubaneswar
+gpanda@cgu-odisha.ac.in
+Prabhat Dansena
+Computer Science & Engineering
+C. V. Raman Global University
+Odisha, Bhubaneswar
+p.dansena23@gmail.com
+Abhipsa Mahala
+Computer Science & Engineering
+C. V. Raman Global University
+Odisha, Bhubaneswar
+abhipsa.mahala@cgu-odisha.ac.in
+Abstract—Low-light images have been a severe problem, when
+it comes to performing surveillance and military operations at
+night. While, there are established computational methods, rang-
+ing from popular conventional to deep-learning methods, most
+methods suffers from uneven lighting conditions in an image.
+Therefore, a hybrid solution based on the proposed (γ-Correction
++ Lite-ZeroDCE) is introduced. It is a combination of an adaptive
+γ-Correction and a deep-learning-based Lite-ZeroDCE model to
+over-come the challenge of low-light image enhancement. The
+adaptive γ-Correction is an flexible and adaptive approach to
+improve the image illumination. Further, the Lite-ZeroDCE is
+based on the notion of zero-reference curve estimation. The
+proposed solution produces significant improvements on multiple
+dataset and Lite-ZeroDCE is light-weight (with 10.27K model
+parameters). Even-more, it can handle images with uneven
+lighting condition in an efficient manner when compared to
+existing methods.
+Index Terms—Curve estimation, Low-light image enhancement
+(LLIE), Zero-reference model.
+I. INTRODUCTION
+The research on developing low-light image enhancement
+(LLIE) approaches has been the long-standing challenge in
+computer vision. LLIE is aimed at developing algorithm to
+enhance the illumination quality of images which are captured
+under the low-light environment. Interestingly, low-light im-
+ages poses challenge during surveillance, military operations,
+and automobile usages at night. Low-light images suffers from
+poor aesthetic quality, and even lacks finer details, results
+into affecting the performances for image-based tasks. The
+causes of low-light images generation include: (i) limiting
+lighting conditions, (ii) poor placement of an object, and/or
+(iii) environmental constraints [7]. Thus, more research on the
+development of image enhancement techniques are needed to
+benefit these image-related tasks.
+In regard to the low-light image enhancement (LLIE) so-
+lution, many computational approaches have been developed
+[1], [3], [5]–[7]. The early methods [1], [3], example using
+image histograms and Retinex theory [8], are primarily based
+on strong statistics and mathematical formulations. In con-
+trast, deep learning based methods [5]–[7] are primarily data-
+dependent, with lesser need for strong statistics and mathe-
+matical knowledge. These approaches are also better in terms
+of performance. Further, few recent approaches even tried
+integrating conventional techniques (i.e., Retinex theory [8])
+with deep learning [10], [11], howsoever, with few research
+work. Henceforth, there is still a large opportunity to work on
+developing a hybrid solution for LLIE.
+Further, there can be more challenges that require focus,
+such as tackling uneven lighting conditions, where the current
+methods struggles to preserve natural colors and finer details.
+Henceforth, this paper focus on developing a low-light image
+enhancement (LLIE) framework. Major challenges that are
+dealt with include:
+1) Limited research on developing a hybrid approach, i.e.,
+to combine the conventional method with the deep-
+learning methods.
+2) Need to develop models to handle images with uneven
+lighting condition.
+With regard to above challenges, the key contributions are
+as follows:
+1) The proposed solution utilizes an adaptive γ-correction
+and CNN-based “Lite-ZeroDCE” architecture to gener-
+ate well-lit images.
+2) Moreover, “Lite-ZeroDCE” is a lighter model (with ≈
+10.27K parameters) and is based on estimating the light
+enhancement curves.
+3) Experiments with multiple datasets demonstrate the su-
+periority of the proposed (γ-correction + Lite-ZeroDCE)
+method. It outperforms LIME [3], ZeroDCE [5] and
+ZerDCE++ [6]. In addition, it manged images with the
+uneven lighting conditions in a better way.
+The rest of sections are: Section II is the related works.
+Section III and Section IV discuss the datasets and the pro-
+2025 International Conference on Cognitive, Green and Ubiquitous Computing (IC-CGU) | 979-8-3315-8676-8/25/$31.00 ©2025 IEEE | DOI: 10.1109/IC-CGU67042.2025.11338095
+Authorized licensed use limited to: University of Pittsburgh. Downloaded on July 07,2026 at 04:54:46 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 2 =====
+Low Light
+Enhancement
+Techniques
+Conventional
+Approach
+Hybrid
+Approach
+Supervised
+Approaches
+Unsupervised
+Approaches
+Deep Learning
+Fig. 1: A generalized hierarchical classification of existing
+methods.
+posed solution, respectively. Section V is on the experimental
+results. Section VI lastly concludes the paper.
+II. RELATED WORK
+The current literature on low-light enhancements, which
+is shown in Fig. 1, can be grouped into: (i) Conventional
+approaches [1], [3], (ii) Deep learning based approaches
+[2], [5]–[7], and (iii) Hybrid approaches [9]–[11]. Early or
+conventional approaches for low-light enhancements [1], [3],
+are based on statistical and mathematical formulations. Li
+et al. [1] introduced a solution based on the illumination
+map estimation. The Retinex theory [8] is employed over
+the images to decomposed them into sub-components, i.e.,
+illumination and reflectance. Further, LIME [3] is based on
+the (illumination map + γ-correction) technique.
+Next major category include approaches based on deep-
+learning which can be further sub-grouped into: (i) supervised-
+based: require paired (low, high)-light image dataset [4], and
+(ii) unsupervised-based: require only low-light image [5]–[7].
+Guo et al. [5] introduced ZeroDCE, that used CNN-based U-
+Net structure for the unsupervised curve estimation. Next, Li et
+al. [6] introduced ZeroDCE++ that is a lighter generalization
+of ZeroDCE [5] (having ≈
+10K model parameters). In
+contrast, ZeroDCE [5] has ≈80K model parameters. Further,
+Mu et al. [7] proposed ZeroDCE-Tiny which is more lighter
+model with ≈3K model parameters.
+Lastly, there are hybrid approaches [9]–[11] that merged
+the conventional Retinex theory [8] and the deep-learning
+technique. Hu et al. [9] used pre-enhanced low-light images
+(using Retinex method) to train the refinement neural network.
+Then, Tang et al. [10] introduced (enhancement network + de-
+noising network) to generate well-lit images. The enhancement
+network is based on CNNs and Retinex theory [8]. In an
+another approach, Jiang et al. [11] proposed a Retinex theory
+[8] based end-to-end U-Net architecture.
+III. DATASETS
+The validation of the proposed approach is performed
+using two different low-light image datasets. The first dataset
+is the UnLOL dataset (https://drive.google.com/drive/folders/
+Enhancement
+Using the Lite-
+ZeroDCE
+Low-light
+Image
+Light
+Enhanced
+Image
+Step 1
+Step 2
+- Correction 
+Based Brightness
+Correction
+Fig. 2: Flow diagram demonstrating major steps with the
+proposed solution.
+1fbzfpK0CfPA8nGMu-wbx0nXnL6g Gh2Q?usp=sharing),
+which is diverse and include images with more uneven
+lighting conditions [12]. This has a total of 128 images for
+training and 43 images for testing. The second dataset is LOL
+dataset [2]. However, it lacks enough diversity in the lighting
+condition. The LOL dataset has 485 samples for training and
+15 sample for testing.
+IV. PROPOSED METHOD
+The proposed work is a hybrid method for enhancing the
+low-light images using the γ-correction and the deep-learning
+based “Lite-ZeroDCE” architecture. Lite-ZeroDCE (elaborated
+in Section IV-B) is based on the notion of zero-reference that
+relaxes the need for the paired images during the training. The
+different steps with the proposed work are shown in Fig. 2,
+which are elaborated next:
+A. Applying Adaptive Gamma Correction Algorithm
+The low-light image (I) undergoes pre-processing step using
+the adaptive γ-correction algorithm as discussed in Algorithm
+1. The algorithm has three major steps as outlined in Algo-
+rithm 1 and are discussed next.
+Algorithm 1 Adaptive Gamma Correction
+Inputs: Low-light image (I)
+Output: Well-lit image (I′)
+1: Compute the average intensity of an image.
+Avg. Int = np.mean(I)
+(1)
+2: Set the gamma parameter (γ) based on the average inten-
+sity of an image.
+γ =
+
+
+
+
+
+
+
+
+
+
+
+0.6,
+if Avg. Int < 70
+0.8,
+if 70 ≤Avg. Int < 100
+1.0,
+if 100 ≤Avg. Int ≤150
+1.2,
+if 150 < Avg. Int ≤180
+1.4,
+if 180 < Avg. Int
+(2)
+3: I′ = Iγ
+# Apply gamma correction
+4: return I′
+The first step is computing the avg. intensity of the low-
+light image, denoted with Avg. Int. It is a measure of overall
+brightness of an image. Then, in the second step, the gamma
+parameter (γ) is chosen based the average intensity of the
+image. The γ value is kept small for a low-light image with
+very poor overall brightness. In contrast, the γ value is kept
+large, if the overall brightness of an image is high. This is
+represented using Equation 2. Lastly, in the third step, the
+Authorized licensed use limited to: University of Pittsburgh. Downloaded on July 07,2026 at 04:54:46 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 3 =====
+CNN
+(3 x 1 x1)
++
+Tanh
+CNN
+(3 x 1 x1)
++
+Tanh
+CNN
+(3 x 1 x1)
++
+Tanh
+CNN
+(32) 
++
+ReLu
+Final Curve
+Parameter Map
+Low-light
+Image
+CNN
+(32) 
++
+ReLu
+AVERAGE
+CNN
+(32) 
++
+ReLu
+CNN
+(32) 
++
+ReLu
+32
+CNN
+(32) 
++
+ReLu
+32
+CNN
+(32) 
++
+ReLu
+32
+Int.
+Curve 1
+Int.
+Curve 2
+Int.
+Curve 3
+CNN Feature Map
+CNN Feature Map
+CNN Feature Map
+Fig. 3: Proposed architecture of the Lite-ZeroDCE model. This utilizes depth-wise separable CNNs to realize the light-weight
+architecture and is based on the notion of estimation of multiple curve parameters.
+chosen γ-correction is applied which is a non-linear operation
+on the low-light image. It helps enhance the brightness of an
+image, where the gamma corrected image is denoted as I′.
+The advantage of the adaptive γ-correction algorithm is that
+it helps dynamically adjust the brightness of an image based
+on the average brightness quality of the low-light image.
+B. Training a Lite-ZeroDCE Model
+The images produced from the γ-correction step (discussed
+in Section IV-A) are next utilized for training the proposed
+Lite-ZeroDCE model. As shown in Fig. 3, it is a light-weight
+neural network architecture that uses a depth-wise separable
+CNN. The working of Lite-ZeroDCE model is based on “Zero-
+Reference Deep Curve Estimation” that allows to improve the
+illumination conditions of a low-light image. Note, “Zero-
+Reference” symbolizes relaxation from the requirement of pair
+of low and high light images that helps generalize well for the
+new unseen data.
+The Lite-ZeroDCE model can be mathematically formulated
+as: Let, the gamma-corrected input image be I′(x) and the
+enhanced image be I′′(x), where x denote an image pixel.
+Then, I′′(x) is produced using Eq. 3:
+I′′(x) = I′(x) + wI′(x) ∗[1 −I′(x)]
+(3)
+where, w ∈[−1, +1] is a learnable curve parameter.
+For a dynamic adjustment, the Eq. 3 is applied in an iteration
+(denoted with n) which is formulated as:
+I′′
+n(x) = I′
+n−1(x) + wnI′
+n−1(x)[1 −I′
+n−1(x)]
+(4)
+1) Lite-ZeroDCE Model Architecture: Lite-ZeroDCE, as
+shown in Fig. 3, is a U-net based architecture that utilizes
+nine depth-wise separable CNNs for the curve-estimation. The
+depth-wise separable CNNs is based on two major operations,
+which are: i) depth-wise convolution: where each channel is
+processed separately, and ii) point-wise convolution: each pixel
+is processed along the channels.
+The first six CNN layers are used for processing the image.
+These CNN layers have following hyper-parameters: no. of
+filters = 32, filter-size (3 x 3), stride = 1, and activation =
+ReLU. The remaining three CNN layers, as shown in Fig. 3,
+are used to learn the intermediate curve parameters, denoted
+with, Int. Curve 1, Int. Curve 2, and Int. Curve 3. Individual
+intermediate curve parameters helps understand different levels
+of abstraction for low-light images. These CNN layers have
+following hyper-parameters: no. of filters = 3, filter-size (1 x
+1), stride = 1, and activation = Tanh.
+2) Non-Referential Loss Function: The loss function with
+the ZeroDCE++ [6] model is used for this work. Mathemati-
+cally, the loss function is:
+Loss = w1 ∗L(col. constancy) + w2 ∗L(exp.)+
+w3 ∗L(illu. smoothness) + w4 ∗L(spa. constancy)
+(5)
+where, w1 = 2, w2 = 10, w3 = 100 and w4 = 5.
+1) Color constancy loss [6]: Ensure to retain the true
+Authorized licensed use limited to: University of Pittsburgh. Downloaded on July 07,2026 at 04:54:46 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 4 =====
+colors.
+L(col. constancy) =
+X
+∀(C1,C2)
+(Iavg(P) −Iavg(Q))2
+(6)
+where, Iavg is avg. intensity and C1, C2 ∈{R, G, B}.
+2) Exposure loss [6]: Improves the under-exposed/over-
+exposed regions.
+L(exp.) = 1
+M
+X
+k={1,2,...,M}
+|Ik
+avg −E|
+(7)
+where, Ik
+avg is the avg. intensity of the local region, and
+E = 0.6 is the well-exposedness level.
+3) Illumination smoothness loss [6]: Ensures retain the
+monotonicity relationships bet. the neighboring pixels.
+L(illu. smoothness) = 1
+N
+N
+X
+n=1
+X
+∀C
+(|▽xAC
+n |+|▽yAC
+n |)2
+(8)
+where, N denote no. of iterations, C ∈{R, G, B}, ▽x
+denote gradient along x-axis, ▽y denote gradient along
+y-axis and A denote the curve parameter.
+4) Spatial consistency loss [6]: Helps preserve the local
+spatial relationships of the enhanced image, where R
+denote count of image sub-regions.
+L(spa. constancy) = 1
+R
+R
+X
+r=1
+X
+j∈Ω(r)
+(|I′
+r−I′
+j|−|Ir−Ij|)2
+(9)
+where, I and I′ represents the avg. intensity of sub-
+region in the input image and its enhanced version,
+respectively.
+3) Model hyper-parameters:
+• Input image size = (256 x 256),
+• Optimizer = adam (lr = 0.0001),
+• No. of epochs = 200, and
+• Batch-size = 16.
+V. RESULT AND DISCUSSION
+In
+this
+section,
+the
+proposed
+(auto-contrast
++
+I-
+ZeroDCE++)-based
+framework
+is
+evaluated
+using
+the
+dataset discussed in Section III.
+A. Evaluation Metric
+Given, low-light/enhanced images (say I1) and well-lit
+images (say I2), metrics such avg. PSNR, avg. SSIM, and
+avg. MS-SSIM [6] are used to evaluate the proposed work.
+These are computed as:
+PSNR(I1, I2) = 10log10
+ 
+R2
+Mean Sq. Err.(I1, I2)
+!
+(10)
+where, R is the maximum value of pixels in the high-quality
+image (I1).
+TABLE I: Ablation analysis: Comparisons on the Proposed
+Dataset
+S.
+Color constancy
+Average
+Average
+Avg. MS-
+No.
+loss weight
+PSNR (↑)
+SSIM (↑)
+SSID (↑)
+1.
+w1 = 1
+13.5887
+0.6069
+0.7138
+2.
+w1 = 2
+13.5791
+0.6065
+0.7137
+3.
+w1 = 5
+13.5703
+0.6063
+0.7136
+4.
+w1 = 10
+13.5682
+0.6062
+0.7136
+5.
+w1 = 20
+13.5655
+0.6060
+0.7135
+TABLE II: Ablation analysis: Comparisons on the LOL
+Dataset (Model = γ-Correction + Lite-ZeroDCE)
+S.
+Color constancy
+Average
+Average
+Avg. MS-
+No.
+loss weight
+PSNR (↑)
+SSIM (↑)
+SSID (↑)
+1.
+w1 = 1
+18.0997
+0.6207
+0.8766
+2.
+w1 = 2
+18.1321
+0.6212
+0.8766
+3.
+w1 = 5
+18.1121
+0.6218
+0.8765
+4.
+w1 = 10
+18.0197
+0.6224
+0.8759
+5.
+w1 = 20
+17.8908
+0.6232
+0.8754
+SSIM(I1, I2) =
+(2µI1µI2 + c1)(2VI1I2 + c2)
+(µ2
+I1 + µ2
+I2 + c1)(V 2
+I1 + V 2
+I2 + c2)
+(11)
+where, (µI1, V 2
+I1) and (µI2, V 2
+I2) represent (mean, variance) for
+I1 and I2, respectively.
+MS−SSIM(I1, I2) = [LM(I1, I2)]aM
+M
+Y
+j=1
+[SSIMj(I1, I2)]bj
+(12)
+where, M is the number of scales, LM(I1, I2) is the luminance
+similarity, and (aM, bj) are parameters signifying weights for
+different scales.
+B. Evaluating The Impact Of Color Constancy Loss
+In this sub-section, the impact of color constancy loss with
+the proposed (γ-Correction + Lite-ZeroDCE)-based solution
+is evaluated. The weight corresponding to the color constancy
+loss is varied between {1, 2, 5, 10, and 20} for deeper analysis.
+The results for the same are given in Table I (for the proposed
+dataset) and Table II (for the LOL dataset).
+Clearly, results suggest a better performance with the lower
+weight parameter for the color constancy loss. For the pro-
+posed dataset, the optimal results are obtained with the weight
+value (w1) equals to 2, while for the LOL dataset, the optimal
+results are obtained with the w1 equal to 1. Furthermore,
+increasing the weight parameter, however, causes decline in
+the results.
+Overall, a weight value (w1) equals to 2 gives good results,
+and hence are used for further analysis.
+C. State-Of-The-Art (SOTA) Comparisons
+A comparison between the proposed (γ-Correction + Lite-
+ZeroDCE) solution and the current SOTA methods is presented
+Authorized licensed use limited to: University of Pittsburgh. Downloaded on July 07,2026 at 04:54:46 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 5 =====
+TABLE III: SOTA Comparisons with respect to both the Datasets
+Dataset −→
+Proposed Dataset
+LOL Dataset
+S.
+Average
+Average
+Avg. MS-
+Average
+Average
+Avg. MS-
+No.
+Method
+PSNR (↑)
+SSIM (↑)
+SSID (↑)
+PSNR (↑)
+SSIM (↑)
+SSID (↑)
+1.
+Low Quality Images
+10.3573
+0.4581
+0.6584
+7.7733
+0.1952
+0.5017
+2.
+Adaptive γ-Correction Method
+12.4037
+0.5730
+0.7060
+10.6168
+0.4764
+0.7295
+3.
+LIME (α = 0.2, iteration = 10) [3]
+12.7504
+0.5564
+0.6737
+15.8437
+0.4895
+0.8415
+4.
+ZeroDCE [5]
+11.9265
+0.5552
+0.7029
+16.2001
+0.5692
+0.8747
+5.
+ZeroDCE++ [6]
+11.9143
+0.5546
+0.7040
+16.3754
+0.5698
+0.8755
+6.
+Auto-contrast + I-ZeroDCE++ [12]
+12.4104
+0.5683
+0.7067
+15.8833
+0.5164
+0.8473
+7.
+γ-Correction + Lite-ZeroDCE
+13.5791
+0.6065
+0.7137
+18.1321
+0.6212
+0.8765
+TABLE IV: Parameter comparisons for different methods
+S.
+Method
+No.
+Method
+Parameter
+1.
+Low Quality Images
+–
+2.
+Adaptive γ-Correction Method
+–
+3.
+LIME (α = 0.2, iteration = 10) [3]
+–
+4.
+ZeroDCE [5]
+79.42K
+5.
+ZeroDCE++ [6]
+10.27K
+6.
+Auto-contrast + I-ZeroDCE++ [12]
+11.81K
+6.
+γ-Correction + Lite-ZeroDCE
+10.27K
+in this section. SOTA methods that are used for the compar-
+ison include LIME [3], ZeroDCE [5], ZeroDCE++ [6], and
+Auto-contrast + I-ZeroDCE++ [12]. Besides, results with the
+adaptive γ-correction approach are also reported.
+1) Objective Evaluation: This is based on popular metrics
+discussed in Section V-A, and are shown in Table III. In addi-
+tion, Table IV presents the comparative analysis based on the
+number of model parameters.. As observed from Table III, it is
+very clear that the proposed (γ-Correction + Lite-ZeroDCE)-
+based solution is superior to other. It is worth noting that the
+adaptive γ-Correction methods helped to improve the illumina-
+tion quality, though the (γ-Correction + Lite-ZeroDCE) model
+performed much better as observed from Table III. Using the
+proposed dataset, the margin of improvements when compared
+to the LIME [3] are: +0.8287 (6.50%), +0.0501 (9.00%), and
++0.040 (5.94%) for avg. PSNR, avg. SSIM, and avg. MS-
+SSIM, respectively. The corresponding numbers with respect
+to LOL dataset are: +2.2584 (14.25%), +0.1317 (26.90%),
+and +0.035 (4.16%), respectively. A very similar kind of
+improvements are observed when compared to ZeroDCE [5],
+ZeroDCE++ [6] and Auto-contrast + I-ZeroDCE++ [12].
+Furthermore, a look at the number of parameters (shown in
+Table IV), the proposed (γ-Correction + Lite-ZeroDCE)-based
+solution exhibits a lowest number of parameter, which is also
+equivalent to ZeroDCE++ [6], i.e., 10.27K parameters.
+2) Subjective Evaluation Based on Sample Test Images:
+The image enhancements using the proposed and other SOTA
+methods for few sample test images are discussed here from
+the human perspective. The enhanced images are illustrated
+in Fig. 4 and Fig. 5 for the proposed dataset [12] and LOL
+dataset [2], respectively.
+For the proposed dataset [12], the illustrations in Fig. 4
+(a) Low-Light
+(b) LIME
+(c) ZeroDCE++
+(d) Auto-contrast
++ I-ZeroDCE++
+(e)    -Correction
++ Lite-ZeroDCE
+(f) Actual well-lit
+Image
+Fig. 4: Image enhancements for sample test images obtained
+for the proposed dataset.
+Authorized licensed use limited to: University of Pittsburgh. Downloaded on July 07,2026 at 04:54:46 UTC from IEEE Xplore.  Restrictions apply. 
+
+
+===== PAGE 6 =====
+(a) Low-Light
+(b) LIME
+(c) ZeroDCE++
+(d) Auto-contrast
++ I-ZeroDCE++
+(e)    -Correction
++ Lite-ZeroDCE
+(f) Actual well-lit
+Image
+Fig. 5: Image enhancements for sample test images obtained
+for the LOL dataset.
+shows that well-lit images are produced with the LIME [3]
+method, though, the enhanced images tends to contain a lot
+of noise, i.e., poorly defined coarse edges. In contrast, test
+images enhanced with the proposed (γ-Correction + Lite-
+ZeroDCE) solution are better when compared to the other
+SOTA methods. This includes comparisons with the LIME [3]
+method as well as other known methods such as ZeroDCE [5]
+and ZeroDCE++ [6]. Similar results are obtained for images
+from the LOL dataset as well (as observed from Fig. 5).
+VI. CONCLUSION
+Low-light images have been challenging, when it comes
+to performing surveillance and military operations at night.
+While, there are established methods, ranging from conven-
+tional to deep-learning methods, most methods suffers from
+uneven lighting conditions in an image. Therefore, a hybrid
+solution based on the combination of an adaptive γ-Correction
++ Lite-ZeroDCE is introduced. The adaptive γ-Correction
+method support adaptive image enhancements based on the im-
+age mean intensity. Then, deep-learning based Lite-ZeroDCE
+is used to further improve the lighting conditions of an image.
+The proposed solution produces significant improvements on
+multiple dataset and is even light-weight (with 10.27K param-
+eters). Even-more, it can handle images with uneven lighting
+condition in a better way when compared to existing methods.
+Future work will investigate the proposed models for larger
+dataset and explore it for other domain.
+REFERENCES
+[1] Li, M., Liu, J., Yang, W., Sun, X. and Guo, Z., 2018. “Structure-
+revealing low-light image enhancement via robust retinex model”. IEEE
+Transactions on Image Processing, 27(6), pp.2828-2841.
+[2] Wei, C., Wang, W., Yang, W. and Liu, J., 2018. “Deep retinex decom-
+position for low-light enhancement”. arXiv preprint arXiv:1808.04560,
+pp.1-12.
+[3] Guo, X., Li, Y. and Ling, H., 2016. “LIME: Low-light image enhancement
+via illumination map estimation”. IEEE Transactions on Image Process-
+ing, 26(2), pp.982-993.
+[4] Liu, R., Ma, L., Zhang, J., Fan, X. and Luo, Z., 2021. “Retinex-inspired
+unrolling with cooperative prior architecture search for low-light image
+enhancement”. In Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition (pp. 10561-10570).
+[5] Guo, C., Li, C., Guo, J., Loy, C.C., Hou, J., Kwong, S. and Cong,
+R., 2020. “Zero-reference deep curve estimation for low-light image
+enhancement”. In Proceedings of the IEEE/CVF Conference on CVPR
+(pp. 1780-1789).
+[6] Li, C., Guo, C. and Loy, C.C., 2021. “Learning to enhance low-light
+image via zero-reference deep curve estimation”. IEEE Transactions on
+Pattern Analysis and Machine Intelligence, 44(8), pp.4225-4238.
+[7] Mu, W., Liu, H., Chen, W. and Wang, Y., 2022. “A more effective zero-
+DCE variant: Zero-DCE tiny”. Electronics, 11(17), p.2750.
+[8] Land, E.H., 1977. “The retinex theory of color vision”. Scientific Amer-
+ican, 237(6), pp.108-129.
+[9] Hu, J., Guo, X., Chen, J., Liang, G., Deng, F. and Lam, T.L., 2021.
+“A two-stage unsupervised approach for low light image enhancement”.
+IEEE Robotics and Automation Letters, 6(4), pp.8363-8370.
+[10] Tang, H., Zhu, H., Tao, H. and Xie, C., 2022. “An improved algorithm
+for low-light image enhancement based on RetinexNet”. Applied Sciences,
+12(14), p.7268.
+[11] Jiang, S., Shi, Y., Zhang, Y. and Zhang, Y., 2024. “An Improved Retinex-
+Based Approach Based on Attention Mechanisms for Low-Light Image
+Enhancement”. Electronics, 13(18), p.3645.
+[12] Mahala, A., Ranjan, A., Dansena, P. and Kumar, G., 2025. “A Zero-
+Reference based HE + Deep Enhancement Approach for Low-Light Im-
+ages”. In Proceedings of the 3rd International Conference on Microwave,
+Optical and Communication Engineering (ICMOCE-2025), pp.1-12.
+Authorized licensed use limited to: University of Pittsburgh. Downloaded on July 07,2026 at 04:54:46 UTC from IEEE Xplore.  Restrictions apply. 

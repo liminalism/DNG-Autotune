@@ -1,0 +1,1608 @@
+
+
+===== PAGE 1 =====
+The Visual Computer
+https://doi.org/10.1007/s00371-023-02770-9
+ORIGINAL ARTICLE
+Illumination estimation for nature preserving low-light image
+enhancement
+Kavinder Singh1 · Anil Singh Parihar1
+Accepted: 5 January 2023
+© The Author(s), under exclusive licence to Springer-Verlag GmbH Germany, part of Springer Nature 2023
+Abstract
+In retinex model, images are considered as a combination of two components: illumination and reﬂectance. However, decom-
+posing an image into the illumination and reﬂectance is an ill-posed problem. This paper presents a new approach to estimate
+the illumination for low-light image enhancement. This work contains three major tasks: estimation of structure-aware initial
+illumination, reﬁnement of the estimated illumination, and the ﬁnal correction of lightness in reﬁned illumination. We have
+proposed a novel approach for structure-aware initial illumination estimation leveraging a new multi-scale guided ﬁltering
+approach. The algorithm reﬁnes proposed initial estimation by formulating a new multi-objective function for optimization.
+Further, we proposed a new adaptive illumination adjustment for correction of lightness using the estimated illumination.
+The qualitative and quantitative analysis on low-light images with varying illumination shows that the proposed algorithm
+performs image enhancement with color constancy and preserves the natural details. The performance comparison with
+state-of-the-art algorithms shows the superiority of the proposed algorithm.
+Keywords Low-light image · Illumination estimation · Retinex · Image enhancement · Guided ﬁltering
+1 Introduction
+Images with good illumination are always desirable in the
+design of any vision-based system. However, many times
+the environment is not conducive to capture an image with
+good illumination and results in a low-light image. The
+other cause of low-light images may be variable lightness
+in a scene, night-time imaging, improper camera setting,
+bad lighting sources, etc. Sometimes an image may con-
+tain two types of regions: regions with properly illuminated
+objects and regions with poorly illuminated objects (i.e. the
+image with varying illumination). Low-light images pose
+challenges in object and feature detection and may degrade
+theperformanceofavision-basedsystem[7,13,16,36,51,54].
+Low-light image enhancement may improve the visual qual-
+ity of an image. However, an inferior enhancement algorithm
+B Anil Singh Parihar
+parihar.anil@gmail.com
+Kavinder Singh
+kavinder85@gmail.com
+1
+Machine Learning Research Laboratory, Department of
+Computer Science and Engineering, Delhi Technological
+University, Delhi, India
+may result in the loss of crucial details and introduce unde-
+sirable artifacts. Thus, designing an effective algorithm for
+the enhancement of low-light images is a challenging task.
+Inliterature,researchershaveproposedlow-lightenhance-
+ment algorithms based on contrast enhancement [4,43],
+retinex theory [22–24], deep learning [41,52,58,63], and
+other approaches [8,42,62]. However, most of the low-light
+image enhancement algorithms suffer from one or more of
+the following limitations:
+– Algorithms [5,12,14,25] provide inadequate enhance-
+ment of non-uniformly illuminated images i.e. over-
+enhancement in the bright regions or under-enhancement
+in dark regions.
+– Algorithms [5,12,25,42] provide enhanced images with
+unnatural colors, i.e. fail to preserve natural colors.
+– Algorithms [12,42,53] provide undesired artifacts in the
+enhanced images.
+– Algorithms [12,14,25] are unable to restrict the disper-
+sion effect in light dominant regions of the low-light
+image with varying illumination.
+– Algorithms [12,14,25] result in loss of ﬁner details.
+123
+
+
+===== PAGE 2 =====
+K. Singh, A. S. Parihar
+Fig. 1 Results of different algorithms on image birds. (a) Input image;
+(b) Patch of (a); (c) NPEA [53]; (d) Patch of (c); (e) PIRE [5]; (f) Patch
+of (e); (g) LIME [12]; (h) Patch of (g); (i) SRLIME [25]; (j) Patch of
+(i); (k) LECARM [42]; (l) Patch of (k); (m) LSDD [14]; (n) Patch of
+(m); (o) Zero-DCE [11]; (p) Patch of (o); (q) CSDGAN [32]; (r) Patch
+of (q); (s) Proposed method; (t) Patch of (s)
+In general, there is a trade-off between lightness enhance-
+ment and naturalness preservation, i.e. if an algorithm
+preserves naturalness, then the overall lightness is low and
+vice versa. In this paper, we proposed a new low-light image
+enhancement approach to overcome the limitations men-
+tioned above. The proposed algorithm considers the retinex
+model of image formation. In the retinex model, an image
+contains two components: illumination and reﬂectance. The
+estimation of illumination and reﬂectance from an image
+is ill-posed. The proposed algorithm estimates illumina-
+tion of an image and leverages the retinex model to obtain
+reﬂectance component. We estimate the structure-aware ini-
+tial illumination using the proposed multiple box (window)
+sizes in the guided ﬁlters [15]. We reﬁne the initial illumina-
+tion by formulating and solving a new multi-objective opti-
+mization function. The proposed objective function involves
+ﬁdelity between the initial illumination and reﬁned illumi-
+nation. Thus, initial illumination plays a deﬁning role in
+obtaining the reﬁned illumination. At last, we apply the
+proposed adaptive illumination adjustment to improve the
+lightness of the image based on the estimated illumination.
+The proposed algorithm is termed Nature Preserving Low-
+light Image Enhancement (NPLIE).
+The importance of proposed NPLIE can be demonstrated
+using an image with varying illumination shown in Fig. 1,
+where bird is illuminated but other details are darker. It
+may be noticed that most algorithms are struggling to give
+natural enhancement. Some of the algorithms [12,42,53]
+try to enhance darker regions; however, already illuminated
+regions get over-enhanced in the process. The other algo-
+rithms [5,11,14,32] try to maintain a natural look by avoiding
+over-enhancement but fail to enhance signiﬁcant lightness
+in darker regions. On the other hand, the proposed NPLIE
+enhancesdarkerregionsoftheimagewithoutover-enhancing
+already illuminated regions. The detailed analysis is shown
+in Sect. 4.4.
+The major contributions of this work are as follows:
+– Proposed a new approach to estimate initial illumination
+leveraging the proposed multi-scale guided ﬁlter. The
+guided ﬁlter uses single box size due to which it is unable
+to achieve textural smoothening and structural preser-
+vation simultaneously. Thus, we propose multi-scale
+guided ﬁlter using multiple box sizes to achieve adequate
+textural smoothening while preserving the structural
+details.
+– Formulated and proposed a new multi-objective opti-
+mization problem with a new regularization term to
+effectively preserve structural details in the reﬁned illu-
+mination while smoothening the textural details. We
+solved the above optimization problem using Alternative
+Direction Minimization (ADM) algorithm [55].
+– Proposed a new approach for adaptive illumination
+adjustment to improve the overall lightness of the
+low-light image using the estimated illumination. The
+proposed adaptive illumination adjustment increases
+the lightness in darker region, while maintaining the
+lightness of the bright regions by using the proposed
+illumination estimation to manage the lightness. Thus,
+it results in the natural enhancement of low light
+images.
+– We performed an exhaustive analysis of the proposed
+approach on various datasets [17,30,42,53,56,57] using
+qualitative and qualitative analysis and compared with
+state-of-the-art algorithms.
+The remaining paper is organized as follows. Section 2
+contains Related Work. Section 3 brieﬂy describes the pro-
+posed methodology. Section 4 presents results and analysis.
+Section 5 concludes the proposed approach and ﬁndings.
+123
+
+
+===== PAGE 3 =====
+Illumination estimation for nature preserving low-light image enhancement
+2 Related work
+Many researchers have attempted to develop algorithms for
+image enhancement [19,21,46]. Low-light images contain
+most of the low-intensity pixels, and they are loosely con-
+sidered low-contrast images. Histogram equalization-based
+approaches[37,38]arethemoststraight-forwardapproaches.
+These algorithms focus on contrast enhancement rather than
+improving the illumination of the image. Thus, they some-
+times fail to improve the contrast of low-light images.
+Retinex [24,33] based enhancement algorithms work
+reasonably well for low-light images. Many authors [5,
+14,25,34,35,50] have attempted simultaneous estimation
+of illumination and reﬂectance. Fu et al. [5] proposed a
+method for computing both components simultaneously with
+probabilistic-based prior (PIRE). The algorithm [5] works
+well for objects with proper illumination in a low-light
+image, but the enhancement is limited in darker regions. Li
+et al. [25] proposed SRLIME for simultaneous estimation
+of reﬂectance, illumination, and noise from an image. Hao et
+al.proposedsemi-decoupleddecomposition(LSDD)[14]for
+low-light image enhancement. It considers the inherent noise
+in the reﬂectance. SRLIME and LSDD algorithms provide
+good color constancy. However, the algorithms [14,25] result
+in degraded images due to over smoothening in many images.
+Wang et al. [50] proposed a method for image decomposi-
+tion using total generalized variation regularization and H1
+decomposition. In general, the complexity of algorithms esti-
+mating both illumination and reﬂectance is high. Thus, these
+algorithms may not be useful for real-time applications.
+Another set of algorithms [6,12,53] estimate the illumi-
+nation and use it to ﬁnd the reﬂectance. Wang et al. [53]
+proposed Naturalness Preserved Enhancement Algorithm
+(NPEA) to deal with non-uniform illumination. NPEA pre-
+serves naturalness at the cost of illumination improvement.
+Thus,darkerregionsmaynotenhanceadequately.Fuetal.[6]
+proposed a method that uses multi-fusion to deal with weak
+illumination. The algorithm fails to provide signiﬁcant light-
+ness for a darker region. Guo et al. [12] proposed a low-light
+image enhancement algorithm using illumination map esti-
+mation (LIME). The performance of LIME is signiﬁcantly
+good. However, over enhancement occurs in properly illumi-
+nated regions of low-light images. Moreover, LIME fails to
+retain color constancy.
+Researchers endeavored data-driven approaches in image
+dehazing [3,20,64,65], image deraining [49], underwater
+image enhancement [27] and low-light image enhancement
+[26,29,31,47]. To this end, Shen et al. [45] proposed MSR-
+net, a neural network-based approach to implement MSR.
+Wei et al. [56] proposed Retinex-Net, for image decom-
+position and illumination mapping. Retinex-Net performs
+denoising of reﬂectance component. Zhang et al. [66] pro-
+posed kindling in darkness (KID) for the decomposition
+of images. Yu et al. [59] developed a modular low-light
+enhancement network using feature aggregation and atten-
+tion. Li et al. [26] proposed a low-light image enhancement
+network based on attention method, and stacking method. Yu
+et al. [61] presented a low-light image enhancement method
+using two-stage decomposition and regulator method. Song
+et al. [47] proposed a spatial feature pyramid network for
+enhancementoflow-lightimages.Themethod[47]usesthree
+convolution kernels on spatial pyramid network to obtain fea-
+tures of distinct scales. The learning-based methods require
+a huge set of low-light and enhanced images. Moreover,
+the learning-based methods work well for data similar to
+the test images. However, these methods may provide lim-
+ited enhancement while dealing with signiﬁcantly different
+images.
+Yu and Zhu [60] proposed a physical model-based algo-
+rithm, which considers the environmental light and scattering
+attenuation rate. Ren et al. [42] proposed LECARM, which
+uses a camera response model for the enhancement of low-
+light images. Ghosh et al. [9] proposed an adaptive bilateral
+ﬁlter-based textural smoothing. Wang et al. [48] proposed a
+fast method based on exposure fusion to enhance the details
+in multiple regions in the image using local Laplacian ﬁl-
+ters. Rahman et al. [39] developed a wavelet transform-based
+multi-scale decomposition and denoising method.
+3 Nature preserving low-light image
+enhancement (NPLIE)
+In this section, we describe the details of proposed NPLIE.
+The algorithm uses three major modules for low-light image
+enhancement. First, NPLIE estimates initial illumination
+leveraging the proposed multi-scale guided ﬁlter. The algo-
+rithm uses multiple boxes to achieve textural smoothening
+while preserving the structural details. Second, we reﬁne
+the initial illumination using the formulated multi-objective
+optimization function. NPLIE estimates reﬂectance using the
+reﬁned illumination. Lastly, the algorithm adjusts the reﬁned
+illumination using the proposed adaptive illumination adjust-
+ment to obtain the ﬁnal illumination with corrected lightness.
+NPLIE combines the ﬁnal illumination with the reﬂectance
+to provide an enhanced image. This work considers Retinex
+[23] image formation model, which can be deﬁned as:
+J = R ◦I
+(1)
+where J is an image, R is reﬂectance of the image, I is
+illumination, and symbol ‘◦’ represents element-wise multi-
+plication.
+In earlier work [18,40], a smooth image is considered as an
+estimate of illumination. However, direct smoothening using
+a center/surround function does not capture the character-
+123
+
+
+===== PAGE 4 =====
+K. Singh, A. S. Parihar
+Fig. 2 Results of House. a Original Image; b Illumination of LIME; c
+Illumination of Proposed method; d LIME [12]; e Proposed Method
+istics of non-uniform illumination. In dark regions, most of
+the information about illumination is available on the channel
+with the maximum intensity value [6,12,53]. A set of algo-
+rithms [6,12,53] use pixel-wise maximum across all color
+channels (bright-channel) as initial illumination. However,
+the bright-channel of low-light images may not represent
+true illumination. An image is indeed a 2D representation
+of 3D scenes (real world). Therefore, two adjacent objects
+in an image may be far distant in reality, and illumination in
+such cases may also vary. However, maximum intensity for
+two adjacent objects may be similar, and bright-channel will
+not distinguish their illumination. Moreover, in the surround-
+ing region of a light source, the bright-channel estimation
+produces a scattering effect during low-light enhancement.
+It can be observed from Fig. 2 that the bright channel as
+initial illumination generates undesired artifacts. Thus, we
+proposed a structure-aware initial illumination instead of a
+bright-channel to address the above issue.
+3.1 Structure-aware initial illumination estimation
+In any optimization-based approach, initial illumination
+plays a deﬁning role as it acts as a reference for reﬁned
+illumination. One may notice in the red box of Fig. 2 that
+structural details are lost in Fig. 2d (in case of LIME), while
+details are preserved in Fig. 2e (in case of NPLIE). Sim-
+ilarly, the artifacts are prominently visible on the pillar in
+the green box of Fig. 2d. The analysis of illumination esti-
+mation can help to understand these losses of details and
+artifacts, as shown in Fig. 2b. One may notice that illumi-
+nation is changing abruptly, which is quite unnatural. Thus,
+a structure-aware illumination estimation is highly desirable
+in images with non-uniform light conditions. The textural
+details of the image have almost no effect on the spatial vari-
+ation of the illumination. Thus, the illumination of an image
+may be considered to be independent of textural details. The
+algorithm should smoothen textural details while preserving
+structural details to achieve an actual (or near actual) estima-
+tion of the illumination. In the proposed method, we develop
+an algorithm for structure-aware estimation of initial illumi-
+nation by proposed multi-scale guided ﬁltering.
+Fig. 3 Initial illumination with bmin, bm, bmax, LIME (i.e. simple max-
+imum intensity) and Proposed method in (4) respectively
+In guided ﬁltering [15], there is a fundamental assump-
+tion of linear relation between the guidance image (J) and
+the smoothen image (Jb). The linear model in guided ﬁl-
+ter ensures that the smoothen image contain an edge only
+if the input image has an edge. However, near strong edges
+gradient of each parameter of the ﬁlter is expected to be
+very small. Therefore, it is expected that the ﬁltering should
+preserve structural details while smoothening the textural
+details. However, it also depends on the box size and image
+content inside the box.
+In case of a box with high variance, the smoothen image
+retains maximum details from the guidance image which
+causes structural details preservation. In case of a box with
+low variance, the smoothen image captures the mean of the
+box ﬁlter that causes smoothening of textural details. The
+smaller box generally results in low variance as the details
+do not change much within the box (except abrupt changes
+i.e. dominant structural details). Thus, it will perform textural
+smoothening with dominant structural details preservation.
+However, the overall smoothening will be low if we con-
+sider a very small box size (i.e. small neighborhood). As
+we increase the box size, the variance will increase primar-
+ily due to two reasons: (i) Higher probability of including
+high detailed regions; and (ii) The variation inside the box
+is high due to larger spatial region coverage. The larger box
+size will result in better structural retention with slightly less
+contrast as it tries to pull all the values near the mean of
+the large region. From the above discussion, we noticed that
+smaller box size results in better textural smoothening with
+only dominant structural details preservation. On the other
+hand, larger box sizes result in better structural details preser-
+vation with compromised textural smoothening. Thus, it is
+intuitive to use some intermediate box size between bmin and
+bmax. However, it is empirically observed that the intermedi-
+ate box also fails to give desired illumination estimation and
+contains somedrawbacks of bothbmin andbmax. It shows that
+the guided ﬁlter with a single box size is unable to perform
+the textural smoothening and structural preservation simul-
+taneously, which is required for illumination. We propose to
+use three different box sizes bmin, bm, and bmax to obtain
+structure-aware smoothening. However, the above relation
+is an approximate relation; thus, we performed exhaustive
+123
+
+
+===== PAGE 5 =====
+Illumination estimation for nature preserving low-light image enhancement
+Fig. 4 Framework of structure-aware initial illumination estimation
+experimentation on a large set of images to analyse the effect
+of the box size in section 4.1.
+We empirically observed that box size eight provides good
+textural smoothening as shown in Fig. 3a. Thus, we select
+the minimum box size as eight, i.e. bmin = 8. However, bmin
+fails to preserve the structural details near the pillar region
+in Fig. 3a. On the other hand maximum box size i.e. bmax
+preserves the structural details; however, it fails to smoothen
+the textural details signiﬁcantly as shown in Fig. 3c. The
+maximum box size, bmax is computed as:
+bmax = round(min(H, W)/2)
+(2)
+where H and W represents number of rows and columns of
+the image respectively. Intuitively, we consider intermediate
+box size (bm) for trade-off between bmin and bmax. However,
+intermediate box size also fails to give desired illumination
+and contains some drawbacks of both boxes. bm is computed
+as:
+bm = round((bmin + bmax)/2)
+(3)
+Theframeworkofstructure-awareinitialilluminationesti-
+mation is shown in Fig. 4. In ﬁrst step, guided ﬁlters with
+box sizes bmin, bm, and bmax are applied to the low-light
+image. Then, the pixel-wise max operation is performed
+across all three color channels on each output images of
+guided ﬁlters. This results in three max channels correspond-
+ing to each box size (max guided channels). Finally, the
+pixel-wise max operation is applied on above three max
+guided channels to achieve the structure-aware initial illu-
+mination. Fig. 3 shows the results of initial illumination for
+smoothened image (using bmin, bm, and bmax), simple max-
+imum operation (used in LIME), and the proposed method.
+We consider maximum operation [12,42,53] to obtain the
+effect of light in the initial illumination. It can be observed
+from Fig. 3(d) that proposed initial illumination contains the
+effect of light, structural preservation (at top near the grill),
+and low textural details. For notational convenience, let us
+consider b1 = bmin, b2 = bm, and b3 = bmax. The proposed
+algorithm computes initial illumination as given below:
+ˆI = max
+i
+ 3
+
+i=1
+max
+c∈{R,G,B}
+
+Jc
+bi
+
+(4)
+where ˆI denotes the initial illumination, Jc
+bi denotes cth color
+channel of the output image of guided ﬁlter with box size
+bi, max denotes pixel-wise maximum, and (R, G, B) denotes
+(red, green and blue) color channel of the image.
+3.2 Formulated optimization for refined
+illumination estimation
+The proposed initial illumination gives a reasonably good
+estimationofactualilluminationandresultsingoodenhance-
+ment. However, the estimated illumination still contains
+textural details and may result in over-enhancement. Thus,
+there is a need for reﬁning the initial illumination while pre-
+serving the structural details. To achieve a structure-aware
+smoothening, we formulate the following multi-objective
+optimization problem:
+min
+I
+||ˆI −I||2
+2 + α||∇Jm −∇I||2
+2 + β||G ◦∇I||1
+(5)
+where I is the reﬁned illumination, ˆI is initial illumination
+as obtained by (4), ∇denotes ﬁrst-order derivative operator,
+∇Jm denotes maximum of ∇from all channels of J, G is a
+weight matrix based on initial illumination as discussed later
+in this section, || • ||p represents L p norm operator, and α
+and β are the regularization parameters.
+The ﬁrst term (i.e. ||ˆI −I||2
+2) of (5) provides ﬁdelity
+between initial illumination and reﬁned illumination. The
+second term (i.e. ||∇Jm −∇I||2
+2) pulls the gradient of the
+reﬁned illumination towards the maximum gradient of input
+image (∇Jm). It tries to maximize the structural details in
+the illumination. The third term (i.e. ||G ◦∇I||1) provides
+smoothness to minimize textural details. The second term of
+(5)limitsthesmootheningeffectintroducedbythethirdterm,
+while the third term prevents the second term from enhanc-
+ing textural or noisy details. Thus, combining the second
+and third terms results in preserving structural details and
+smoothening textural details in the reﬁned illumination.
+In the third term, weight matrix G plays a vital role in
+smoothening of the textural details. The weights in matrix G
+are calculated as below:
+Gx = −log(∇xˆI)
+(6)
+where ∇x denotes ﬁrst-order derivative along horizontal
+dimension.
+Gy = −log(∇yˆI)
+(7)
+where ∇y denotes ﬁrst-order derivative along vertical dimen-
+sion. The logarithm of derivatives assign a higher weight to
+textural details, while reducing the importance of structural
+details. Note that low gradient values characterize texture
+123
+
+
+===== PAGE 6 =====
+K. Singh, A. S. Parihar
+details, while high gradient values characterize structural
+details. Thus, the minimization of the multi-objective func-
+tion signiﬁcantly suppresses textural details and results in
+textural smoothening, while reducing the smoothening effect
+in structural details.
+The efﬁcient solution of (5) can be obtained using the
+Alternative Direction Minimization (ADM) algorithm [55].
+The researchers [5,12,25] have proven the convergence of
+optimizationproblemlikein(5)totheglobaloptimum.Letus
+replace the term ∇I with an auxiliary variable K and rewrite
+objective function in (5) as:
+arg min
+I, K
+||ˆI −I||2
+2 + α||∇Jm −K||2
+2 + β||G ◦K||1
+s.t.∇I = K
+(8)
+The multi-objective optimization which contains equality
+constraint can use Lagrangian multiplier to compute the opti-
+mum point. The equality constraint in (8) can be included in
+the objective function using Lagrangian multiplier (L). The
+augmented Lagrangian function of (8) is given as:
+L = ||ˆI −I||2
+2 + α||∇Jm −K||2
+2 + β||G ◦K||1
++ϕ(L, ∇I −K)
+(9)
+where ϕ(L, ∇I−K) = ω
+2 ||∇I−K||2
+2+⟨L, ∇I−K⟩and ⟨·, ·⟩
+denotes element-wise multiplication, ω is a positive penalty
+term. The penalty term is required to control the rate of con-
+vergence to the solution [55]. The optimization problem can
+be solved easily by iteratively updating one variable while
+considering others as constant. The separation of the opti-
+mization problem (5) into sub-problems can simplify it. We
+divide the proposed multi-objective function into two sub-
+problems, sub-problem I, and sub-problem K. Sub-problem
+I is formed using all terms of (9) which contain illumination
+component. Sub-problem K is formed by considering the all
+terms of (9) which contain equality constraint. Let us solve
+both sub-problems using ADM [55] algorithm.
+Sub-problem I Considering only terms related to the variable
+I of (9), we obtain the following sub-problem at ith iteration:
+Ii+1 = arg min
+I
+||ˆI −I||2
+2 + ϕ(Li, ∇I −Ki)
+(10)
+This is a well-known least square problem and can be solved
+by differentiating it with respect to I and putting it equal to
+0:
+I = 2ˆI + DT (ωK −L)
+2 + ωDT D
+(11)
+where D denotes the matrix containing Dx and Dy, Dx is the
+differencealongrowsandDyisthedifferencealongcolumns.
+Multiplication, transpose, and inverses of large matrices may
+be computationally inefﬁcient. Thus, we use the 2D-FFT
+method by considering the condition of the circular bound-
+ary, and compute I as:
+Ii+1 = F −1
+F
+
+2ˆI
+	
++ 
+d∈{x,y} F c
+Dd(ωiKi −Li)
+	
+2 + ωi 
+d∈{x,y} F c
+Dd
+	
+· F
+
+Dd
+	
+
+(12)
+where F denotes 2D-FFT operation, F c denotes complex
+conjugate of 2D-FFT operation, F −1 denotes the inverse of
+2D-FFT operation and 2 is a matrix equivalent to image size
+having all elements 2. Here, all operations are element-wise.
+Sub-problem K: The sub-problem K is obtained from (9) by
+selecting terms related to K only. Thus, we have the following
+sub-problem at ith iteration:
+Ki+1 = arg min
+K
+α||∇Jm −K||2
+2 + β||G ◦K||1
++ ω
+2 ||∇I −K||2
+2 + ⟨L, ∇I −K⟩
+(13)
+To solve the minimization problem (13), take derivative with
+respect to K and equate it to zero. The value of a pixel in
+an image cannot be negative. However, K can have negative
+pixel values because of higher weights, which is inappro-
+priate while dealing with images. Thus, the computation of
+K requires normalization to deal with negative pixel values.
+Shrinkage operation [12,25] helps in thresholding the val-
+ues of the image. Hence, we can solve (13) using shrinkage
+operation:
+Ki+1 = S
+β·G
+2α+ωi
+2α∇Jm + ω∇Ii+1 + Li
+2α + ωi
+
+(14)
+where Sφ[x] = sign(x)max(|x| −φ, 0) and all operations
+are element-wise. The value of parameters α and β are cho-
+sen empirically. The parameters analysis shows that the best
+values of α and β are 0.5 and 0.1 respectively. The detailed
+analysis is discussed in section 4.6.
+L and ω : The Lagrangian multiplier matrix L and penalty
+term ω can be updated as follows:
+Li+1 = Li + ωi(∇Ii+1 −Ki+1);
+ωi+1 = ωiδ, δ > 1.
+(15)
+The above iterative algorithm needs suitable stopping cri-
+teria to achieve an optimal solution. We can either consider a
+threshold for the difference between Ii+1 and Ii (i.e. I i
+error)
+or work out the maximum number of iterations. We consid-
+ered the second option and found the maximum number of
+iterations using a large number of experiments with various
+image datasets. We analyze the results and found that after
+eight iterations, the proposed algorithm gives optimal results.
+123
+
+
+===== PAGE 7 =====
+Illumination estimation for nature preserving low-light image enhancement
+Algorithm 1: Reﬁned illumination estimation
+Input: Proposed Structure-aware initial illumination ˆI, α & β
+Initialization: I0 = K0 = L0 = 0, ω0= 1, δ = 1.5.
+while not converged do
+Update Ii+1 via (12);
+Update Ki+1 via (14);
+Update Li+1 via (15);
+i=i+1;
+end
+Output: Reﬁned illumination I=Ii
+Input image
+LIME, γ = 0.5
+LIME, γ = 0.8
+Input image
+LIME, γ = 0.5
+LIME, γ = 0.8
+Fig. 5 Lightness comparison in Shoe(top row) image and Wall(bottom
+row)
+image
+after
+enhancement
+using
+LIME
+algorithm
+(with
+γ =[0.5,0.8])
+Input image
+LIME
+Proposed method
+Fig. 6 Input image, LIME with γ =0.8, and NPLIE with proposed adap-
+tive illumination adjustment
+Additionally, the algorithm often runs a larger number of
+iteration without signiﬁcant improvement and results in the
+wastage of computation power if we consider the threshold
+difference. The whole procedure of estimating reﬁned illu-
+mination is summarized in Algorithm 1, which covers all
+details regarding variables initialization.
+After estimation of illumination, we require to estimate
+reﬂectance. Remember illumination is independent of color
+channel; however, reﬂectance depends on color channel. The
+estimated reﬂectance is given as:
+Rc = Jc/I
+(16)
+where Rc is estimated reﬂectance of cth color channel and
+division is element-wise.
+3.3 Adaptive illumination adjustment
+In traditional approaches for illumination adjustment, ﬁnd-
+ing a suitable value for the adjusting factor (like gamma) for
+all kinds of images is not feasible because images with differ-
+ent illumination require different values of adjusting factor
+for the same algorithm. LIME and many other algorithms
+[5,12,25] use gamma correction for the adjustment of light-
+ness in the image. For Fig. 5, LIME suggests suitable value of
+γ = 0.8, which works well for image ’Wall’. However, in the
+’Shoe’ image of Fig. 5, LIME results in over-enhancement
+around the white corners of the shoe. One may work out
+some lower value of gamma, say γ = 0.5. It addresses the
+problem of over-enhancement (ignoring some dark patches)
+in the image ’Shoe’ but fails to improve illumination in case
+of the image ’Wall’. Thus, the same gamma value is unable
+to deal with different types of images. Even if an algorithm
+computes a different gamma value for different images, i.e.
+image-dependent gamma, it will not handle images with
+varying illumination. A global value of gamma is unable
+to produce faithful enhancement of all the regions in images
+with varying illumination. It can be observed from Fig. 6
+that in one region (highlighted in the red box), LIME results
+in over-enhancement, and the other region (highlighted in
+the green box), it gives under-enhancement. Thus, to achieve
+natural enhancement, we require an adaptive illumination
+adjustment method that adopts the value according to the
+local region of the low-light images. In this work, we devel-
+oped an adaptive illumination adjustment method that uses
+the local illumination properties of the image. The adaptive
+illumination adjustment method is adapting automatically
+according to the required enhancement in the regions. The
+proposed approach eradicates over-enhancement and under-
+enhancement in different regions of the image with varying
+illumination. Thus, it helps in providing natural enhancement
+for all types of images irrespective of illumination property.
+The proposed illumination adjustment is given as:
+I f = I·log(I)
+(17)
+where I f is the adjusted illumination estimation, and · rep-
+resents the element-wise power operation. The logarithmic
+function improves consistency in illumination of the image.
+The proposed adaptive illumination adjustment uses the
+properties of estimated illumination properties to manage the
+lightness in the different regions of an image. The adaptive
+illumination adjustment improves the lightness of dark-
+regions and restricts the lightness of regions with normal
+illumination. Note that the images are normalized between 0
+to 1. The element-wise product of adjusted illumination and
+reﬂectance provides an enhanced image. The ﬁnal enhanced
+image is given as:
+Jc
+f = Rc ◦I f
+(18)
+where Jc
+f is ﬁnal enhanced image.
+123
+
+
+===== PAGE 8 =====
+K. Singh, A. S. Parihar
+4 Experimental results and analysis
+The proposed algorithm is analyzed and validated experi-
+mentally. The performance is evaluated with both quantita-
+tive and visual assessments. The time complexity is another
+important aspect to assess the performance of an algorithm.
+Thus, the computational cost is also analyzed for the pro-
+posed approach. We tested the proposed method using a large
+set of images (having varying illumination) taken from var-
+ious image datasets: LECARM [42], NPEA [53], ExDark
+Dataset [30], LOL Dataset [56], EnlightenGAN [17], MIT-
+Adobe5k dataset [1] and NASA Database [57]. We compare
+the performance of the proposed algorithm with other state-
+of-the-art algorithms: NPEA [53], PIRE [5], LIME [12],
+SRLIME [25], LECARM [42], LSDD [14], Zero-DCE [11],
+and CSDGAN [32]. We have used codes and parameters (of
+other algorithms) as available on the author’s websites/or as
+provided by authors for a fair comparison.
+4.1 Effect of box size on initial illumination
+This section presents a detailed analysis of box size for ini-
+tial illumination. As discussed in Sect. 3.1, single box size
+is incapable of providing desirable initial illumination. We
+propose initial illumination estimation using three box size
+i.e. bmin, bm and bmax. For proper estimation of initial illu-
+mination, we need to perform textural smoothening while
+preserving the structural details. We investigated the behav-
+ior of guided ﬁlters by varying the box size over 500 different
+types of images i.e. covering all kind of detail variations. We
+have shown three sample images for demonstration in Fig. 7.
+For the purpose of analysis, we have divided an image into
+three categories: low detailed regions, high detailed regions,
+and mixed regions (regions with low details for smaller boxes
+and high details for larger boxes, and vice versa).
+Case I - Low detailed regions: In Fig. 7a and b, the area
+highlighted with blue color shows the low detailed region in
+the image, and the blue line in the plot shows variance with
+respect to multiple box sizes. In such regions, variance is low
+for a smaller box, and there is a slight change in variance as
+we move from small box size to high box size because of
+fewer details. The low variance of the box results in high
+textural smoothening. In such regions, structural details are
+unavailable; thus, there is no effect of the box size. Smaller
+boxsizeinsuchregionsprovidesslightlyhighersmoothening
+than the larger box size, which can be observed from variance
+shown in the plot of Fig. 7a and b. In low detailed regions, box
+size has less effect on variance as these regions do not contain
+structural details. Such regions perform textural smoothening
+for small and large box sizes due to low variance.
+Case II - High detailed regions: In Fig. 7a and b, the area
+highlighted with red color shows the high detailed region in
+the image, and the red line in the plot shows the variance with
+(a) Sample 1
+(b) Sample 2
+(c) Sample 3
+Fig. 7 Effect of box size on variance. The plot shows variance of the
+box with varying box size where x-axis denotes the box-size and y-axis
+denotes the variance of respective box. In the plot, red line and blue
+line show the effect of box size in region highlighted with red color and
+blue color
+(a) Reﬁned 1 (b) Reﬁned 2 (c) Reﬁned 3 (d) Reﬁned 4
+Fig. 8 Assessment of reﬁned illumination
+respect to multiple box sizes. Such regions contain textural
+andhighstructural details. Smaller boxes insuchregions cap-
+ture low variance, thus provides smoothening of the textural
+details. In high detailed regions of an image, the variance of
+a box increases sharply with an increase in box size up to
+maximum variance as shown by the red curve of the plot in
+Fig. 7a and b. High variance results in low smoothening thus,
+results in the preservation of structural details. Moreover, the
+smoothened image with a large box size appears to be faded
+as it tries to pull all values towards the mean value of a large
+region. The smaller box size performs textural smoothening
+in the high detailed region, and the larger box size performs
+structural preservation.
+Case III - Mixed Regions: In Fig. 7c, the area highlighted
+with red and blue color shows the mixed region in the image.
+In Fig. 7c, the area highlighted with blue color in the sky is
+a low detailed region. In this region, the variance is low for
+123
+
+
+===== PAGE 9 =====
+Illumination estimation for nature preserving low-light image enhancement
+Fig. 9 Graph for quantitative comparison between several reﬁned illu-
+mination
+smaller box sizes, resulting in higher textural smoothening.
+However, when we increase the box size after some limit,
+it will capture structural details due to which variance will
+increase, resulting in structural preservation. On the other
+hand, the red area and red curve in Fig. 7c shows a region
+where initially the variance increases with an increase in box
+size, but once the box starts to capture the low detailed region,
+then the variance reduces. Thus, in such regions smaller box
+provides textural smoothening, and the larger box provides
+structural details preservation with slight textural smoothen-
+ing as it captures comparably higher variance. Moreover,
+intermediate box size in such regions helps in structural
+preservation.
+It is evident from the above analysis that the textu-
+ral smoothening and structural preservation both cannot be
+achieved simultaneously using a single scale guided ﬁlter. As
+the textural smoothening and structural preservation depend
+on box size, characteristics of the image, and the neighbor-
+hood; thus, multiple box sizes are required to achieve textural
+smoothening and structural preservation simultaneously. The
+assessment of proposed initial and reﬁned illumination is dis-
+cussed in the next section.
+4.2 Assessment of initial and refined illumination
+We analyzed the effect of the proposed initial and pro-
+posed reﬁned illumination by comparing the performance
+of various combinations (listed below). The following com-
+binations of reﬁned illuminations are used for assessment:
+– Reﬁned 1 : the bright channel (used in [12,42,53]) with
+optimization used in [12,42].
+– Reﬁned 2 : the proposed initial illumination with opti-
+mization used in [12,42].
+– Reﬁned 3 : the bright channel (used in [12,42,53]) with
+the proposed optimization formulated in (5).
+– Reﬁned 4 : the proposed initial illumination with the pro-
+posed optimization formulated in (5).
+These combinations (reﬁned 1 to 4) are chosen to analyze
+the performance of the proposed initial illumination and the
+proposed optimization formulated in (5). The performance
+of the various combinations is analyzed by computing the
+performance metrics on enhanced images. We performed an
+exhaustive assessment on a large set of images, and some
+of the visual results are shown in Fig. 8. It is evident from
+Fig. 8a that reﬁned 1 provides over-enhancement near the
+stands in the top image and near the cup in the bottom image.
+Reﬁned 2 restricts the over-enhancement up to an extent, as
+shown in Fig. 8b. It shows that the proposed initial illumi-
+nation helps in restricting the over-enhancement. However,
+the overall enhancement is limited as reﬁned 2 uses inade-
+quate optimization. The result of reﬁned 3 is shown in Fig.
+8c. Reﬁned 3 provides comparably better performance than
+reﬁned 1 and reﬁned 2. It shows that the proposed optimized
+reﬁnement restricts the over-enhancement after combining
+withthebright channel. It canbeobservedthat theformulated
+optimization provides superior enhancement as compared to
+the optimization used in [12,42] with the bright channel and
+the proposed initial illumination. Reﬁned 4 achieves superior
+enhancement than other combinations. Reﬁned 4 uses pro-
+posed initial illumination and proposed optimization, which
+helps in achieving better enhancement. Hence, the reﬁned 4
+(proposed method) is superior to any other combination of
+the initial illumination and optimization.
+Further, we performed quantitative analysis of the result-
+ing images using Contrast Gain (CG) [5], Normalized Dis-
+crete Entropy (DEN) [2], Information maximization-based
+No-reference quality metric (NIQMC) [10], and Visual Infor-
+mation Fidelity (VIF) [44]. For all performance measures,
+the higher value is the better. Details of the measures are dis-
+cussed in Sect. 4.4. Fig. 9 shows the quantitative assessment
+of the above-mentioned combinations (reﬁned 1 to 4). Note:
+we normalized all measures using division with the maxi-
+mum for representation purposes. Fig. 9 shows that reﬁned
+1 achieves good DEN and NIQMC. However, CG and VIF
+are not good in case of reﬁned 1. Reﬁned 2 uses proposed
+initial illumination, which improves the value of CG, DEN,
+NIQMC, and VIF as shown in Fig. 9. In case of reﬁned 3,
+the initial illumination is not appropriate, which results in
+a decrease in the value of all performance measures except
+CG. It is evident from Fig. 9 that the proposed approach (i.e.
+reﬁned 4) performs better than other combinations for all
+performance measures.
+4.3 Assessment of proposed adaptive illumination
+adjustment
+We replaced the traditional gamma correction for lightness
+improvement with the proposed adaptive illumination adjust-
+ment in PIRE, LIME, SRLIME, and NPLIE to analyze its
+effect. Fig. 10 shows the comparison of the proposed adap-
+tive illumination adjustment and the traditional gamma with
+PIRE, LIME, SRLIME, and NPLIE. It is evident from Fig. 10
+123
+
+
+===== PAGE 10 =====
+K. Singh, A. S. Parihar
+Table 1 Mean values of Quantitative Measures for various algorithms
+Metric
+NPEA
+PIRE
+LIME
+SRLIME
+LECARM
+LSDD
+Zero-DCE
+CSDGAN
+Proposed
+CG
+0.57
+0.54
+0.61
+0.42
+0.55
+0.55
+0.88
+0.91
+0.96
+DEN
+0.68
+0.66
+0.66
+0.62
+0.68
+0.68
+0.64
+0.41
+0.77
+NIQMC
+4.79
+4.08
+5.38
+4.07
+4.56
+4.34
+3.69
+2.84
+5.45
+VIF
+17.25
+4.51
+25.18
+3.46
+6.51
+5.77
+3.90
+4.52
+32.31
+Table 2 Statistical analysis of one tail paired z-test for CG, DEN, NIQMC, and VIF
+Metric
+Algorithm X
+NPEA
+PIRE
+LIME
+SRLIME
+LECARM
+LSDD
+Zero-DCE
+CSDGAN
+CG
+Z-stat
+23.87
+27.51
+18.43
+32.97
+24.68
+25.61
+6.02
+3.28
+p-value
+0
+0
+0
+0
+0
+0
+8.89E-10
+5.25E-04
+DEN
+Z-stat
+9.50
+39.87
+10.74
+40.65
+19.11
+29.95
+46.46
+97.67
+p-value
+0
+0
+0
+0
+0
+0
+0
+0
+NIQMC
+Z-stat
+68.25
+62.23
+4.44
+61.07
+40.43
+44.62
+66.17
+67.02
+p-value
+0
+0
+4.49E-06
+0
+0
+0
+0
+0
+VIF
+Z-stat
+5.67
+12.69
+2.13
+13.21
+11.64
+11.95
+12.59
+12.21
+p-value
+7.22E-09
+0
+0.017
+0
+0
+0
+0
+0
+Fig. 12 Results of different algorithms on image corner. (a) Input
+image; (b) Patch of (a); (c) NPEA; (d) Patch of (c); (e) PIRE; (f) Patch
+of (e); (g) LIME; (h) Patch of (g); (i) SRLIME; (j) Patch of (i); (k)
+LECARM; (l) Patch of (k); (m) LSDD; (n) Patch of (m); (o) Zero-
+DCE; (p) Patch of (o); (q) CSDGAN; (r) Patch of (q); (s) Proposed
+method; (t) Patch of (s)
+(a) PIRE
+(b) LIME
+(c) SRLIME
+(d) NPLIE
+Fig. 10 Assessment of proposed adaptive illumination adjustment. Top
+row shows the results with traditional gamma (for illumination adjust-
+ment on various approaches), and bottom row shows the results with
+proposed adaptive illumination adjustment on various approaches
+(a) Traditional gamma (for
+illumination adjustment)
+(b) Proposed adaptive illu-
+mination adjustment
+Fig. 11 Quantitative assessment of proposed adaptive illumination
+adjustment
+that the proposed adaptive illumination adjustment improves
+the performance of PIRE [5], LIME [12], and NLPIE. There
+123
+
+
+===== PAGE 11 =====
+Illumination estimation for nature preserving low-light image enhancement
+is a slight improvement in lightness after using the pro-
+posed adaptive illumination adjustment with PIRE. Fig. 10b
+shows that there is a signiﬁcant improvement in lightness
+when we use the proposed adaptive illumination adjust-
+ment with LIME. Fig. 10c shows results of SRLIME with
+traditional gamma and the proposed adaptive illumination
+adjustment. The results of SRLIME degrades with proposed
+adaptive illumination adjustment as its illumination esti-
+mation is inadequate. The proposed adaptive illumination
+adjustment improves the overall lightness in case of NPLIE
+as shown in Fig. 10d.
+The quantitative assessment of various algorithms with
+traditionalgammaandproposedadaptiveilluminationadjust-
+ment is shown in Fig. 11. It is shown in Fig. 11a and
+11b that the values of all performance measures improve
+for PIRE, LIME and NPLIE. However, the values of all
+measures decrease in case of SRLIME. The decomposed
+components from SRLIME algorithm are dependent on each
+other because of the optimization. In attempt to remove
+noise, SRLIME sometimes looses minor details which leads
+to inadequate estimation of the components. The proposed
+adaptive illumination adjustment uses the estimated illumi-
+nation component for correction of lightness in the image,
+which is inadequate in SRLIME and may contain the details
+of reﬂectance. Thus, the illumination of SRLIME after the
+proposed illumination adjustment causes over-enhancement
+and distortion in the enhanced image. Hence, the pro-
+posed adaptive illumination adjustment fails to achieve better
+enhancement with SRLIME.
+4.4 Quantitative assessment
+The quantitative assessment is always desirable to vali-
+date any experimental result. It may be easily veriﬁed that
+a quantitative measure occasionally may give better value
+for poorly enhanced image and inferior value for a high-
+quality image and vice versa. There is no single universally
+accepted quantitative assessment method available. There are
+two types of measures for quantitative assessments of the
+images: referential and non-referential measures. In case of
+referential measures, good quality ground truth images are
+required. It is nearly infeasible to ﬁnd an image database
+having pairs of good quality illuminated and dark (with
+varying illumination) version of the images. Even if such
+data is created, the enhancement is limited by the qual-
+ity of the illuminated reference images. That is, the value
+of referential measure greatly depends upon the quality of
+the reference image. Thus, we have used four quantitative
+measures (frequently used in literature): Contrast Gain (CG)
+[5], Normalized Discrete Entropy (DEN) [2], Information
+maximization based No-reference quality metric (NIQMC)
+[10], and Visual Information Fidelity (VIF) [44]. The mea-
+sures for quantitative assessment was applied to all images in
+all datasets except MIT-Adobe5k dataset. In MIT-Adobe5k
+dataset, we have sampled 500 images that are either cap-
+tured in night or contains low-light regions. Then, the mean
+metric value was computed and reported on all images of
+other datasets and sampled images of Adobe-MIT5k dataset.
+Higher structural details contribute to better contrast. Thus,
+higher CG is desirable for enhanced images. A higher value
+of DEN represents more details and better enhancement.
+A higher value of NIQMC denotes better enhancement and
+more information in an image. Higher value of VIF indicates
+better enhancement and more nature preserving enhance-
+ment. The results of the quantitative assessment for various
+algorithms are shown in Table 1. The best values for quantita-
+tivemetricsarebold.ItmaybenotedfromTable1thatNPLIE
+achieves the highest mean value (for CG, DEN, NIQMC,
+and VIF). LIME achieves comparable results; however, it
+may be observed from the visual analysis that LIME gener-
+ates artifacts and provides poor color constancy. Therefore,
+CG, DEN, NIQMC, and VIF metrics show that NPLIE is
+superior to the other state-of-the-art algorithms.
+Statistical assessment Analyzing all results manually may
+infer erroneous conclusions. Thus, we perform a statistical
+analysis of the results obtained by the proposed algorithm
+and other contemporary algorithms. We perform paired z-
+test [28] for the statistical analysis of the results. The pairs
+of proposed and other algorithms are used to perform the z-
+test. To assess the performance, the null hypothesis (H0) and
+alternate hypothesis (H1) are:
+H0: The performance of NPLIE and algorithm X is same.
+H1: The performance of NPLIE is better than algorithm X.
+We conduct one-tail testing to evaluate the enhancement. The
+probability of rejecting H0 (i.e. p-value) is obtained using z-
+distribution table [28]. We reject H0 for a signiﬁcantly small
+p-valueandaccept H0 foralargerp-value.Wetestthehypoth-
+esis for all four measures (i.e. CG, DEN, NIQMC, and VIF).
+Table 2 shows the z-statistics and p-value for the pair of
+NPLIE and other algorithms. It may be noted from Table 2
+that all p-values are less than 0.05; thus, we can reject the null
+hypothesis (H0) with at least a 0.05 level of signiﬁcance.
+Hence, we can accept the alternate hypothesis that NPLIE
+achieves better enhancement than the other algorithms.
+4.5 Visual assessment
+As discussed in the earlier section that there is no univer-
+sally accepted quantitative measure for image assessment.
+Thus, visual assessment of the results becomes a neces-
+sity. An exhaustive visual assessment of the results from the
+proposed algorithm and other contemporary algorithms is
+performed. For easy reference, some of the regions of the
+images are highlighted in colored boxes, and the magniﬁed
+view is shown adjacent to each image. The sample results are
+shown in Figs. 1 and 12-14.
+123
+
+
+===== PAGE 12 =====
+K. Singh, A. S. Parihar
+Fig. 13 Results of different algorithms on image road. (a) Input image;
+(b) Patch of (a); (c) NPEA; (d) Patch of (c); (e) PIRE; (f) Patch of (e);
+(g) LIME; (h) Patch of (g); (i) SRLIME; (j) Patch of (i); (k) LECARM;
+(l) Patch of (k); (m) LSDD; (n) Patch of (m); (o) Zero-DCE; (p) Patch
+of (o); (q) CSDGAN; (r) Patch of (q); (s) Proposed method; (t) Patch
+of (s)
+Fig. 14 Results of different algorithms on sample images. (a) Input image; (b) NPEA; (c) PIRE; (d) LIME; (e) SRLIME; (f) LECARM; (g) LSDD;
+(h) Zero-DCE; (i) CSDGAN; (j) Proposed method
+Table 3 Subjective assessment for various algorithms
+NPEA
+PIRE
+LIME
+SRLIME
+LECARM
+LSDD
+Zero-DCE
+CSDGAN
+NPLIE
+80.12
+62.54
+87.88
+68.94
+77.16
+79.53
+66.42
+54.32
+91.22
+The enhanced images of NPEA shows that it provides
+limited improvement of lightness, less contrast and over-
+enhancement in some regions. The highlighted region (red
+box) in Fig. 12(c) shows over-enhancement near cup. Fig.
+13(c) shows less improvement in lightness. In Fig. 14(b),
+enhanced image of NPEA is acceptable but contrast is
+slightly low. PIRE provides limited enhancement as shown
+in Fig. 12(e), 13(e), and 14(c). It can be noted from the
+highlighted regions that PIRE fails to provide appropriate
+lightness in the dark regions. The enhanced images of LIME
+are shown in Fig. 12(g), 13(g), and 14 (d). Fig. 12(g) shows
+LIME results in poor color constancy. Moreover, enhanced
+image of LIME shows over-enhancement in Fig. 12(h).
+SRLIME provides blurred details which causes poor visi-
+bility of details as shown in Fig. 12(i), 13(i), and 14 (e).
+Fig. 13(i) shows that SRLIME provides limited lightness.
+Fig. 12(k), 13(k), and 14 (f) shows the results of LECARM. It
+provides limited enhancement in low-light images and faded
+colors as shown in Fig. 13(l). In Fig. 12(m), 13(m), and 14 (g),
+LSDD shows blurring effect; thus, the details in the image is
+unclear. Moreover, LSDD fails to achieve appropriate con-
+trast. Zero-DCE provides limited enhancement as shown in
+Fig. 12(o) and 13 (o). CSDGAN fails to improve the lightness
+in the dark regions as shown in Fig. 12(q) and Fig. 13(q). Both
+Zero-DCE and CSDGAN are deep-learning based meth-
+ods and fails to achieve better results in generalized cases.
+Fig. 12(s), 13(s) and 14 (h) shows the result of proposed
+algorithm. It can be noted that the proposed algorithm pro-
+vides signiﬁcant improvement of lightness in the low-light
+images as highlighted in Fig. 12(t) and Fig. 13(t). More-
+123
+
+
+===== PAGE 13 =====
+Illumination estimation for nature preserving low-light image enhancement
+Table 4 Average computational time per image (in seconds)
+NPEA
+PIRE
+LIME
+SRLIME
+LECARM
+LSDD
+Zero-DCE
+CSDGAN
+NPLIE
+2.33
+0.22
+0.39
+3.64
+0.11
+1.53
+0.01(G)
+0.01(G)
+0.21
+Fig. 15 Mean contrast gain for different pairs of (α,β). The contour
+denotes that pairs inside the contour have values based on the contour
+color. The colorbar represents the value of the contrast gain with respect
+to the color from the surface plot
+over, the proposed algorithm restricts over-enhancement in
+light dominant region while enhancing the details of the dark
+regions in the images with varying illumination condition as
+shown in Fig.1(s), and 14(h). The visual comparison shows
+that the proposed algorithm achieves the superior enhance-
+ment of lightness with adequate contrast.
+4.6 Subjective assessment
+We conduct a subjective assessment on 100 low light images
+selected from various image datasets: LECARM [42], NPEA
+[53], ExDark Dataset [30], LOL Dataset [56], Enlighten-
+GAN [17] and NASA Database [57]. We selected images
+for distinct lightness conditions like, normal-light, low-light,
+and non-uniform illumination. The input images and their
+enhanced results are randomly shown to 20 participants for
+scoring the enhancement. Each participant scored randomly
+shown 20 images between 0(worst) to 100(best) based on
+the visual aspect of the enhanced image. Table 3 shows the
+summarized average scores for outputs of several algorithms.
+Table 3 shows that the proposed algorithm achieves visually
+pleasing results.
+4.7 Parameter analysis
+The proposed algorithm involves two regularization param-
+eters α and β. To analyze the effect of these parameters, we
+performed exhaustive experimentation, and it is found that
+the values of α and β should vary between 0 and 1. Since
+the optimization problem (5) is multi-objective optimization,
+considering negative values of α and β does not make any
+sense. As discussed in Sect. 3.2, parameters α and β reg-
+ularize structural information and smoothening of textural
+details, respectively. Thus, if either of the parameter α and β
+have a value greater than 1, then one of the objectives (tex-
+tural or structural details) will be dominant. For example,
+if parameter α is increased beyond value 1, the structural
+details will be dominant. Moreover, while capturing struc-
+tural details, textural details may also get enhanced due to use
+of the gradients in the related term. It may result in unnatural
+enhanced images. Similarly, a large value of β may result
+in smoothening of structural details as well. This results in
+over-smoothen reﬁned illumination. To avoid the dominance
+of the term related to the regularization parameter and limit
+the adverse effect, we consider values of α and β between
+0 and 1. To arrive at optimal values of the parameters α and
+β, we perform experimentation over 500 images of diverse
+illumination and consider their mean contrast gain as a mea-
+sure of enhancement. However, to have a better correlation
+between image qualities and values, we also analyze the best
+values using visual analysis. The results are plotted in Fig. 15.
+It may be noted that the best values of α and β are 0.5 and
+0.1, respectively. Thus at α = 0.5, better structural details are
+captured without over-enhancing textural details. In case of
+α values less than 0.5, structural information of the image is
+not captured adequately. On the other hand, for α greater than
+0.5, textural details are captured along with structural details.
+The parameter β at value 0.1 provides desirable smoothening
+of textural details without losing structural details. For case
+of β less than 0.1, smoothening of textural details is inad-
+equate, while in case of β greater than 0.1 smoothening of
+structural details occurs as well. In our experimentation, the
+empirical values of parameters generate satisfactory results.
+4.8 Computational analysis
+The computational time complexity plays an important role
+in the performance analysis of any algorithm. Thus, the com-
+putational time analysis of the various algorithm is performed
+on a set of 200 images with size 350x229. Table 4 shows
+the average computational time per image. In Table 4, (G)
+shows that the algorithm is running on ubuntu with titan-rtx
+GPU and 128GB RAM. Zero-DCE and CSDGAN require
+very lesser time then the proposed NPLIE. However, Zero-
+DCE and CSDGAN are running on GPU whereas proposed
+NPLIE is using CPU for computations. Furthermore, the
+visual results of the proposed NPLIE is better than both
+Zero-DCE and CSDGAN. We use MATLAB 2018a on Win-
+dows10 running at 8GB RAM and core i5 processor @
+123
+
+
+===== PAGE 14 =====
+K. Singh, A. S. Parihar
+3.40GHz for CPU based algorithms. NPEA, SRLIME, and
+LSDD are slower than other algorithms. These algorithms
+are not useful for real-time applications due to slow conver-
+gence. LECARM takes slightly lesser time than the proposed
+algorithm. However, the visual quality of enhanced images
+produced by the proposed method is much better.
+5 Conclusion
+In this paper, we presented a new approach to estimate illu-
+mination from a low light image. The algorithm gives natural
+contrast enhancement for low-light images. Further, we pro-
+posed a new adaptive illumination adjustment which helps in
+providing appropriate lightness to all regions in the images
+with varying illumination. The experimental analysis shows
+that the proposed algorithm improves dark regions of the
+image without over-enhancing properly illuminated areas of
+the same image. Our algorithm has various advantages over
+other methods, which are:
+– Works effectively both for images that contain low-light
+and properly illuminated images with shaded regions.
+– Produces nature preserving enhanced image with almost
+no artifacts.
+– Restrict light dispersion in the light dominant region
+while improving lightness in the dark regions.
+We performed exhaustive experimentation over a large num-
+ber of images with different variations in the illumination
+conditions to check the performance of the proposed method.
+The visual assessment shows that the proposed method main-
+tains color constancy over the object under varying light
+conditions. The proposed algorithm outperforms most of the
+state-of-the-art low-light image enhancement algorithms.
+Funding In this study, there is no funding involved from any agency.
+Declarations
+Humans or animals performed This article does not contain any studies
+involving humans or animals performed by any of the authors.
+Conﬂict of Interest The authors declare that they have no conﬂicts of
+interest.
+References
+1. Bychkovsky, V., Paris, S., Chan, E., Durand, F.: Learning photo-
+graphic global tonal adjustment with a database of input / output
+image pairs. In: The 24th IEEE Conference on Computer Vision
+and Pattern Recognition (2011)
+2. Celik, T.: Two-dimensional histogram equalization and contrast
+enhancement. Pattern Recognition 45(10), 3810–3824 (2012)
+3. Chen, Z., Hu, Z., Sheng, B., Li, P., Kim, J., Wu, E.: Simpliﬁed
+non-locally dense network for single-image dehazing. The Visual
+Computer 36(10), 2189–2200 (2020)
+4. Dhal, K.G., Das, A., Ghoshal, N., Das, S.: Variance based bright-
+ness preserved dynamic histogram equalization for image contrast
+enhancement. Pattern Recogn Image Anal 28(4), 747–757 (2018)
+5. Fu, X., Liao, Y., Zeng, D., Huang, Y., Zhang, X., Ding, X.: A
+probabilistic method for image enhancement with simultaneous
+illumination and reﬂectance estimation. IEEE Trans Image Process
+24(12), 4965–4977 (2015)
+6. Fu, X., Zeng, D., Huang, Y., Liao, Y., Ding, X., Paisley, J.: A
+fusion-based enhancing method for weakly illuminated images.
+Signal Processing 129, 82–96 (2016)
+7. Gautam, A., Singh, S.: Neural style transfer combined with efﬁ-
+cientdet for thermal surveillance. The Visual Computer pp. 1–17
+(2021)
+8. Gharbi, M., Chen, J., Barron, J.T., Hasinoff, S.W., Durand, F.: Deep
+bilateral learning for real-time image enhancement. ACM Trans.
+Graph. 36(4), 1–2 (2017)
+9. Ghosh, S., Gavaskar, R.G., Panda, D., Chaudhury, K.N.: Fast scale-
+adaptive bilateral texture smoothing. IEEE Trans. Circuits. Syst.
+Video. Technol. 30(7), 2015–2026 (2020)
+10. Gu, K., Lin, W., Zhai, G., Yang, X., Zhang, W., Chen, C.W.:
+No-reference quality metric of contrast-distorted images based on
+information maximization. IEEE Trans. Cybern. 47(12), 4559–
+4565 (2017)
+11. Guo, C., Li, C., Guo, J., Loy, C.C., Hou, J., Kwong, S., Cong, R.:
+Zero-reference deep curve estimation for low-light image enhance-
+ment. In: Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition (CVPR) (2020)
+12. Guo, X., Li, Y., Ling, H.: Lime: Low-light image enhancement via
+illumination map estimation. IEEE Trans. Image Process. 26(2),
+982–993 (2017)
+13. Guo, Z., Shuai, H., Liu, G., Zhu, Y., Wang, W.: Multi-level feature
+fusion pyramid network for object detection. The Visual Computer
+pp. 1–11 (2022)
+14. Hao, S., Han, X., Guo, Y., Xu, X., Wang, M.: Low-light image
+enhancement with semi-decoupled decomposition. IEEE Trans.
+Multim. 22(12), 3025–38 (2020)
+15. He, K., Sun, J., Tang, X.: Guided image ﬁltering. IEEE Trans.
+Pattern Anal. Mach. Intell. 35(6), 1397–1409 (2013)
+16. Hu, W., Wang, T., Wang, Y., Chen, Z., Huang, G.: Le-msfe-
+ddnet: a defect detection network based on low-light enhancement
+and multi-scale feature extraction. The Visual Computer pp. 1–15
+(2021)
+17. Jiang, Y., Gong, X., Liu, D., Cheng, Y., Fang, C., Shen, X., Yang, J.,
+Zhou, P., Wang, Z.: Enlightengan: Deep light enhancement without
+paired supervision. arXiv preprint arXiv:1906.06972 (2019)
+18. Jobson, D.J., Rahman, Z., Woodell, G.A.: Properties and perfor-
+mance of a center/surround retinex. IEEE Trans. Image Process.
+6(3), 451–462 (1997)
+19. Joshi, P., Prakash, S.: Image enhancement with naturalness preser-
+vation. The Visual Computer 36(1), 71–83 (2020)
+20. Ju, M., Zhang, D., Wang, X.: Single image dehazing via an
+improved atmospheric scattering model. The Visual Computer
+33(12), 1613–1625 (2017)
+21. Karr, B.A., Debattista, K., Chalmers, A.G.: Optical effects on HDR
+calibration via a multiple exposure noise-based workﬂow. The
+Visual Computer 37(5), 895–910 (2021)
+22. Land, E.H.: Recent advances in Retinex theory and some implica-
+tions for cortical computations: color vision and the natural image.
+Proc. Nat. Acad. Sci. United States of Am. 80(16), 5163 (1983)
+23. Land, E.H.: Recent advances in Retinex theory. In: Central and
+peripheral mechanisms of colour vision, pp. 5–17. Springer (1985)
+123
+
+
+===== PAGE 15 =====
+Illumination estimation for nature preserving low-light image enhancement
+24. Land, E.H., McCann, J.J.: Lightness and retinex theory. J. Opt.
+Soci. Am. 61(1), 1–11 (1971)
+25. Li, M., Liu, J., Yang, W., Sun, X., Guo, Z.: Structure-revealing low-
+light image enhancement via robust Retinex model. IEEE Trans.
+Image Process. 27(6), 2828–2841 (2018)
+26. Li, M., Zhao, L., Zhou, D., Nie, R., Liu, Y., Wei, Y.: Aems: An
+attention enhancement network of modules stacking for lowlight
+image enhancement. The Visual Computer pp. 1–17 (2021)
+27. Lin, R., Liu, J., Liu, R., Fan, X.: Global structure-guided learning
+framework for underwater image enhancement. The Visual Com-
+puter pp. 1–16 (2021)
+28. Lind, D.A., Marchal, W.G., Wathen, S.A.: Statis. Techn. Business
+Econom., 13th edn. McGraw-Hill, New York, NY, USA (2014)
+29. Liu, R., Ma, L., Zhang, J., Fan, X., Luo, Z.: Retinex-inspired
+unrolling with cooperative prior architecture search for low-light
+image enhancement. In: Proceedings of the IEEE/CVF Conference
+on Computer Vision and Pattern Recognition (CVPR), pp. 10561–
+10570 (2021)
+30. Loh, Y.P., Chan, C.S.: Getting to know low-light images with the
+exclusively dark dataset. Comput. Vision Image Understanding
+178, 30–42 (2019)
+31. Lv, F., Li, Y., Lu, F.: Attention guided low-light image enhance-
+ment with a large scale low-light simulation dataset. Int. J. Comput.
+Vision 129(7), 2175–2193 (2021)
+32. Ma, L., Liu, R., Zhang, J., Fan, X., Luo, Z.: Learning deep context-
+sensitive decomposition for low-light image enhancement. IEEE
+Trans. Neural Netw. Learn. Syst. 22(12), 3025–38 (2021)
+33. Parihar, A.S., Singh, K.: A study on retinex based method for image
+enhancement. In: 2nd International Conference on Inventive Sys-
+tems and Control, pp. 619–624 (2018)
+34. Parihar, A.S., Singh, K., Rohilla, H., Asnani, G.: Fusion-based
+simultaneous estimation of reﬂectance and illumination for low-
+light image enhancement. IET Image Processing 15(7), 1410–1423
+(2021)
+35. Parihar, A.S., Singh, K., Rohilla, H., Asnani, G., Kour, H.:
+A comprehensive analysis of fusion-based image enhancement
+techniques. In: 2020 4th International Conference on Intelligent
+Computing and Control Systems (ICICCS), pp. 823–828 (2020).
+https://doi.org/10.1109/ICICCS48265.2020.9120999
+36. Parihar, A.S., Varshney, D., Pandya, K., Aggarwal, A.: A compre-
+hensive survey on video frame interpolation techniques. The Visual
+Computer pp. 1–25 (2021)
+37. Parihar, A.S., Verma, O.P.: Contrast enhancement using entropy-
+based dynamic sub-histogram equalisation. IET Image Processing
+10(11), 799–808 (2016)
+38. Parihar, A.S., Verma, O.P., Khanna, C.: Fuzzy-contextual con-
+trast enhancement. IEEE Trans. Image Process. 26(4), 1810–1819
+(2017)
+39. Rahman, Z., Pu, Y.F., Aamir, M., Wali, S.: Structure revealing of
+low-light images using wavelet transform based on fractional-order
+denoising and multiscale decomposition. The Visual Computer
+37(5), 865–880 (2021)
+40. Rahman, Z.U., Jobson, D.J., Woodell, G.A.: Multi-scale retinex for
+color image enhancement. In: IEEE International Conference on
+Image Processing, vol. 3, pp. 1003–1006. IEEE (1996)
+41. Ren, W., Liu, S., Ma, L., Xu, Q., Xu, X., Cao, X., Du, J., Yang,
+M.H.: Low-light image enhancement via a deep hybrid network.
+IEEE Trans. Image Process. 28(9), 4364–4375 (2019)
+42. Ren, Y., Ying, Z., Li, T.H., Li, G.: Lecarm: Low-light image
+enhancement using the camera response model. IEEE Trans. Cir-
+cuits Syst. for Video Technol. 29(4), 968–981 (2019)
+43. Shanmugavadivu, P., Balasubramanian, K., Muruganandam, A.:
+Particle swarm optimized bi-histogram equalization for contrast
+enhancement and brightness preservation of images. The Visual
+Computer 30(4), 387–399 (2014)
+44. Sheikh, H.R., Bovik, A.C.: Image information and visual quality.
+IEEE Trans. Image Process. 15(2), 430–444 (2006)
+45. Shen, L., Yue, Z., Feng, F., Chen, Q., Liu, S., Ma, J.: Msr-net:low-
+light image enhancement using deep convolutional network (2017)
+46. Singh, K., Parihar, A.S.: Variational optimization based single
+image dehazing. J. Visual Commun. Image Represent. 79, 103241
+(2021)
+47. Song, X., Huang, J., Cao, J., Song, D.: Feature spatial pyramid
+network for low-light image enhancement. The Visual Computer
+pp. 1–11 (2022)
+48. Wang, C., He, C., Xu, M.: Fast exposure fusion of detail enhance-
+ment for brightest and darkest regions. The Visual Computer 37(5),
+1233–1243 (2021)
+49. Wang, C., Xing, X., Yao, G., Su, Z.: Single image Deraining via
+deep shared pyramid network. The Visual Computer 37(7), 1851–
+1865 (2021)
+50. Wang, C., Zhang, H., Liu, L.: Total generalized variation-based
+Retinex image decomposition. The Visual Computer 37(1), 77–93
+(2021)
+51. Wang, G., Gan, X., Cao, Q., Zhai, Q.: Mfanet: Multi-scale feature
+fusion network with attention mechanism. The Visual Computer
+pp. 1–12 (2022)
+52. Wang, R., Zhang, Q., Fu, C.W., Shen, X., Zheng, W.S., Jia, J.:
+Underexposed photo enhancement using deep illumination estima-
+tion. In: Proceedings of the IEEE/CVF Conference on Computer
+Vision and Pattern Recognition (CVPR) (2019)
+53. Wang, S., Zheng, J., Hu, H., Li, B.: Naturalness preserved enhance-
+ment algorithm for non-uniform illumination images. IEEE Trans.
+Image Process. 22(9), 3538–3548 (2013)
+54. Wang, Y., Wang, H., Cao, J.: A contour self-compensated network
+for salient object detection. The Visual Computer 37(6), 1467–
+1479 (2021)
+55. Wang, Y., Yin, W., Zeng, J.: Global convergence of ADMM in
+nonconvex Nonsmooth optimization. J. Sci. Comput. 78(1), 29–63
+(2019)
+56. Wei, C., Wang, W., Yang, W., Liu, J.: Deep Retinex decomposition
+for low-light enhancement. In: British Machine Vision Conference
+2018, Newcastle, UK, September 3-6, 2018, p. 155. BMVA Press
+(2018)
+57. Woodell, G.: Retinex image processing. Accessed:2019-08-13
+58. Xu, K., Yang, X., Yin, B., Lau, R.W.: Learning to restore low-light
+images via decomposition-and-enhancement. In: Proceedings of
+the IEEE/CVF Conference on Computer Vision and Pattern Recog-
+nition (CVPR) (2020)
+59. YU, N., LI, J., HUA, Z.: Fla-net: multi-stage modular network
+for low-light image enhancement. The Visual Computer pp. 1–20
+(2022)
+60. Yu, S., Zhu, H.: Low-illumination image enhancement algorithm
+based on a physical lighting model. IEEE Trans. Circuits. Syst.
+Video Technol. 29(1), 28–37 (2019)
+61. Yu, X., Li, H., Yang, H.: Two-stage image decomposition and color
+regulator for low-light image enhancement. The Visual Computer
+pp. 1–11 (2022)
+62. Zhang, Q., Nie, Y., Zheng, W.S.: Dual illumination estimation for
+robust exposure correction. Comput. Graphics Forum 38(7), 243–
+252 (2019)
+63. Zhang, Q., Yuan, G., Xiao, C., Zhu, L., Zheng, W.S.: High-quality
+exposure correction of underexposed photos. In: Proceedings of the
+26th ACM International Conference on Multimedia, MM ’18, p.
+582–590. Association for Computing Machinery, New York, NY,
+USA (2018)
+64. Zhang, S., He, F.: Drcdn: learning deep residual convolutional
+dehazing networks. The Visual Computer 36(9), 1797–1808 (2020)
+65. Zhang,S.,He,F.,Ren,W.,Yao,J.:Jointlearningofimagedetailand
+transmission map for single image dehazing. The Visual Computer
+36(2), 305–316 (2020)
+123
+
+
+===== PAGE 16 =====
+K. Singh, A. S. Parihar
+66. Zhang, Y., Zhang, J., Guo, X.: Kindling the darkness: A practical
+low-light image enhancer. In: 27th ACM International Conference
+on Multimedia. MM ’19, pp. 1632–1640. Association for Comput-
+ing Machinery, New York, NY, USA (2019)
+Publisher’s Note Springer Nature remains neutral with regard to juris-
+dictional claims in published maps and institutional afﬁliations.
+Springer Nature or its licensor (e.g. a society or other partner) holds
+exclusive rights to this article under a publishing agreement with the
+author(s) or other rightsholder(s); author self-archiving of the accepted
+manuscript version of this article is solely governed by the terms of such
+publishing agreement and applicable law.
+KavinderSinghreceived his B.Tech.
+degree in Computer Science &
+Engineering in 2016 from A. K.
+Technical University, Lucknow, India,
+M.Tech. degree in Information sys-
+tems from Delhi Technological Uni-
+versity, New Delhi, India in 2018.
+He is pursuing his PhD from Delhi
+Technological University, New Delhi,
+India. He joined Department of
+Computer Science & Engineering
+at Delhi Technological University
+as Assistant Professor in 2020.
+Currently, he is Assistant Profes-
+sor in the Department of Com-
+puter Science & Engineering at Delhi Technological University, New
+Delhi, India. His research interest includes Image Processing, Pattern
+Recognition, Object recognition and Computer Vision.
+Anil Singh Parihar received his
+B.Tech. Degree in Electronics and
+Communication Engineering in 2005
+from U. P. Technical University,
+Lucknow, India, M.E. degree in
+Electronics and Communication Engi-
+neering from Delhi College of Engi-
+neering, New Delhi, India in 2008,
+and Ph.D. degree in the area of
+applications of soft comping in
+image processing in 2016. He joined
+the Department of Information Tech-
+nology at Delhi Technological Uni-
+versity, Delhi, India as Assistant
+Professor in 2010. Currently, he is
+a Professor in the Department of Computer Science & Engineering
+at Delhi Technological University, Delhi, India. His research inter-
+est includes Image Processing, Pattern Recognition, Computer Vision,
+Soft Computing and Evolutionary Algorithms.
+123
