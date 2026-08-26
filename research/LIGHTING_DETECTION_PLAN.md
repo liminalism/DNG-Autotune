@@ -275,3 +275,45 @@ only when the cheap measured signal agrees):
 - C5 (Apache-2.0): https://github.com/mahmoudnafifi/C5
 - Burn model zoo with pretrained-weight import: https://github.com/tracel-ai/models
   and https://burn.dev/blog/resnet-burn/
+
+## 7. Shot list — paired evidence for phase-4 policy classes (added 2026-08-26)
+
+Phase 4's A/B methodology grades our render against the camera JPEG, and the
+docs note backlit and indoor have **no paired evidence** in the corpus. These
+shots fill that gap. On every scene: **RAW+JPEG in one press** (the camera
+JPEG is the scorecard reference — RAW-only shots can't be used), camera on
+auto WB/exposure as usual, 3–5 frames per scene with small angle/framing
+variation. 10–20 keepers per class is plenty; these are observational
+fixtures, not training data.
+
+### Needs daylight (tomorrow)
+
+1. **Backlit** — the phase-4 priority (wired first):
+   - a person or object between camera and the sun, subject's lit side
+     *away* from camera (face/front in shade), sky bright behind;
+   - the same setup against bright sky without direct sun;
+   - indoors by day: subject in front of a bright window, shot from inside
+     (window-backlit is the classic indoor backlight the classifier and the
+     centre-vs-surround EV split must both catch).
+   Vary how deep the silhouette goes — from mild rim-light to full
+   silhouette. The policy question is "silhouette vs fill", so both
+   intents on the same scene are the most valuable pairs.
+2. **Mixed light** — daytime indoor with the room lights **on** and daylight
+   coming through a window; subject positioned so both illuminants hit it.
+   A few frames with the lights off for the same scene make a clean A/B on
+   the illuminant estimator.
+
+### Nighttime indoor cuts it — for these classes it's actually *better*
+
+3. **Indoor artificial / tungsten** — evening/night rooms lit only by warm
+   bulbs (no daylight contamination through windows, which is exactly why
+   night beats day for this class): 2–3 different rooms/light types. Add
+   one cool-LED or fluorescent-lit room for CCT contrast.
+4. **Candle light** (policy class, quick win while you're at it): a scene
+   dominated by candle/flame light, lights off.
+5. **Macro** (optional, mild policy): close-focus small objects — indoor at
+   night is fine; a daylight variant is a bonus, not a requirement.
+
+So: tonight's indoor shooting covers classes 3–5 perfectly; tomorrow's
+daylight session is needed only for backlit and mixed-light. Night outdoor
+already exists in the corpus (`raw_at_night`).
