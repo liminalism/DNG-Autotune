@@ -52,6 +52,22 @@ record raw-autotune.decision.face-detection-is-off-by-default/1 : decision {
     ]
 }
 
+record raw-autotune.decision.faithful-blue-violet-sky-over-camera-white-shoulder/1 : decision {
+    title "Bright blue-violet sky renders faithfully; the camera's stronger white shoulder is not adopted"
+    state active
+    scope [ path "src/analyze.rs", path "src/tone.rs" ]
+    decision """
+        Keep the current faithful rendering of bright unclipped blue-violet sky (_DSC1288/1289 and the 1249/1250/1253/1258 population) rather than adopting the camera JPEG's stronger highlight-to-white shoulder. The user confirmed this on 2026-08-27 after reviewing paired evidence.
+
+        The cast was acquitted as a solver defect: it survives --highlight-method current and reconstruction disabled unchanged, and a direct CFA probe of unclipped sky measures R:G:B = 6201:6881:8853 under as-shot white balance — the sky genuinely is blue-violet, and below L = 0.35 our colour matches the camera to within 0.03. The divergence is entirely the camera's shoulder policy plus our 0.25-0.57 EV darker sky.
+
+        Two candidates were evaluated and rejected for the default. Raising highlight_desaturation to camera levels bleaches legitimate blue skies (the populations overlap in normalized_highlight). The clip-evidence-gated path to white (branch fix/lavender-cast, git 7f4fc29, unmerged) discriminates perfectly on real frames but fails the BlueRamp synthetic gate (final OKLab RMSE 0.0073 to 0.0799) because it discards a correctly reconstructed blue clipped highlight, and it whitens only the blown core while leaving the unclipped lavender surround.
+
+        Consequences: the remaining perceptual gap is pursued through the midtone/shadow contrast work item (the sky-EV half) and, if matrix colour proves demonstrably insufficient, a calibrated hue/saturation table per Candidate D of docs/PURPLE_SKY_PROBLEM_SCOPE.md. The fix/lavender-cast branch is retained as a reference implementation only.
+        """
+    supported_by [ @raw-autotune.evidence.lavender-cast-is-faithful-rendering-20260827 ]
+}
+
 record raw-autotune.decision.harmonic-highlight-is-automatic/1 : decision {
     title "The conservative harmonic estimator is the automatic highlight path"
     state active

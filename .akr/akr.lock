@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:60ed80839850840c7b4b7b7d26c1322d81fbcbe38d89964534f4fca41e276d96"
+    source_graph "sha256:4f97646d21ff677124f6da312b62d3c7c8637b5ad3b4fd8ba45e01c38b4b87d2"
 }
 
 source ".akr/project.akr" {
@@ -19,8 +19,8 @@ source ".akr/records/raw-autotune/assessments.akr" {
 }
 
 source ".akr/records/raw-autotune/decisions.akr" {
-    hash "sha256:94b1c3576fce85901ffc3290714359e8d7ac2a42a848749b5653df4ab3de1397"
-    records 10
+    hash "sha256:18f8be9a269e5f230da16a2222d95fcf9ec2c43eeb78d76cfbdbc3a2f75e976e"
+    records 11
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
@@ -54,8 +54,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:59fdfa29e15407d0af6e5fd50815b259cc3362fff138edf14fbf24c2e29d2380"
-    records 58
+    hash "sha256:5a58ed5f4bce1dfc7ff7797420a09c8f340c2a17cb364b4811b4128ea2ae2254"
+    records 59
 }
 
 resolution @raw-autotune.assessment.scene-evidence-usefulness/3 {
@@ -92,6 +92,12 @@ resolution @raw-autotune.decision.face-detection-is-off-by-default/1 {
     slot supported_by
     to @raw-autotune.evidence.semantic-sidecar-shape-survives-the-face-gate-20260826/1
     hash "sha256:998c158a58076614d73d2a62e6bb7b057a0b24d98f02e62e52e39a6c9ddd7074"
+}
+
+resolution @raw-autotune.decision.faithful-blue-violet-sky-over-camera-white-shoulder/1 {
+    slot supported_by
+    to @raw-autotune.evidence.lavender-cast-is-faithful-rendering-20260827/1
+    hash "sha256:f2c7db3a7034aee1a76b81e797114cb408deda7a1c2694ae4986732d6608e779"
 }
 
 resolution @raw-autotune.decision.harmonic-highlight-is-automatic/1 {
@@ -304,6 +310,12 @@ resolution @raw-autotune.question.unfitted-partial-cell-floor/2 {
     hash "sha256:5b5bac9cdc35ce670466f0ccc3072cd2b554f6dbf4118f34de1aeaf490468cd4"
 }
 
+resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/1 {
+    slot derived_from
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
+    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+}
+
 resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
     slot implements
     to @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1
@@ -506,6 +518,11 @@ seal @raw-autotune.decision.agpl-boundary-and-dependency-direction/1 {
 seal @raw-autotune.decision.face-detection-is-off-by-default/1 {
     state active
     hash "sha256:645078b1aba3a7cdd64799b07e891084aeb56ebfc4742ffd428444d7f111bdc6"
+}
+
+seal @raw-autotune.decision.faithful-blue-violet-sky-over-camera-white-shoulder/1 {
+    state active
+    hash "sha256:fd0eaf9c4c9c619015ae1704108aa4a32e79324b2b15ce50c6f60bb9e9dd98d1"
 }
 
 seal @raw-autotune.decision.harmonic-highlight-is-automatic/1 {
@@ -1916,6 +1933,11 @@ seal @raw-autotune.work.highlight-boundary-fringe-diagnosis/1 {
 seal @raw-autotune.work.lege-gpu-onnx-session/1 {
     state completed
     hash "sha256:26380003bdcf1c8fdabf37358b5c0b39ea8415deecb7138758d8d64b2ab8e9e0"
+}
+
+seal @raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/1 {
+    state active
+    hash "sha256:7ef105dc63eed185c1d4816629ac3e7024924da93ba4740e801772b221ebe2e2"
 }
 
 seal @raw-autotune.work.night-low-light-rendering/1 {
