@@ -2429,6 +2429,58 @@ mod tests {
     }
 
     #[test]
+    fn partial_support_in_an_incoherent_component_does_not_keep_the_clipped_chroma() {
+        // Two measured cells of very different colour make the component
+        // incoherent (chroma_std well past 0.35), so the heterogeneity guard
+        // hands the third cell to the neutral fallback. That cell has a
+        // measured red and a clipped green and blue, and only half the
+        // colour-line support, which is exactly _DSC1282's canopy sky. The
+        // white-balanced blue floor proves 2.0, so green must reach it rather
+        // than stay near its own 1.0 clip and render magenta.
+        let white_balance = [2.0_f32, 1.0, 2.0];
+        let value = vec![
+            [0.10, 0.50, 0.10],
+            [0.50, 0.10, 0.10],
+            [0.40, 1.00, 1.00],
+            [0.20, 0.30, 0.20],
+        ];
+        let grid = Grid {
+            width: 4,
+            height: 1,
+            floor: value.clone(),
+            value,
+            confidence: vec![[0.0; 3], [0.0; 3], [0.0, 1.0, 1.0], [0.0; 3]],
+            trust: vec![[1.0; 3], [1.0; 3], [1.0, 0.0, 0.0], [1.0; 3]],
+            valid: vec![[true; 3], [true; 3], [true, false, false], [true; 3]],
+        };
+        let region = Region {
+            cells: vec![0, 1, 2],
+            boundary: vec![3],
+        };
+        let luminance = grid.value.clone();
+        let support = vec![[0.5_f32; 3]; 4];
+
+        let current = joint_log_chromaticity(&grid, &[region], &luminance, &support, white_balance);
+        let balanced: [f32; 3] = std::array::from_fn(|c| current[2][c] * white_balance[c]);
+        assert!(
+            balanced[1] > 1.8,
+            "clipped green stayed near its own clip: {balanced:?}"
+        );
+        let spread = balanced.iter().copied().fold(f32::MIN, f32::max)
+            - balanced.iter().copied().fold(f32::MAX, f32::min);
+        assert!(
+            spread < 0.1,
+            "the neutral fallback still carried clipped chroma: {balanced:?}"
+        );
+        for c in 0..3 {
+            assert!(
+                current[2][c] >= grid.floor[2][c],
+                "a channel fell below its floor"
+            );
+        }
+    }
+
+    #[test]
     fn prediction_application_is_continuous_below_the_old_clip_gate() {
         let width = 2;
         let height = 2;
