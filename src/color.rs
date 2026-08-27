@@ -1343,6 +1343,26 @@ pub fn develop(
             };
             let pre_linear = to_linear(pre)?;
             let post_linear = to_linear(&post_img.pixels)?;
+            // Numeric probe: RAW_AUTOTUNE_PROBE_XY="x,y;x,y" prints camera-RGB
+            // and scene-linear values at those pixels, since every image dump
+            // display-clips and can hide super-range casts.
+            if let Ok(spec) = std::env::var("RAW_AUTOTUNE_PROBE_XY") {
+                for pair in spec.split(';') {
+                    let mut it = pair.split(',');
+                    if let (Some(x), Some(y)) = (
+                        it.next().and_then(|v| v.trim().parse::<usize>().ok()),
+                        it.next().and_then(|v| v.trim().parse::<usize>().ok()),
+                    ) && x < post_img.width
+                        && y < post_img.height
+                    {
+                        let i = y * post_img.width + x;
+                        eprintln!(
+                            "PROBE ({x},{y}) camera pre {:?} post {:?} | linear pre {:?} post {:?}",
+                            pre[i], post_img.pixels[i], pre_linear.pixels[i], post_linear.pixels[i],
+                        );
+                    }
+                }
+            }
             let working_to_display = options.working_space.to_display();
             // 1. Camera RGB before reconstruction (as scene-linear)
             write_linear(

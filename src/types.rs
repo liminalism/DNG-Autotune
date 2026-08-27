@@ -380,7 +380,7 @@ impl RunOptions {
     /// post-demosaic `Current` estimator instead of the harmonic solver. That
     /// deliberately moves default rendered pixels on frames with essentially no
     /// clipping, so the profile version advances with it.
-    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v6";
+    pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v7";
 
     /// The unattended archive profile shared by the flag CLI and the minimal
     /// interactive front-end. Callers change only explicit user overrides.

@@ -1708,12 +1708,26 @@ fn joint_log_chromaticity(
                 .map(|c| harmonic[c] / q[c].max(EPSILON))
                 .fold(f32::INFINITY, f32::min);
             let scalar = scalar.min(luminance_envelope);
+            // The heterogeneity guard used to attenuate toward the clipped
+            // floor. But the floor's chroma is the one colour known to be
+            // wrong — it records which channel clipped first, not the scene —
+            // and on mixed indoor-outdoor components the guard therefore
+            // painted whole openings magenta
+            // (docs/evidence/phase4-backlit-20260827/ablation-grid.png). The
+            // guard still discounts the joint chroma exactly as before in
+            // incoherent components; its fallback is now neutral chroma at
+            // the harmonic luminance — the least-commitment colour the sensor
+            // evidence supports there, and how reference renderers treat
+            // unknowable blown colour. Coherent components are unchanged in
+            // the coherence→1 limit.
+            let neutral_luminance = harmonic.iter().sum::<f32>() / 3.0;
             for c in 0..3 {
                 let predicted = (scalar * q[c] / white_balance[c]).max(grid.floor[i][c]);
+                let neutral = (neutral_luminance / white_balance[c]).max(grid.floor[i][c]);
+                let target =
+                    component_coherence * predicted + (1.0 - component_coherence) * neutral;
                 output[i][c] = grid.floor[i][c]
-                    + component_coherence
-                        * luminance_support[i][c]
-                        * (predicted - grid.floor[i][c]).max(0.0);
+                    + luminance_support[i][c] * (target - grid.floor[i][c]).max(0.0);
             }
         }
     }
@@ -1760,6 +1774,64 @@ fn apply_prediction(
 }
 
 /// Reconstruct a normalized RGB Bayer mosaic in place.
+/// Diagnostic stage dump, active only when `RAW_AUTOTUNE_HIGHLIGHT_DEBUG`
+/// names a directory. White-balanced, tone-compressed to make chroma errors
+/// visible; values above clip roll off instead of wrapping. Never touches the
+/// reconstruction itself.
+fn debug_dump_grid(stage: &str, grid: &Grid, data: &[[f32; 3]], white_balance: [f32; 3]) {
+    let Ok(directory) = std::env::var("RAW_AUTOTUNE_HIGHLIGHT_DEBUG") else {
+        return;
+    };
+    let white_balance = usable_white_balance(white_balance);
+    let mut img = image::RgbImage::new(grid.width as u32, grid.height as u32);
+    for y in 0..grid.height {
+        for x in 0..grid.width {
+            let v = data[y * grid.width + x];
+            let encode = |value: f32, gain: f32| -> u8 {
+                let balanced = (value * gain).max(0.0);
+                // Reinhard-style rolloff so >1 values stay distinguishable.
+                let compressed = balanced / (1.0 + 0.5 * balanced);
+                ((compressed / (1.0 / 1.5)).min(1.0).powf(1.0 / 2.2) * 255.0) as u8
+            };
+            img.put_pixel(
+                x as u32,
+                y as u32,
+                image::Rgb([
+                    encode(v[0], white_balance[0]),
+                    encode(v[1], white_balance[1]),
+                    encode(v[2], white_balance[2]),
+                ]),
+            );
+        }
+    }
+    let _ = std::fs::create_dir_all(&directory);
+    let _ = img.save(format!("{directory}/{stage}.png"));
+}
+
+/// Companion to [`debug_dump_grid`]: per-channel trust as an RGB map.
+fn debug_dump_trust(grid: &Grid) {
+    let Ok(directory) = std::env::var("RAW_AUTOTUNE_HIGHLIGHT_DEBUG") else {
+        return;
+    };
+    let mut img = image::RgbImage::new(grid.width as u32, grid.height as u32);
+    for y in 0..grid.height {
+        for x in 0..grid.width {
+            let t = grid.trust[y * grid.width + x];
+            img.put_pixel(
+                x as u32,
+                y as u32,
+                image::Rgb([
+                    (t[0] * 255.0) as u8,
+                    (t[1] * 255.0) as u8,
+                    (t[2] * 255.0) as u8,
+                ]),
+            );
+        }
+    }
+    let _ = std::fs::create_dir_all(&directory);
+    let _ = img.save(format!("{directory}/04-trust.png"));
+}
+
 pub fn reconstruct_cfa(
     samples: &mut [f32],
     width: usize,
@@ -1839,13 +1911,51 @@ pub fn reconstruct_cfa(
     let pyramid = build_pyramid(&grid);
     let pyramid_prediction = pyramid_prediction(&grid, &pyramid);
     let all_regions = regions(&grid);
+    debug_dump_grid("00-grid-value", &grid, &grid.value, white_balance);
+    debug_dump_grid("01-pyramid", &grid, &pyramid_prediction, white_balance);
+    debug_dump_trust(&grid);
+    let probe_cells: Vec<(usize, usize)> = std::env::var("RAW_AUTOTUNE_PROBE_GRID")
+        .ok()
+        .map(|spec| {
+            spec.split(';')
+                .filter_map(|pair| {
+                    let mut it = pair.split(',');
+                    Some((
+                        it.next()?.trim().parse::<usize>().ok()?,
+                        it.next()?.trim().parse::<usize>().ok()?,
+                    ))
+                })
+                .filter(|&(x, y)| x < grid.width && y < grid.height)
+                .collect()
+        })
+        .unwrap_or_default();
+    for &(x, y) in &probe_cells {
+        let i = y * grid.width + x;
+        eprintln!(
+            "GRIDPROBE ({x},{y}) value {:?} trust {:?} valid {:?} floor {:?} pyramid {:?}",
+            grid.value[i], grid.trust[i], grid.valid[i], grid.floor[i], pyramid_prediction[i],
+        );
+    }
     let (prediction, mean_fit_quality, fully_clipped_cores, solver_fallbacks) = match method {
         HighlightMethod::RawPyramid => (pyramid_prediction, 0.0, 0, 0),
         HighlightMethod::Harmonic => {
             let (luminance, support, fit, cores, fallbacks) =
                 harmonic_prediction(&grid, &pyramid_prediction, &all_regions, white_balance);
+            debug_dump_grid("02-harmonic", &grid, &luminance, white_balance);
+            for &(x, y) in &probe_cells {
+                let i = y * grid.width + x;
+                eprintln!(
+                    "GRIDPROBE ({x},{y}) harmonic {:?} support {:?}",
+                    luminance[i], support[i]
+                );
+            }
             let prediction =
                 joint_log_chromaticity(&grid, &all_regions, &luminance, &support, white_balance);
+            debug_dump_grid("03-joint", &grid, &prediction, white_balance);
+            for &(x, y) in &probe_cells {
+                let i = y * grid.width + x;
+                eprintln!("GRIDPROBE ({x},{y}) joint {:?}", prediction[i]);
+            }
             (prediction, fit, cores, fallbacks)
         }
         HighlightMethod::Current => unreachable!("checked above"),
@@ -1862,6 +1972,36 @@ pub fn reconstruct_cfa(
             grid_width: grid.width,
         },
     );
+    if std::env::var("RAW_AUTOTUNE_HIGHLIGHT_DEBUG").is_ok() {
+        // Rebuild a grid from the applied mosaic so the dump shows what the
+        // demosaic will actually receive, not the idealized prediction.
+        let applied = build_grid(samples, confidence, width, height, cfa);
+        debug_dump_grid("05-applied", &applied, &applied.value, white_balance);
+        let mut unweighted = vec![[0.0_f32; 3]; applied.value.len()];
+        let mut counts = vec![[0_u8; 3]; applied.value.len()];
+        for y in 0..height {
+            for x in 0..width {
+                if let Some(c) = channel(cfa.cfa_color_at(y, x)) {
+                    let cell = (y / 2) * applied.width + x / 2;
+                    unweighted[cell][c] += samples[y * width + x];
+                    counts[cell][c] += 1;
+                }
+            }
+        }
+        for (cell, count) in unweighted.iter_mut().zip(&counts) {
+            for c in 0..3 {
+                if count[c] > 0 {
+                    cell[c] /= f32::from(count[c]);
+                }
+            }
+        }
+        debug_dump_grid(
+            "06-applied-unweighted",
+            &applied,
+            &unweighted,
+            white_balance,
+        );
+    }
     if strength < 1.0 {
         for (sample, &source) in samples.iter_mut().zip(&original) {
             *sample = source + strength * (*sample - source);

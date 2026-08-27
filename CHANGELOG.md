@@ -2,6 +2,35 @@
 
 ## Unreleased — a standalone front-end
 
+### Harmonic highlight fix: the heterogeneity guard falls back to neutral, not to clipped chroma — `archive-auto-v7`
+
+Root cause of the magenta/pink false colour the raw_backlit batch exposed
+(and, the corpus A/B then showed, of the long-standing pink-patch sky
+defect): `joint_log_chromaticity`'s region-global heterogeneity guard
+attenuated its output toward the **clipped floor**, whose chroma is the
+clipping order of the sensor (G saturates first → magenta after white
+balance), not the scene. On mixed-colour components — door and window
+openings, sky through canopy — `component_coherence` collapses to ~0.13
+and whole regions kept clipped chroma even though the harmonic colour-line
+stage had already reconstructed them correctly (probed: G 1.75 predicted,
+1.15 after the guard, ~1.71 true). The guard's fallback target is now
+neutral chroma at the harmonic luminance; its discount of the joint chroma
+is unchanged, and coherent components are unchanged in the coherence→1
+limit.
+
+Measurements: on a 16-frame clipped/sky A/B every changed frame improves
+and coherent frames are stable (cloudy-sky and sunset frames 0.00%
+changed); the purple-sky question's patch population (_DSC1282/1283/1290)
+clears while the broad faint cast (_DSC1288/1289, a different cause) is
+untouched; the night batch's blown screen renders neutral instead of
+violet. 366 lib + integration tests pass; repeated `--jobs 8` runs
+identical. Because default rendered pixels move on clipped frames, the
+unattended profile advances to **`archive-auto-v7`**. Evidence:
+`docs/evidence/harmonic-neutral-fallback-20260827/`. Diagnostics that
+found it (env-gated, zero cost when off): `RAW_AUTOTUNE_HIGHLIGHT_DEBUG`
+solver-stage dumps, `RAW_AUTOTUNE_PROBE_XY` / `RAW_AUTOTUNE_PROBE_GRID`
+numeric probes.
+
 ### `--scene-classify`: the CamSDD classifier runs in the pipeline, fused into a `scene_lighting` verdict (observational)
 
 New opt-in flag: `scene::infer_classifier` runs `camsdd_resnet50_192.onnx`
