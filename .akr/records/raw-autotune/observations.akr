@@ -57,7 +57,7 @@ record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliag
 
 record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/2 : observation {
     title "Spatial-highlight false colour: root-caused to the heterogeneity guard's clipped-floor fallback; fixed in c09b7f9, residuals listed"
-    state verified
+    state superseded
     statement """
         On indoor-outdoor frames with a large clipped exterior seen through an
         opening (raw/raw_backlit), both spatial highlight estimators painted
@@ -82,5 +82,50 @@ record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliag
     method manual
     watches [ "src/raw_highlight*.rs", "src/color.rs" ]
     supersedes [ @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/1 ]
+    verified_by [ @raw-autotune.evidence.harmonic-neutral-fallback-20260827 ]
+}
+
+record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3 : observation {
+    title "Spatial-highlight false colour: root-caused to the heterogeneity guard's clipped-floor fallback; fixed in c09b7f9, residuals listed"
+    state verified
+    statement """
+        On indoor-outdoor frames with a large clipped exterior seen through an
+        opening (raw/raw_backlit), both spatial highlight estimators painted
+        the reconstructed area with large pink/magenta false-colour regions
+        while --highlight-method current rendered it nearly camera-like.
+        Root cause (found 2026-08-27, fixed in git c09b7f9): the joint chroma
+        solve's region-global heterogeneity guard attenuated toward the
+        clipped floor, whose chroma is the sensor's clipping order, not the
+        scene — discarding a correct harmonic colour-line reconstruction
+        (probed G 1.75 predicted vs 1.15 after the guard, ~1.71 true). The
+        guard now falls back to neutral chroma at the harmonic luminance;
+        the corpus-wide pink-patch population clears with coherent skies and
+        sunsets byte-stable.
+
+        Follow-up outcomes (2026-08-27, git afb1cf0, archive-auto-v8):
+            (1) the _DSC1282 residual patch is FIXED — the recomposition's base
+            was still the raw clipped floor, reached in proportion to
+            1 - luminance_support, and neutral_luminance could sit below a
+            channel's white-balanced clip floor; the base now gets the same
+            coherence blend as the target, anchored to the least-commitment
+            clip_neutral (see
+            @raw-autotune.evidence.harmonic-base-neutralization-20260827).
+            (2) the broad faint lavender cast on _DSC1288/1289 is ACQUITTED as
+            a solver defect: the unclipped sky genuinely measures blue-violet
+            (CFA B/R 1.43 under as-shot WB) and the divergence from the camera
+            is its stronger highlight-to-white shoulder plus our 0.25-0.57 EV
+            darker sky — a look decision, with a clip-gated white-path
+            candidate held unmerged on fix/lavender-cast (see
+            @raw-autotune.evidence.lavender-cast-is-faithful-rendering-20260827);
+            _DSC1249/1250/1253/1258 belong to this population. The darker-sky
+            half connects to
+            @raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers.
+            (3) the local-windowed coherence idea is moot for this defect —
+            base neutralization removed the failure mode it targeted.
+        """
+    observed_at git:afb1cf091b6278882b5d06b0a4ab8ff0e666ac42
+    method manual
+    watches [ "src/raw_highlight*.rs", "src/color.rs" ]
+    supersedes [ @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/2 ]
     verified_by [ @raw-autotune.evidence.harmonic-neutral-fallback-20260827 ]
 }

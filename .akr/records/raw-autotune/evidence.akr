@@ -573,6 +573,17 @@ record raw-autotune.evidence.harmonic-abstention-full-suite-20260809/1 : evidenc
         """
 }
 
+record raw-autotune.evidence.harmonic-base-neutralization-20260827/1 : evidence {
+    title "Base-neutralized support blend clears the _DSC1282 residual patch; corpus improves, 33/58 byte-identical"
+    state verified
+    result pass
+    method command
+    observed_at git:afb1cf091b6278882b5d06b0a4ab8ff0e666ac42
+    command "cargo test --release; cargo clippy --release --all-targets; double render at --jobs 8 byte-compare; corpus A/B over raw/raw_3rd_batch via ev/compare.py in the fix worktree"
+    artifact "docs/evidence/harmonic-base-neutralization-20260827/README.md"
+    summary "Patch magenta index 17.2 to 2.5 against camera 2.4; 29 changed paired frames improve mean |magenta-camera| 8.34 to 6.17 with every visually checked mover better; 33 of 58 frames byte-identical; determinism at --jobs 8 IDENTICAL; 381 tests and clippy clean; regression test pins the partial-support incoherent case."
+}
+
 record raw-autotune.evidence.harmonic-chroma-envelope-tests-20260809/1 : evidence {
     title "303 unit tests plus in-memory API, output metadata, real-RAW dimension probe, profile-lens, and doc tests passed; focused harmonic fixtures also passed after the retained global chroma-envelope change."
     state verified
@@ -981,6 +992,17 @@ record raw-autotune.evidence.in-memory-metadata-matches-the-file-writers-2026082
 
         With RenderOptions::metadata false both fields are None and the returned sample buffer is equal to the metadata-on run, so the surface cannot move a pixel.
         """
+}
+
+record raw-autotune.evidence.lavender-cast-is-faithful-rendering-20260827/1 : evidence {
+    title "The broad faint lavender on _DSC1288/1289 is faithful rendering of unclipped blue-violet sky, not a solver defect"
+    state verified
+    result pass
+    method command
+    observed_at git:afb1cf091b6278882b5d06b0a4ab8ff0e666ac42
+    command "three-arm bisection (harmonic vs current vs reconstruction 0); CFA box probe of an unclipped sky window; luminance-binned ratio comparison against the camera JPEG; 56-frame paired corpus grade of the clip-gated white-path candidate"
+    artifact "docs/evidence/harmonic-base-neutralization-20260827/README.md"
+    summary "The cast survives all three reconstruction arms unchanged; the unclipped CFA window measures R:G:B 6201:6881:8853 under as-shot WB (B/R 1.43, nothing clipped) and our ratios match the camera within 0.03 below L 0.35, so the divergence is entirely the camera's stronger highlight-to-white shoulder plus our sky rendering 0.25-0.57 EV darker. Clip-gated white-path candidate kept unmerged on fix/lavender-cast (7f4fc29): zero regressions on 56 real frames but fails the BlueRamp synthetic gate by discarding a correctly reconstructed blue highlight."
 }
 
 record raw-autotune.evidence.lege-gpu-adapter-skip-tests/1 : evidence {
