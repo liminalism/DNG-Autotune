@@ -2,6 +2,40 @@
 
 ## Unreleased — a standalone front-end
 
+### Harmonic highlight fix: the support blend's base is neutralized like its target — `archive-auto-v8`
+
+Sibling of the v7 fix below, found by probing the residual pink patch in
+_DSC1282's canopy sky. v7 neutralized the heterogeneity guard's *target*
+but the recomposition still started from the raw clipped floor, and the
+blend only travels `luminance_support` of the way from base to target —
+so any cell with partial colour-line support (~0.55 on the patch) kept
+the remaining fraction of the floor's magenta. A second mechanism
+compounded it: the neutral luminance (mean of the harmonic channels) can
+sit below a channel's own white-balanced clip floor, and the per-channel
+floor clamp then re-injects clip chroma asymmetrically. The base is now
+given the same coherence blend as the target, anchored to the
+*least-commitment neutral* — the largest white-balanced floor, the
+dimmest neutral consistent with what the clipping already proves — and
+the neutral luminance is clamped to it. Coherent components remain
+unchanged in the coherence→1 limit and output ≥ floor still holds.
+
+Measurements: the _DSC1282 patch's magenta index drops 17.2 → 2.5
+(camera JPEG: 2.4). Across all 58 raw_3rd_batch files, 33 render
+byte-identical; the 29 changed paired frames improve from mean
+|magenta − camera| 8.34 → 6.17, with every visually checked mover better
+(_DSC1251's magenta twilight sky 31.9 → 9.2, camera 2.6). _DSC1288/1289
+barely move (<0.8% of pixels) — their broad faint lavender was
+root-caused separately as *faithful rendering* of genuinely blue-violet
+unclipped sky (CFA-probed B/R 1.43 under as-shot WB) that the camera's
+much stronger highlight-to-white shoulder converges to white; that is a
+look decision, not a solver defect (see
+`docs/PURPLE_SKY_PROBLEM_SCOPE.md`; candidate clip-gated white path on
+branch `fix/lavender-cast`, not merged — it fails the BlueRamp synthetic
+gate by discarding correctly reconstructed blue highlights). A
+regression test pins the partial-support incoherent case. Because
+default rendered pixels move on clipped frames, the unattended profile
+advances to **`archive-auto-v8`**.
+
 ### Harmonic highlight fix: the heterogeneity guard falls back to neutral, not to clipped chroma — `archive-auto-v7`
 
 Root cause of the magenta/pink false colour the raw_backlit batch exposed
