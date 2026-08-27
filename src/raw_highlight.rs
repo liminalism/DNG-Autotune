@@ -1644,7 +1644,20 @@ fn joint_log_chromaticity(
     }
 
     let mut output = luminance_prediction.to_vec();
-    for region in all_regions {
+    let deep_probe: Vec<usize> = std::env::var("RAW_AUTOTUNE_PROBE_GRID")
+        .ok()
+        .map(|spec| {
+            spec.split(';')
+                .filter_map(|pair| {
+                    let mut it = pair.split(',');
+                    let x = it.next()?.trim().parse::<usize>().ok()?;
+                    let y = it.next()?.trim().parse::<usize>().ok()?;
+                    (x < grid.width && y < grid.height).then_some(y * grid.width + x)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    for (region_id, region) in all_regions.iter().enumerate() {
         // A component containing several real colours must not let one colour
         // line become another's missing channel. Measure component
         // heterogeneity from the same confidence-weighted pairwise evidence;
@@ -1675,6 +1688,19 @@ fn joint_log_chromaticity(
             })
             .fold(0.0_f32, f32::max);
         let component_coherence = (-(chroma_std / 0.35).powi(2)).exp();
+        if !deep_probe.is_empty() {
+            for &p in &deep_probe {
+                if region.cells.contains(&p) {
+                    eprintln!(
+                        "DEEPPROBE cell {p} ({},{}) region {region_id} cells {} boundary {} chroma_std {chroma_std:.4} coherence {component_coherence:.4}",
+                        p % grid.width,
+                        p / grid.width,
+                        region.cells.len(),
+                        region.boundary.len()
+                    );
+                }
+            }
+        }
         for &i in &region.cells {
             let q = [current_uv[i][0].exp(), 1.0, current_uv[i][1].exp()];
             let observed = std::array::from_fn::<_, 3, _>(|c| grid.value[i][c] * white_balance[c]);
@@ -1720,14 +1746,41 @@ fn joint_log_chromaticity(
             // evidence supports there, and how reference renderers treat
             // unknowable blown colour. Coherent components are unchanged in
             // the coherence→1 limit.
-            let neutral_luminance = harmonic.iter().sum::<f32>() / 3.0;
+            //
+            // The neutral fallback is only reached in proportion to
+            // `luminance_support`, because the recomposition below starts from
+            // `grid.floor` — and that base carries the same wrong chroma the
+            // fallback exists to remove. Where the colour-line evidence is
+            // partial (support around 0.55 on _DSC1282's canopy sky) an
+            // incoherent component therefore kept most of the clipped floor's
+            // magenta even after the target was neutralized. So the base is
+            // neutralized the same way, to the *least-commitment* neutral:
+            // every clipped floor is a lower bound on its channel, so the
+            // dimmest neutral consistent with all three bounds is
+            // `clip_neutral`, the largest white-balanced floor. It claims no
+            // luminance the clip does not already prove, and a channel that
+            // attains the maximum keeps exactly its own floor. `neutral` can
+            // no longer sit below that base, so the support blend spans a
+            // non-negative interval as before.
+            let clip_neutral = (0..3)
+                .map(|c| grid.floor[i][c] * white_balance[c])
+                .fold(0.0_f32, f32::max);
+            let neutral_luminance = (harmonic.iter().sum::<f32>() / 3.0).max(clip_neutral);
             for c in 0..3 {
                 let predicted = (scalar * q[c] / white_balance[c]).max(grid.floor[i][c]);
                 let neutral = (neutral_luminance / white_balance[c]).max(grid.floor[i][c]);
+                let neutral_base = (clip_neutral / white_balance[c]).max(grid.floor[i][c]);
+                let base = component_coherence * grid.floor[i][c]
+                    + (1.0 - component_coherence) * neutral_base;
                 let target =
                     component_coherence * predicted + (1.0 - component_coherence) * neutral;
-                output[i][c] = grid.floor[i][c]
-                    + luminance_support[i][c] * (target - grid.floor[i][c]).max(0.0);
+                output[i][c] = base + luminance_support[i][c] * (target - base).max(0.0);
+            }
+            if !deep_probe.is_empty() && deep_probe.contains(&i) {
+                eprintln!(
+                    "DEEPPROBE cell {i} q {q:?} scalar {scalar:.5} clip_neutral {clip_neutral:.5} neutral_lum {neutral_luminance:.5} wb {white_balance:?} obs {observed:?} harmonic {harmonic:?} floor {:?} support {:?} out {:?}",
+                    grid.floor[i], luminance_support[i], output[i]
+                );
             }
         }
     }
