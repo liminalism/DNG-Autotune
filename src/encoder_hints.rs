@@ -486,6 +486,7 @@ mod tests {
             },
             embedded_preview_semantic_eligible: false,
             models: Vec::new(),
+            classification: None,
             raw_scores: BTreeMap::new(),
             regions: vec![
                 RegionStats {

@@ -16,6 +16,47 @@ use std::path::{Path, PathBuf};
 
 pub const PROXY_SIZE: usize = 512;
 pub const DEFAULT_MODEL_DIR: &str = "models/artifacts";
+
+/// CamSDD class names, index-aligned with the 30 logits of
+/// `camsdd_resnet50_192.onnx` (`tools/scene_models/train_camsdd.py`
+/// `class_names()`: dataset folders sorted by numeric prefix).
+pub const CAMSDD_CLASSES: [&str; 30] = [
+    "1_Portrait",
+    "2_Group_portrait",
+    "3_Kids",
+    "4_Dog",
+    "5_Cat",
+    "6_Macro",
+    "7_Food",
+    "8_Beach",
+    "9_Mountain",
+    "10_Waterfall",
+    "11_Snow",
+    "12_Landscape",
+    "13_Underwater",
+    "14_Architecture",
+    "15_Sunset_Sunrise",
+    "16_Blue_Sky",
+    "17_Cloudy_Sky",
+    "18_Greenery",
+    "19_Autumn_leaves",
+    "20_Flower",
+    "21_Night_shot",
+    "22_Stage_concert",
+    "23_Fireworks",
+    "24_Candle_light",
+    "25_Neon_lights",
+    "26_Indoor",
+    "27_Backlight",
+    "28_Text_Documents",
+    "29_QR_images",
+    "30_Computer_Screens",
+];
+
+/// Classifier input geometry: the domain-adaptation fine-tune scored proxy
+/// content letterboxed to this shape, so inference must match it exactly.
+const CLASSIFIER_INPUT_HEIGHT: usize = 192;
+const CLASSIFIER_INPUT_WIDTH: usize = 288;
 const MASK_THRESHOLD: u8 = 128;
 const SKY_POLICY_MIN_AREA: f32 = 0.05;
 const SKY_POLICY_MIN_MEAN_CONFIDENCE: f32 = 0.75;
@@ -176,11 +217,110 @@ pub struct ModelProvenance {
     pub backend: String,
 }
 
+/// Raw output of the CamSDD scene classifier. These are probabilities over a
+/// closed 30-class vocabulary, not a scene verdict: the hand review of
+/// 2026-08-26 (tools/scene_models/TRAINING.md) established per-class trust
+/// tiers, and only `fuse_lighting` applies them.
+#[derive(Debug, Clone, Serialize)]
+pub struct SceneClassification {
+    /// Full 30-way softmax distribution, keyed by CamSDD class name.
+    pub scores: BTreeMap<String, f32>,
+    /// Class names ranked by probability, best first. Real frames belong to
+    /// several classes at once, which is why consumers read top-k, never
+    /// argmax alone.
+    pub top3: Vec<String>,
+    /// Shannon entropy of the distribution in nats; high entropy means the
+    /// classifier saw nothing it recognises.
+    pub entropy: f32,
+}
+
+/// How strongly a lighting condition is asserted, and by whom.
+///
+/// `Observed` means the classifier (or a measured statistic) sees the
+/// condition; `Actionable` means the plan's corroboration rule is satisfied —
+/// the neural verdict and the cheap measured signal agree — so a policy is
+/// allowed to read it. Nothing in this release consumes `Actionable` yet: the
+/// block exists so the backlit tone policy can be graded against sidecars
+/// that already carry its gating decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LightingState {
+    Quiet,
+    Observed,
+    Actionable,
+}
+
+/// Backlit: classifier Backlight verdict corroborated by the centre-vs-
+/// surround EV split the analyzer already measures.
+#[derive(Debug, Clone, Serialize)]
+pub struct BacklitSignal {
+    pub classifier_probability: f32,
+    pub classifier_top3: bool,
+    /// `p50_ev - center_median_ev`: how much darker the frame centre is than
+    /// the frame median. Backlit subjects sit in front of a bright field, so
+    /// the split goes strongly positive.
+    pub ev_split: f32,
+    /// The corpus-derived corroboration margin the split must exceed.
+    pub ev_split_margin: f32,
+    pub state: LightingState,
+}
+
+/// Indoor: classifier verdict (Tier B — ~50% precision on the corpus hand
+/// review, so C5 CCT corroboration is mandatory for `Actionable`).
+#[derive(Debug, Clone, Serialize)]
+pub struct IndoorSignal {
+    pub classifier_probability: f32,
+    pub classifier_top3: bool,
+    /// C5 CCT when `--illuminant` also ran; corroboration is impossible
+    /// without it and the state then caps at `Observed`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub illuminant_cct_k: Option<f64>,
+    pub cct_threshold_k: f64,
+    pub state: LightingState,
+}
+
+/// Night: the measured `low_light_score` remains authoritative (it fuses
+/// darkness, sensor noise and capture EV); the classifier only corroborates.
+/// It cannot dissent either — the fixed-neutral proxy renders night scenes at
+/// daytime brightness, so classifier silence on night frames is expected
+/// (`@raw-autotune.observation.night-invisible-in-fixed-tone-proxy`).
+#[derive(Debug, Clone, Serialize)]
+pub struct NightSignal {
+    pub low_light_score: f32,
+    pub classifier_probability: f32,
+    pub state: LightingState,
+}
+
+/// Macro: Tier A precision on the hand review, but the plan wants EXIF
+/// focus-distance corroboration before policy reads it, so it caps at
+/// `Observed` until that lands.
+#[derive(Debug, Clone, Serialize)]
+pub struct MacroSignal {
+    pub classifier_probability: f32,
+    pub state: LightingState,
+}
+
+/// The fused per-frame lighting verdict of LIGHTING_DETECTION_PLAN.md §4.
+/// Observational: recorded in the sidecar, read by nothing in the render.
+///
+/// Classes the 2026-08-26 hand review blocklisted (Kids, Underwater,
+/// Computer_Screens, Snow — all precision-zero or near it on this corpus)
+/// stay visible in `scene.classification.scores` but are never fused here.
+#[derive(Debug, Clone, Serialize)]
+pub struct SceneLightingReport {
+    pub backlit: BacklitSignal,
+    pub indoor: IndoorSignal,
+    pub night: NightSignal,
+    pub macro_shot: MacroSignal,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SceneEvidence {
     pub proxy: SemanticProxyInfo,
     pub embedded_preview_semantic_eligible: bool,
     pub models: Vec<ModelProvenance>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub classification: Option<SceneClassification>,
     /// Mean softmax confidence for every native Cityscapes class. These are raw
     /// model outputs, not a winner-take-all scene label.
     pub raw_scores: BTreeMap<String, f32>,
@@ -435,6 +575,17 @@ pub fn build_proxy(
 /// Run the optional perception stack. Errors are evidence rather than render
 /// errors: model absence or an unsupported graph falls back to the unchanged
 /// controller and is recorded for corpus diagnosis.
+/// Which perception models `observe` should run over the shared proxy.
+#[derive(Debug, Clone, Copy)]
+pub struct PerceptionTasks {
+    /// LR-ASPP Cityscapes segmentation plus the region measurements.
+    pub segment: bool,
+    /// YuNet face detection; only meaningful with `segment`.
+    pub faces: bool,
+    /// The CamSDD 30-way scene classifier.
+    pub classify: bool,
+}
+
 pub fn observe(
     image: &LinearImage,
     working_to_display: Option<&Matrix3>,
@@ -442,13 +593,14 @@ pub fn observe(
     noise_snr10_ev: Option<f32>,
     embedded_preview_semantic_eligible: bool,
     model_dir: &Path,
-    faces: bool,
+    tasks: PerceptionTasks,
 ) -> Result<(SemanticProxy, SceneEvidence)> {
     let proxy = build_proxy(image, working_to_display)?;
     let mut evidence = SceneEvidence {
         proxy: SemanticProxyInfo::from(&proxy),
         embedded_preview_semantic_eligible,
         models: Vec::new(),
+        classification: None,
         raw_scores: BTreeMap::new(),
         regions: Vec::new(),
         inference_errors: Vec::new(),
@@ -458,16 +610,18 @@ pub fn observe(
         masks: RegionMasks::blank(),
     };
 
-    infer(&proxy, model_dir, faces, &mut evidence);
+    infer(&proxy, model_dir, tasks, &mut evidence);
 
-    evidence.regions = measure_regions(
-        image,
-        working_to_display,
-        reconstruction_uncertainty,
-        noise_snr10_ev,
-        &proxy,
-        &evidence.masks,
-    );
+    if tasks.segment {
+        evidence.regions = measure_regions(
+            image,
+            working_to_display,
+            reconstruction_uncertainty,
+            noise_snr10_ev,
+            &proxy,
+            &evidence.masks,
+        );
+    }
     Ok((proxy, evidence))
 }
 
@@ -758,26 +912,43 @@ pub fn build_sky_chroma_map(
 /// entry in `models`, and a `Face` mask that stays blank.
 pub const FACE_DETECTION_DEFAULT: bool = false;
 
-fn infer(proxy: &SemanticProxy, model_dir: &Path, faces: bool, evidence: &mut SceneEvidence) {
-    match infer_segmenter(proxy, model_dir) {
-        Ok((masks, scores, provenance)) => {
-            evidence.models.push(provenance);
-            evidence.raw_scores = scores;
-            merge_masks(&mut evidence.masks, masks);
+fn infer(
+    proxy: &SemanticProxy,
+    model_dir: &Path,
+    tasks: PerceptionTasks,
+    evidence: &mut SceneEvidence,
+) {
+    if tasks.segment {
+        match infer_segmenter(proxy, model_dir) {
+            Ok((masks, scores, provenance)) => {
+                evidence.models.push(provenance);
+                evidence.raw_scores = scores;
+                merge_masks(&mut evidence.masks, masks);
+            }
+            Err(error) => evidence
+                .inference_errors
+                .push(format!("segmenter: {error:#}")),
         }
-        Err(error) => evidence
-            .inference_errors
-            .push(format!("segmenter: {error:#}")),
-    }
-    if !faces {
-        return;
-    }
-    match infer_faces(proxy, model_dir) {
-        Ok((face, provenance)) => {
-            evidence.models.push(provenance);
-            *evidence.masks.get_mut(RegionKind::Face) = face;
+        if tasks.faces {
+            match infer_faces(proxy, model_dir) {
+                Ok((face, provenance)) => {
+                    evidence.models.push(provenance);
+                    *evidence.masks.get_mut(RegionKind::Face) = face;
+                }
+                Err(error) => evidence.inference_errors.push(format!("face: {error:#}")),
+            }
         }
-        Err(error) => evidence.inference_errors.push(format!("face: {error:#}")),
+    }
+    if tasks.classify {
+        match infer_classifier(proxy, model_dir) {
+            Ok((classification, provenance)) => {
+                evidence.models.push(provenance);
+                evidence.classification = Some(classification);
+            }
+            Err(error) => evidence
+                .inference_errors
+                .push(format!("classifier: {error:#}")),
+        }
     }
 }
 
@@ -867,6 +1038,285 @@ fn imagenet_tensor(proxy: &SemanticProxy) -> Result<lege_gpu::vision::Tensor> {
         }
     }
     lege_gpu::vision::Tensor::new(vec![1, 3, PROXY_SIZE, PROXY_SIZE], data)
+}
+
+/// One axis of a PIL-style antialiased triangle (bilinear) resample: for each
+/// destination index, the first contributing source index and the normalized
+/// weights over the contributing span. On downscale the filter widens with the
+/// scale factor, which is what separates PIL's resize from naive 2x2 bilinear
+/// sampling — and PIL is what the domain-adaptation fine-tune saw.
+fn triangle_weights(in_size: usize, out_size: usize) -> Vec<(usize, Vec<f32>)> {
+    let scale = in_size as f32 / out_size as f32;
+    let filterscale = scale.max(1.0);
+    let support = filterscale;
+    (0..out_size)
+        .map(|out| {
+            let center = (out as f32 + 0.5) * scale;
+            let min = (center - support).floor().max(0.0) as usize;
+            let max = ((center + support).ceil() as usize)
+                .min(in_size)
+                .max(min + 1);
+            let mut weights: Vec<f32> = (min..max)
+                .map(|x| {
+                    let distance = ((x as f32 + 0.5) - center) / filterscale;
+                    (1.0 - distance.abs()).max(0.0)
+                })
+                .collect();
+            let sum: f32 = weights.iter().sum();
+            if sum > 0.0 {
+                for weight in &mut weights {
+                    *weight /= sum;
+                }
+            }
+            (min, weights)
+        })
+        .collect()
+}
+
+/// Builds the classifier input exactly as the pseudo-label/fine-tune pipeline
+/// did (`tools/scene_models/pseudo_label.py`): the proxy content region,
+/// aspect-preserving bilinear resize onto a black 288x192 canvas centred both
+/// ways, then /255 and ImageNet mean/std. Letterbox pixels normalize as black.
+pub(crate) fn classifier_tensor_from_content(
+    content: &[u8],
+    source_width: usize,
+    source_height: usize,
+) -> Result<lege_gpu::vision::Tensor> {
+    ensure!(
+        source_width > 0 && source_height > 0 && content.len() == source_width * source_height * 3,
+        "classifier input content is empty or mis-sized"
+    );
+    let scale = (CLASSIFIER_INPUT_WIDTH as f32 / source_width as f32)
+        .min(CLASSIFIER_INPUT_HEIGHT as f32 / source_height as f32);
+    let new_width =
+        ((source_width as f32 * scale).round() as usize).clamp(1, CLASSIFIER_INPUT_WIDTH);
+    let new_height =
+        ((source_height as f32 * scale).round() as usize).clamp(1, CLASSIFIER_INPUT_HEIGHT);
+    let horizontal = triangle_weights(source_width, new_width);
+    let vertical = triangle_weights(source_height, new_height);
+
+    // Horizontal pass: (source_height x new_width) per channel.
+    let mut intermediate = vec![0.0_f32; 3 * source_height * new_width];
+    for y in 0..source_height {
+        for (x, (start, weights)) in horizontal.iter().enumerate() {
+            let mut accumulated = [0.0_f32; 3];
+            for (offset, weight) in weights.iter().enumerate() {
+                let index = (y * source_width + start + offset) * 3;
+                for channel in 0..3 {
+                    accumulated[channel] += content[index + channel] as f32 * weight;
+                }
+            }
+            for channel in 0..3 {
+                intermediate[(channel * source_height + y) * new_width + x] = accumulated[channel];
+            }
+        }
+    }
+
+    // Vertical pass straight into the normalized NCHW tensor.
+    let mean = [0.485_f32, 0.456, 0.406];
+    let std = [0.229_f32, 0.224, 0.225];
+    let plane = CLASSIFIER_INPUT_HEIGHT * CLASSIFIER_INPUT_WIDTH;
+    let offset_x = (CLASSIFIER_INPUT_WIDTH - new_width) / 2;
+    let offset_y = (CLASSIFIER_INPUT_HEIGHT - new_height) / 2;
+    let mut data = vec![0.0_f32; 3 * plane];
+    for channel in 0..3 {
+        // The black letterbox normalizes to (0 - mean)/std, not 0.
+        let black = (0.0 - mean[channel]) / std[channel];
+        for value in &mut data[channel * plane..(channel + 1) * plane] {
+            *value = black;
+        }
+        for (y, (start, weights)) in vertical.iter().enumerate() {
+            for x in 0..new_width {
+                let mut accumulated = 0.0_f32;
+                for (offset, weight) in weights.iter().enumerate() {
+                    accumulated += intermediate
+                        [(channel * source_height + start + offset) * new_width + x]
+                        * weight;
+                }
+                let value = (accumulated / 255.0 - mean[channel]) / std[channel];
+                data[channel * plane + (offset_y + y) * CLASSIFIER_INPUT_WIDTH + (offset_x + x)] =
+                    value;
+            }
+        }
+    }
+    lege_gpu::vision::Tensor::new(
+        vec![1, 3, CLASSIFIER_INPUT_HEIGHT, CLASSIFIER_INPUT_WIDTH],
+        data,
+    )
+}
+
+fn classifier_tensor(proxy: &SemanticProxy) -> Result<lege_gpu::vision::Tensor> {
+    let mut content = vec![0_u8; proxy.content_width * proxy.content_height * 3];
+    for y in 0..proxy.content_height {
+        let source = ((proxy.content_y + y) * proxy.width + proxy.content_x) * 3;
+        let destination = y * proxy.content_width * 3;
+        content[destination..destination + proxy.content_width * 3]
+            .copy_from_slice(&proxy.rgb[source..source + proxy.content_width * 3]);
+    }
+    classifier_tensor_from_content(&content, proxy.content_width, proxy.content_height)
+}
+
+pub(crate) fn classification_from_logits(logits: &[f32]) -> SceneClassification {
+    let max = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    let exponentials: Vec<f32> = logits.iter().map(|logit| (logit - max).exp()).collect();
+    let denominator: f32 = exponentials.iter().sum();
+    let probabilities: Vec<f32> = exponentials
+        .iter()
+        .map(|value| value / denominator)
+        .collect();
+    let mut ranked: Vec<usize> = (0..probabilities.len()).collect();
+    ranked.sort_by(|&a, &b| {
+        probabilities[b]
+            .partial_cmp(&probabilities[a])
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.cmp(&b))
+    });
+    let entropy = -probabilities
+        .iter()
+        .map(|&p| if p > 0.0 { p * p.ln() } else { 0.0 })
+        .sum::<f32>();
+    SceneClassification {
+        scores: CAMSDD_CLASSES
+            .iter()
+            .zip(&probabilities)
+            .map(|(name, &probability)| (name.to_string(), probability))
+            .collect(),
+        top3: ranked
+            .iter()
+            .take(3)
+            .map(|&index| CAMSDD_CLASSES[index].to_string())
+            .collect(),
+        entropy,
+    }
+}
+
+/// Corroboration margin for the backlit EV split, in EV. Derived from the
+/// 2026-08-27 corpus survey: see the constant's derivation note in
+/// tools/scene_models/TRAINING.md ("Phase 4" section) before changing it.
+pub const BACKLIT_EV_SPLIT_MARGIN_EV: f32 = 1.25;
+
+/// CCT below which the C5 estimate corroborates an indoor/artificial-light
+/// verdict. The 2026-08-26 acceptance run measured tungsten frames at
+/// 2936-3398 K and daylight-dominated frames at >= 4339 K; this sits in the
+/// gap, biased toward the tungsten side.
+pub const INDOOR_CCT_THRESHOLD_K: f64 = 3800.0;
+
+/// A class must carry at least this much probability mass before its top-3
+/// membership counts: on confidently-classified frames the tail of the top-3
+/// is noise.
+const FUSION_MIN_PROBABILITY: f32 = 0.10;
+
+/// `localtone::automatic_night_strength` starts acting at this score; the
+/// night signal reports `Actionable` exactly where the render already acts.
+const NIGHT_ACTIONABLE_LOW_LIGHT: f32 = 0.2;
+
+/// Fuses the classifier distribution with the measured statistics (and the C5
+/// illuminant when present) into the plan's typed per-frame verdict.
+/// Corroboration rules are LIGHTING_DETECTION_PLAN.md §4; trust tiers are
+/// tools/scene_models/TRAINING.md.
+pub fn fuse_lighting(
+    classification: &SceneClassification,
+    stats: &crate::types::AnalysisStats,
+    illuminant_cct_k: Option<f64>,
+) -> SceneLightingReport {
+    let probability = |class: &str| classification.scores.get(class).copied().unwrap_or(0.0);
+    let in_top3 = |class: &str| classification.top3.iter().any(|name| name == class);
+    let asserted = |class: &str| in_top3(class) && probability(class) >= FUSION_MIN_PROBABILITY;
+
+    let backlit_probability = probability("27_Backlight");
+    let ev_split = stats.p50_ev - stats.center_median_ev;
+    let backlit_state = if asserted("27_Backlight") {
+        if ev_split >= BACKLIT_EV_SPLIT_MARGIN_EV {
+            LightingState::Actionable
+        } else {
+            LightingState::Observed
+        }
+    } else {
+        LightingState::Quiet
+    };
+
+    let indoor_probability = probability("26_Indoor");
+    let indoor_cct = illuminant_cct_k;
+    let indoor_state = if asserted("26_Indoor") {
+        // Tier B: ~50% precision on the hand review, so the physically
+        // grounded CCT is mandatory for anything beyond `Observed`.
+        match indoor_cct {
+            Some(cct) if cct < INDOOR_CCT_THRESHOLD_K => LightingState::Actionable,
+            _ => LightingState::Observed,
+        }
+    } else {
+        LightingState::Quiet
+    };
+
+    let night_probability = probability("21_Night_shot");
+    let night_state = if stats.low_light_score > NIGHT_ACTIONABLE_LOW_LIGHT {
+        LightingState::Actionable
+    } else if asserted("21_Night_shot") {
+        LightingState::Observed
+    } else {
+        LightingState::Quiet
+    };
+
+    let macro_probability = probability("6_Macro");
+    let macro_state = if asserted("6_Macro") {
+        // Caps at Observed until EXIF focus-distance corroboration lands.
+        LightingState::Observed
+    } else {
+        LightingState::Quiet
+    };
+
+    SceneLightingReport {
+        backlit: BacklitSignal {
+            classifier_probability: backlit_probability,
+            classifier_top3: in_top3("27_Backlight"),
+            ev_split,
+            ev_split_margin: BACKLIT_EV_SPLIT_MARGIN_EV,
+            state: backlit_state,
+        },
+        indoor: IndoorSignal {
+            classifier_probability: indoor_probability,
+            classifier_top3: in_top3("26_Indoor"),
+            illuminant_cct_k: indoor_cct,
+            cct_threshold_k: INDOOR_CCT_THRESHOLD_K,
+            state: indoor_state,
+        },
+        night: NightSignal {
+            low_light_score: stats.low_light_score,
+            classifier_probability: night_probability,
+            state: night_state,
+        },
+        macro_shot: MacroSignal {
+            classifier_probability: macro_probability,
+            state: macro_state,
+        },
+    }
+}
+
+fn infer_classifier(
+    proxy: &SemanticProxy,
+    model_dir: &Path,
+) -> Result<(SceneClassification, ModelProvenance)> {
+    use lege_gpu::vision::OnnxSession;
+    let path = model_dir.join("camsdd_resnet50_192.onnx");
+    let session = OnnxSession::from_path(&path)?;
+    let input = classifier_tensor(proxy)?;
+    let (outputs, backend) = run_preferred(&session, &input)?;
+    let provenance = model_provenance(
+        &path,
+        "camsdd-scene-classifier",
+        "content-letterbox-288x192-rgb-u8/255-imagenet-mean-std-v1",
+        &backend,
+        &session,
+    )?;
+    let logits = outputs
+        .get("scene_logits")
+        .context("classifier did not return scene_logits")?;
+    ensure!(
+        logits.shape == [1, CAMSDD_CLASSES.len()],
+        "unexpected classifier output shape {:?}",
+        logits.shape
+    );
+    Ok((classification_from_logits(&logits.data), provenance))
 }
 
 fn infer_segmenter(
@@ -1262,6 +1712,7 @@ mod tests {
             proxy: SemanticProxyInfo::from(proxy),
             embedded_preview_semantic_eligible: false,
             models: Vec::new(),
+            classification: None,
             raw_scores: BTreeMap::new(),
             regions: vec![RegionStats {
                 kind: RegionKind::Sky,
@@ -1422,5 +1873,180 @@ mod tests {
         let mut adjusted = source.clone();
         map.apply(&mut adjusted).unwrap();
         assert_eq!(adjusted.pixels, source.pixels);
+    }
+
+    fn classification(entries: &[(&str, f32)]) -> SceneClassification {
+        let mut logits = [0.0_f32; 30];
+        for (name, probability) in entries {
+            let index = CAMSDD_CLASSES
+                .iter()
+                .position(|class| class == name)
+                .expect("test class name");
+            // ln(p) as a logit reproduces p after softmax up to the
+            // normalization the remaining mass forces; good enough for
+            // rank/threshold tests when the entries dominate.
+            logits[index] = (probability * 1000.0).ln();
+        }
+        classification_from_logits(&logits)
+    }
+
+    fn stats(
+        p50_ev: f32,
+        center_median_ev: f32,
+        low_light_score: f32,
+    ) -> crate::types::AnalysisStats {
+        crate::types::AnalysisStats {
+            sampled_pixels: 1,
+            sample_stride: 1,
+            p005_ev: -8.0,
+            p05_ev: -6.0,
+            p50_ev,
+            p95_ev: 2.0,
+            p995_ev: 3.0,
+            center_median_ev,
+            measured_dynamic_range_ev: 11.0,
+            key_score: 0.5,
+            target_median_ev: 0.0,
+            tonal_class: crate::types::TonalClass::Normal,
+            near_black_fraction: 0.0,
+            near_white_fraction: 0.1,
+            clipped_1_fraction: 0.0,
+            clipped_2_fraction: 0.0,
+            clipped_3_fraction: 0.0,
+            mean_chroma: 0.2,
+            capture_ev100: None,
+            low_light_score,
+        }
+    }
+
+    #[test]
+    fn triangle_weights_are_normalized_and_cover_the_source() {
+        for (source, destination) in [(512, 288), (341, 192), (100, 100), (50, 192)] {
+            let rows = triangle_weights(source, destination);
+            assert_eq!(rows.len(), destination);
+            for (start, weights) in &rows {
+                assert!(!weights.is_empty());
+                assert!(start + weights.len() <= source);
+                let sum: f32 = weights.iter().sum();
+                assert!((sum - 1.0).abs() < 1.0e-5, "weights sum {sum}");
+            }
+        }
+    }
+
+    #[test]
+    fn classifier_tensor_letterboxes_and_normalizes() {
+        // A uniform mid-gray content half the canvas height: the vertical
+        // letterbox bars must normalize as black, the content as 128/255.
+        let width = 512;
+        let height = 256;
+        let content = vec![128_u8; width * height * 3];
+        let tensor = classifier_tensor_from_content(&content, width, height).unwrap();
+        assert_eq!(tensor.shape, vec![1, 3, 192, 288]);
+        let plane = 192 * 288;
+        let mean = [0.485_f32, 0.456, 0.406];
+        let std = [0.229_f32, 0.224, 0.225];
+        // scale = min(288/512, 192/256) = 0.5625 -> 288x144, bars 24 rows.
+        for channel in 0..3 {
+            let black = (0.0 - mean[channel]) / std[channel];
+            let gray = (128.0 / 255.0 - mean[channel]) / std[channel];
+            let top_bar = tensor.data[channel * plane + 10 * 288 + 144];
+            let center = tensor.data[channel * plane + 96 * 288 + 144];
+            assert!((top_bar - black).abs() < 1.0e-5);
+            assert!((center - gray).abs() < 1.0e-4);
+        }
+    }
+
+    #[test]
+    fn classification_ranks_and_sums() {
+        let result = classification(&[("27_Backlight", 0.6), ("26_Indoor", 0.3)]);
+        assert_eq!(result.top3[0], "27_Backlight");
+        assert_eq!(result.top3[1], "26_Indoor");
+        let sum: f32 = result.scores.values().sum();
+        assert!((sum - 1.0).abs() < 1.0e-4);
+        assert!(result.entropy > 0.0);
+    }
+
+    #[test]
+    fn backlit_promotes_only_with_the_ev_split() {
+        let verdict = classification(&[("27_Backlight", 0.7)]);
+        // Classifier alone: observed.
+        let report = fuse_lighting(&verdict, &stats(0.0, -0.5, 0.0), None);
+        assert_eq!(report.backlit.state, LightingState::Observed);
+        // Classifier plus a centre much darker than the frame: actionable.
+        let report = fuse_lighting(&verdict, &stats(0.0, -2.0, 0.0), None);
+        assert_eq!(report.backlit.state, LightingState::Actionable);
+        assert!((report.backlit.ev_split - 2.0).abs() < 1.0e-6);
+        // EV split alone without the classifier: quiet.
+        let silent = classification(&[("12_Landscape", 0.9)]);
+        let report = fuse_lighting(&silent, &stats(0.0, -3.0, 0.0), None);
+        assert_eq!(report.backlit.state, LightingState::Quiet);
+    }
+
+    #[test]
+    fn indoor_needs_the_cct_to_act() {
+        let verdict = classification(&[("26_Indoor", 0.8)]);
+        let report = fuse_lighting(&verdict, &stats(0.0, 0.0, 0.0), None);
+        assert_eq!(report.indoor.state, LightingState::Observed);
+
+        let report = fuse_lighting(&verdict, &stats(0.0, 0.0, 0.0), Some(3000.0));
+        assert_eq!(report.indoor.state, LightingState::Actionable);
+
+        let report = fuse_lighting(&verdict, &stats(0.0, 0.0, 0.0), Some(5500.0));
+        assert_eq!(report.indoor.state, LightingState::Observed);
+    }
+
+    #[test]
+    fn night_stays_with_the_measured_score() {
+        // The classifier cannot promote night: the fixed-tone proxy hides it.
+        let verdict = classification(&[("21_Night_shot", 0.9)]);
+        let report = fuse_lighting(&verdict, &stats(0.0, 0.0, 0.0), None);
+        assert_eq!(report.night.state, LightingState::Observed);
+        // The measured score promotes it with no classifier help.
+        let silent = classification(&[("12_Landscape", 0.9)]);
+        let report = fuse_lighting(&silent, &stats(-4.0, -4.0, 0.6), None);
+        assert_eq!(report.night.state, LightingState::Actionable);
+    }
+
+    #[test]
+    fn macro_caps_at_observed() {
+        let verdict = classification(&[("6_Macro", 0.95)]);
+        let report = fuse_lighting(&verdict, &stats(0.0, 0.0, 0.0), None);
+        assert_eq!(report.macro_shot.state, LightingState::Observed);
+    }
+
+    #[test]
+    fn classifier_golden_matches_python_reference() {
+        // Full-stack parity: fixture proxy -> letterbox/normalize -> ONNX ->
+        // softmax, against probabilities computed by the training venv on the
+        // identical PNG (tests/fixtures/camsdd/expected.json). Skips when the
+        // non-committed model artifact is absent.
+        let model = Path::new("models/artifacts/camsdd_resnet50_192.onnx");
+        let proxy_png = Path::new("tests/fixtures/camsdd/proxy.png");
+        let expected_json = Path::new("tests/fixtures/camsdd/expected.json");
+        if !model.exists() {
+            eprintln!("skipping classifier golden: {} absent", model.display());
+            return;
+        }
+        let content = image::open(proxy_png).unwrap().to_rgb8();
+        let (width, height) = (content.width() as usize, content.height() as usize);
+        let tensor = classifier_tensor_from_content(content.as_raw(), width, height).unwrap();
+        let session = lege_gpu::vision::OnnxSession::from_path(model).unwrap();
+        let outputs = session.run_cpu(&tensor).unwrap();
+        let logits = outputs.get("scene_logits").unwrap();
+        let result = classification_from_logits(&logits.data);
+
+        let expected: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(expected_json).unwrap()).unwrap();
+        let tolerance = expected["tolerance_abs"].as_f64().unwrap() as f32;
+        let mut worst = 0.0_f32;
+        for (class, value) in expected["scores"].as_object().unwrap() {
+            let diff = (result.scores[class] - value.as_f64().unwrap() as f32).abs();
+            worst = worst.max(diff);
+        }
+        assert!(
+            worst <= tolerance,
+            "worst probability diff {worst} > {tolerance}"
+        );
+        assert_eq!(result.top3[0], "26_Indoor");
     }
 }

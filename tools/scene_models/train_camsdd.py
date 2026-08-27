@@ -397,6 +397,40 @@ def eval_stage(args, classes):
     )
 
 
+def _rewrite_flatten_to_reshape(path):
+    """Replace every Flatten with an equivalent Reshape([1, -1]).
+
+    lege-gpu plans Reshape natively but has no shape inference for Flatten.
+    With batch fixed at 1 the two are value-identical for any flatten axis
+    <= 1, which is what torchvision classifiers emit (axis=1 after GAP).
+    """
+    import numpy as np
+    import onnx
+    from onnx import helper, numpy_helper
+
+    model = onnx.load(str(path))
+    graph = model.graph
+    replaced = 0
+    for index, node in enumerate(list(graph.node)):
+        if node.op_type != "Flatten":
+            continue
+        shape_name = f"flatten_as_reshape_{index}_shape"
+        graph.initializer.append(
+            numpy_helper.from_array(np.array([1, -1], dtype=np.int64), shape_name)
+        )
+        reshape = helper.make_node(
+            "Reshape",
+            [node.input[0], shape_name],
+            list(node.output),
+            name=(node.name or f"Flatten_{index}") + "_as_reshape",
+        )
+        graph.node.remove(node)
+        graph.node.insert(index, reshape)
+        replaced += 1
+    onnx.save(model, str(path))
+    return replaced
+
+
 def export_stage(args, classes):
     import torch
 
@@ -420,7 +454,11 @@ def export_stage(args, classes):
         opset_version=17,
         dynamo=False,
     )
-    print(f"exported {out} (1x3x{INPUT_HW[0]}x{INPUT_HW[1]}, raw logits, opset 17)")
+    replaced = _rewrite_flatten_to_reshape(out)
+    print(
+        f"exported {out} (1x3x{INPUT_HW[0]}x{INPUT_HW[1]}, raw logits, opset 17, "
+        f"{replaced} Flatten rewritten to Reshape)"
+    )
     print("GATE 3 next: python3 tools/scene_models/report.py " + str(out))
 
 

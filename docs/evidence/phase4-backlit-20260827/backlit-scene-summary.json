@@ -1,0 +1,1670 @@
+{
+  "schema_version": 26,
+  "application_version": "0.1.19",
+  "automatic_profile_version": "archive-auto-v6",
+  "preset": "auto",
+  "controller_version": "v1",
+  "raw_color_path": "owned",
+  "working_space": "srgb",
+  "dry_run": true,
+  "total": 4,
+  "completed": 4,
+  "skipped": 0,
+  "failed": 0,
+  "tonal_class_counts": {
+    "LowKey": 2,
+    "Normal": 2
+  },
+  "exposure_ev": {
+    "count": 4,
+    "min": 0.9178635,
+    "p10": 0.9178635,
+    "median": 1.3579762,
+    "p90": 1.3710496,
+    "max": 1.3710496,
+    "mean": 1.1863371
+  },
+  "colourfulness": null,
+  "near_white_fraction": null,
+  "luminance_entropy": null,
+  "average_gradient": null,
+  "snr10_ev": {
+    "count": 4,
+    "min": -4.814778,
+    "p10": -4.814778,
+    "median": -3.3811567,
+    "p90": -3.3118935,
+    "max": -3.3118935,
+    "mean": -3.9890792
+  },
+  "low_light_score": {
+    "count": 4,
+    "min": 0.0,
+    "p10": 0.0,
+    "median": 0.015247223,
+    "p90": 0.039375704,
+    "max": 0.039375704,
+    "mean": 0.013655731
+  },
+  "reference_pairs": 0,
+  "reference_center_weighted_key_ev_delta": null,
+  "reference_colourfulness_delta": null,
+  "reference_mean_level_delta": null,
+  "reference_saturation_ratio": null,
+  "reference_highlight_saturation_ratio": null,
+  "reference_hue_median_degrees": null,
+  "reference_hue_p90_degrees": null,
+  "reference_hue_mean_degrees": null,
+  "reference_hue_pairs": 0,
+  "guidance_mode_counts": {
+    "preview_guided": 4
+  },
+  "independent": {
+    "files": 0,
+    "reference_pairs": 0,
+    "center_weighted_key_ev_delta": null,
+    "saturation_ratio": null,
+    "highlight_saturation_ratio": null,
+    "colourfulness_delta": null,
+    "mean_level_delta": null,
+    "hue_median_degrees": null,
+    "hue_p90_degrees": null,
+    "hue_mean_degrees": null,
+    "hue_pairs": 0
+  },
+  "preview_guided": {
+    "files": 4,
+    "reference_pairs": 0,
+    "center_weighted_key_ev_delta": null,
+    "saturation_ratio": null,
+    "highlight_saturation_ratio": null,
+    "colourfulness_delta": null,
+    "mean_level_delta": null,
+    "hue_median_degrees": null,
+    "hue_p90_degrees": null,
+    "hue_mean_degrees": null,
+    "hue_pairs": 0
+  },
+  "clip_altered_fraction": {
+    "count": 4,
+    "min": 0.0018437917,
+    "p10": 0.0018437917,
+    "median": 0.0525725,
+    "p90": 0.107158,
+    "max": 0.107158,
+    "mean": 0.049848948
+  },
+  "clip_mean_abs_delta": {
+    "count": 4,
+    "min": 0.00043824626,
+    "p10": 0.00043824626,
+    "median": 0.034265757,
+    "p90": 0.054921992,
+    "max": 0.054921992,
+    "mean": 0.02750853
+  },
+  "nondeterministic_illuminant_files": 0,
+  "pooled_groups": {},
+  "files": [
+    {
+      "input": "raw/raw_backlit/_DSC1332.ARW",
+      "output": null,
+      "camera": "Sony ILCE-7C",
+      "status": "analyzed",
+      "elapsed_ms": 19374,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 239958,
+        "sample_stride": 10,
+        "p005_ev": -6.292361,
+        "p05_ev": -4.74685,
+        "p50_ev": -2.1772642,
+        "p95_ev": 0.3838094,
+        "p995_ev": 4.267824,
+        "center_median_ev": -1.5693911,
+        "measured_dynamic_range_ev": 10.5601845,
+        "key_score": 0.0016590965,
+        "target_median_ev": -0.8946769,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.00083347916,
+        "near_white_fraction": 0.03282241,
+        "clipped_1_fraction": 0.003546454,
+        "clipped_2_fraction": 0.004050709,
+        "clipped_3_fraction": 0.025504462,
+        "mean_chroma": 0.061188832,
+        "capture_ev100": 5.970854,
+        "low_light_score": 0.039375704
+      },
+      "parameters": {
+        "exposure_ev": 0.9178635,
+        "black_input_ev": -5.7744975,
+        "white_input_ev": 5.5856876,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1015166,
+        "shadow_power": 0.8799093,
+        "highlight_power": 2.5091393,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -10.025013
+      },
+      "noise": {
+        "shot_slope": 2.565139,
+        "read_variance": 0.0,
+        "snr1_ev": -10.025013,
+        "snr10_ev": -3.3811567,
+        "tiles_used": 91975,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -10.025013,
+        "snr10_ev": -3.3811567,
+        "shot_slope": 2.565139,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 2000,
+        "exposure_time": 0.00625,
+        "f_number": 2.8
+      },
+      "preview": {
+        "width": 1616,
+        "height": 1080,
+        "source": "jpeg_interchange",
+        "center_weighted_key_display_ev": -1.0106773,
+        "p05_display_ev": -5.4726076,
+        "p50_display_ev": -1.6175462,
+        "p95_display_ev": 0.9493014,
+        "sampled_pixels": 194040
+      },
+      "chroma_denoise": {
+        "strength": 0.004583577,
+        "radius": 1,
+        "guided": false,
+        "snr10_ev": -3.3811567,
+        "mean_chroma_before": 0.025217151,
+        "mean_chroma_after": 0.024036594
+      },
+      "scene": {
+        "proxy": {
+          "width": 512,
+          "height": 512,
+          "content_x": 0,
+          "content_y": 85,
+          "content_width": 512,
+          "content_height": 341,
+          "source_width": 6000,
+          "source_height": 4000,
+          "rendering": "fixed-neutral-srgb-v1"
+        },
+        "embedded_preview_semantic_eligible": true,
+        "models": [
+          {
+            "role": "camsdd-scene-classifier",
+            "path": "models/artifacts/camsdd_resnet50_192.onnx",
+            "sha256": "72c9b216824df37f22e984d66d8f4d7f20ce32ca09a4f0f3b43bcf75768f8160",
+            "input_name": "scene_image",
+            "input_shape": [
+              1,
+              3,
+              192,
+              288
+            ],
+            "outputs": [
+              "scene_logits"
+            ],
+            "preprocessing": "content-letterbox-288x192-rgb-u8/255-imagenet-mean-std-v1",
+            "backend": "lege-gpu-wgpu:Vulkan:NVIDIA GeForce RTX 4060 Laptop GPU"
+          }
+        ],
+        "classification": {
+          "scores": {
+            "10_Waterfall": 0.00413098,
+            "11_Snow": 0.0033973856,
+            "12_Landscape": 0.0029624682,
+            "13_Underwater": 0.004695983,
+            "14_Architecture": 0.0025879948,
+            "15_Sunset_Sunrise": 0.0058442457,
+            "16_Blue_Sky": 0.0038022196,
+            "17_Cloudy_Sky": 0.007051748,
+            "18_Greenery": 0.005256805,
+            "19_Autumn_leaves": 0.005185819,
+            "1_Portrait": 0.0037343134,
+            "20_Flower": 0.004624698,
+            "21_Night_shot": 0.0037504362,
+            "22_Stage_concert": 0.004264758,
+            "23_Fireworks": 0.0041518277,
+            "24_Candle_light": 0.0032005415,
+            "25_Neon_lights": 0.003920723,
+            "26_Indoor": 0.87064564,
+            "27_Backlight": 0.008519322,
+            "28_Text_Documents": 0.007800514,
+            "29_QR_images": 0.0032679986,
+            "2_Group_portrait": 0.0036159565,
+            "30_Computer_Screens": 0.0036602607,
+            "3_Kids": 0.0032831368,
+            "4_Dog": 0.0032949653,
+            "5_Cat": 0.007984081,
+            "6_Macro": 0.00537465,
+            "7_Food": 0.0025272868,
+            "8_Beach": 0.002673177,
+            "9_Mountain": 0.0047901445
+          },
+          "top3": [
+            "26_Indoor",
+            "27_Backlight",
+            "5_Cat"
+          ],
+          "entropy": 0.81315464
+        },
+        "raw_scores": {},
+        "regions": [],
+        "policy_adjustments": [],
+        "masks": {
+          "width": 512,
+          "height": 512,
+          "masks": [
+            {
+              "kind": "face",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "person",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "sky",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "vegetation",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "water",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "snow_or_sand",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "building_or_interior",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "text_or_document",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "salient_foreground",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            }
+          ]
+        }
+      },
+      "illuminant": {
+        "version": "c5-m7-h64-v1",
+        "camera_rgb": [
+          0.3481237,
+          0.8124331,
+          0.46772036
+        ],
+        "xy": [
+          0.3538225611201964,
+          0.3718981189965717
+        ],
+        "cct_k": 4768.928551856647,
+        "duv": 0.00663549748352484,
+        "as_shot_angular_error_deg": 3.9791164,
+        "matrix_source": "D65",
+        "proxy": {
+          "width": 384,
+          "height": 256,
+          "source_width": 6000,
+          "source_height": 4000,
+          "rendering": "pre-white-balance-camera-rgb-v1"
+        },
+        "model": {
+          "role": "c5-illuminant",
+          "path": "models/artifacts/c5_m7_h64.onnx",
+          "sha256": "f2f31d135090faae455eed6466feb095adf0aecd97347519b8c4cb4a54f9c136",
+          "input_name": "chroma_histograms",
+          "input_shape": [
+            1,
+            4,
+            64,
+            64
+          ],
+          "outputs": [
+            "ccc_filter",
+            "ccc_bias"
+          ],
+          "preprocessing": "camera-rgb-log-chroma-histogram-v1",
+          "backend": "lege-gpu-cpu-reference"
+        },
+        "backend": "lege-gpu-cpu-reference",
+        "inference_errors": []
+      },
+      "scene_lighting": {
+        "backlit": {
+          "classifier_probability": 0.008519322,
+          "classifier_top3": true,
+          "ev_split": -0.6078731,
+          "ev_split_margin": 1.25,
+          "state": "quiet"
+        },
+        "indoor": {
+          "classifier_probability": 0.87064564,
+          "classifier_top3": true,
+          "illuminant_cct_k": 4768.928551856647,
+          "cct_threshold_k": 3800.0,
+          "state": "observed"
+        },
+        "night": {
+          "low_light_score": 0.039375704,
+          "classifier_probability": 0.0037504362,
+          "state": "quiet"
+        },
+        "macro_shot": {
+          "classifier_probability": 0.00537465,
+          "state": "quiet"
+        }
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.1445312,
+          1.0,
+          2.0117188,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "ppg",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -3.3811567,
+          "alias_score": 0.048162226,
+          "reason": "noise_guard"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.0050085834,
+          "negative_luminance_fraction": 0.00025508335,
+          "above_one_fraction": 0.032812916,
+          "altered_fraction": 0.0378215,
+          "mean_abs_delta": 0.034265757,
+          "max_abs_delta": 14.391146
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.0005698695,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 0,
+          "dead": 41,
+          "max_correction": 0.30852646
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 751232,
+          "reconstructed_pixels": 797418,
+          "near_white_pixels": 515792,
+          "fully_clipped_pixels": 397739,
+          "clipped_1_pixels": 235440,
+          "clipped_2_pixels": 118053,
+          "clipped_3_pixels": 397739,
+          "max_lift": 19.410675,
+          "clipped_cfa_sites": 599225,
+          "reconstructed_cfa_sites": 538882,
+          "affected_output_pixels": 797418,
+          "connected_regions": 212,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.8543542,
+          "fully_clipped_cores": 305,
+          "solver_fallbacks": 3
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_backlit/_DSC1333.ARW",
+      "output": null,
+      "camera": "Sony ILCE-7C",
+      "status": "analyzed",
+      "elapsed_ms": 16157,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 239995,
+        "sample_stride": 10,
+        "p005_ev": -6.549451,
+        "p05_ev": -5.7884994,
+        "p50_ev": -3.5202518,
+        "p95_ev": 1.9184661,
+        "p995_ev": 3.7238564,
+        "center_median_ev": -2.980072,
+        "measured_dynamic_range_ev": 10.273308,
+        "key_score": -0.41137725,
+        "target_median_ev": -1.8381679,
+        "tonal_class": "low_key",
+        "near_black_fraction": 0.0003750078,
+        "near_white_fraction": 0.03796746,
+        "clipped_1_fraction": 0.003433405,
+        "clipped_2_fraction": 0.005000104,
+        "clipped_3_fraction": 0.02989229,
+        "mean_chroma": 0.049000572,
+        "capture_ev100": 7.678072,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 1.3579762,
+        "black_input_ev": -5.591475,
+        "white_input_ev": 5.481833,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1066804,
+        "shadow_power": 0.8560148,
+        "highlight_power": 2.4740307,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -8.241565
+      },
+      "noise": {
+        "shot_slope": 0.63270956,
+        "read_variance": 72.389595,
+        "snr1_ev": -8.241565,
+        "snr10_ev": -4.4484887,
+        "tiles_used": 91270,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -8.241565,
+        "snr10_ev": -4.4484887,
+        "shot_slope": 0.63270956,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 1250,
+        "exposure_time": 0.00625,
+        "f_number": 4.0
+      },
+      "preview": {
+        "width": 1616,
+        "height": 1080,
+        "source": "jpeg_interchange",
+        "center_weighted_key_display_ev": -2.2658763,
+        "p05_display_ev": -6.057885,
+        "p50_display_ev": -2.6482983,
+        "p95_display_ev": 2.345841,
+        "sampled_pixels": 194040
+      },
+      "scene": {
+        "proxy": {
+          "width": 512,
+          "height": 512,
+          "content_x": 0,
+          "content_y": 85,
+          "content_width": 512,
+          "content_height": 341,
+          "source_width": 6000,
+          "source_height": 4000,
+          "rendering": "fixed-neutral-srgb-v1"
+        },
+        "embedded_preview_semantic_eligible": true,
+        "models": [
+          {
+            "role": "camsdd-scene-classifier",
+            "path": "models/artifacts/camsdd_resnet50_192.onnx",
+            "sha256": "72c9b216824df37f22e984d66d8f4d7f20ce32ca09a4f0f3b43bcf75768f8160",
+            "input_name": "scene_image",
+            "input_shape": [
+              1,
+              3,
+              192,
+              288
+            ],
+            "outputs": [
+              "scene_logits"
+            ],
+            "preprocessing": "content-letterbox-288x192-rgb-u8/255-imagenet-mean-std-v1",
+            "backend": "lege-gpu-wgpu:Vulkan:NVIDIA GeForce RTX 4060 Laptop GPU"
+          }
+        ],
+        "classification": {
+          "scores": {
+            "10_Waterfall": 0.002687614,
+            "11_Snow": 0.0063361186,
+            "12_Landscape": 0.0027598252,
+            "13_Underwater": 0.0055579673,
+            "14_Architecture": 0.0016353574,
+            "15_Sunset_Sunrise": 0.0040382356,
+            "16_Blue_Sky": 0.0044377763,
+            "17_Cloudy_Sky": 0.00528268,
+            "18_Greenery": 0.0047148024,
+            "19_Autumn_leaves": 0.007237041,
+            "1_Portrait": 0.0042748004,
+            "20_Flower": 0.007163939,
+            "21_Night_shot": 0.006478144,
+            "22_Stage_concert": 0.0026153182,
+            "23_Fireworks": 0.0048297183,
+            "24_Candle_light": 0.005254485,
+            "25_Neon_lights": 0.0033982934,
+            "26_Indoor": 0.8530568,
+            "27_Backlight": 0.011423295,
+            "28_Text_Documents": 0.0071389433,
+            "29_QR_images": 0.0026858598,
+            "2_Group_portrait": 0.0033012484,
+            "30_Computer_Screens": 0.005053883,
+            "3_Kids": 0.00684635,
+            "4_Dog": 0.0033972047,
+            "5_Cat": 0.011189622,
+            "6_Macro": 0.0041540544,
+            "7_Food": 0.003661527,
+            "8_Beach": 0.004017414,
+            "9_Mountain": 0.0053717196
+          },
+          "top3": [
+            "26_Indoor",
+            "27_Backlight",
+            "5_Cat"
+          ],
+          "entropy": 0.8987639
+        },
+        "raw_scores": {},
+        "regions": [],
+        "policy_adjustments": [],
+        "masks": {
+          "width": 512,
+          "height": 512,
+          "masks": [
+            {
+              "kind": "face",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "person",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "sky",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "vegetation",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "water",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "snow_or_sand",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "building_or_interior",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "text_or_document",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "salient_foreground",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            }
+          ]
+        }
+      },
+      "illuminant": {
+        "version": "c5-m7-h64-v1",
+        "camera_rgb": [
+          0.3236701,
+          0.7924021,
+          0.51704603
+        ],
+        "xy": [
+          0.3359517793092907,
+          0.3514743368079054
+        ],
+        "cct_k": 5358.611733806965,
+        "duv": 0.0038439761751439764,
+        "as_shot_angular_error_deg": 4.9024477,
+        "matrix_source": "D65",
+        "proxy": {
+          "width": 384,
+          "height": 256,
+          "source_width": 6000,
+          "source_height": 4000,
+          "rendering": "pre-white-balance-camera-rgb-v1"
+        },
+        "model": {
+          "role": "c5-illuminant",
+          "path": "models/artifacts/c5_m7_h64.onnx",
+          "sha256": "f2f31d135090faae455eed6466feb095adf0aecd97347519b8c4cb4a54f9c136",
+          "input_name": "chroma_histograms",
+          "input_shape": [
+            1,
+            4,
+            64,
+            64
+          ],
+          "outputs": [
+            "ccc_filter",
+            "ccc_bias"
+          ],
+          "preprocessing": "camera-rgb-log-chroma-histogram-v1",
+          "backend": "lege-gpu-cpu-reference"
+        },
+        "backend": "lege-gpu-cpu-reference",
+        "inference_errors": []
+      },
+      "scene_lighting": {
+        "backlit": {
+          "classifier_probability": 0.011423295,
+          "classifier_top3": true,
+          "ev_split": -0.5401797,
+          "ev_split_margin": 1.25,
+          "state": "quiet"
+        },
+        "indoor": {
+          "classifier_probability": 0.8530568,
+          "classifier_top3": true,
+          "illuminant_cct_k": 5358.611733806965,
+          "cct_threshold_k": 3800.0,
+          "state": "observed"
+        },
+        "night": {
+          "low_light_score": 0.0,
+          "classifier_probability": 0.006478144,
+          "state": "quiet"
+        },
+        "macro_shot": {
+          "classifier_probability": 0.0041540544,
+          "state": "quiet"
+        }
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.0507812,
+          1.0,
+          1.7265625,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "ppg",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -4.4484887,
+          "alias_score": 0.037042007,
+          "reason": "noise_guard"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.014741042,
+          "negative_luminance_fraction": 0.000039875,
+          "above_one_fraction": 0.037831627,
+          "altered_fraction": 0.0525725,
+          "mean_abs_delta": 0.020408126,
+          "max_abs_delta": 4.06847
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.00055285846,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 0,
+          "dead": 24,
+          "max_correction": 0.23632818
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 890374,
+          "reconstructed_pixels": 943760,
+          "near_white_pixels": 588038,
+          "fully_clipped_pixels": 481304,
+          "clipped_1_pixels": 302336,
+          "clipped_2_pixels": 106734,
+          "clipped_3_pixels": 481304,
+          "max_lift": 8.572935,
+          "clipped_cfa_sites": 720759,
+          "reconstructed_cfa_sites": 650561,
+          "affected_output_pixels": 943760,
+          "connected_regions": 163,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.94735324,
+          "fully_clipped_cores": 88,
+          "solver_fallbacks": 2
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_backlit/_DSC1334.ARW",
+      "output": null,
+      "camera": "Sony ILCE-7C",
+      "status": "analyzed",
+      "elapsed_ms": 23194,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 239999,
+        "sample_stride": 10,
+        "p005_ev": -6.611093,
+        "p05_ev": -5.908015,
+        "p50_ev": -3.6787295,
+        "p95_ev": 3.0624917,
+        "p995_ev": 3.8175437,
+        "center_median_ev": -2.6847138,
+        "measured_dynamic_range_ev": 10.428637,
+        "key_score": -0.5029745,
+        "target_median_ev": -1.7112706,
+        "tonal_class": "low_key",
+        "near_black_fraction": 0.00027083445,
+        "near_white_fraction": 0.104492106,
+        "clipped_1_fraction": 0.014145892,
+        "clipped_2_fraction": 0.029775124,
+        "clipped_3_fraction": 0.06119609,
+        "mean_chroma": 0.15063335,
+        "capture_ev100": 8.321928,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 1.3710496,
+        "black_input_ev": -5.6400437,
+        "white_input_ev": 5.5885935,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1038845,
+        "shadow_power": 0.8612688,
+        "highlight_power": 2.5158412,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -9.264797
+      },
+      "noise": {
+        "shot_slope": 0.78683674,
+        "read_variance": 15.457749,
+        "snr1_ev": -9.264797,
+        "snr10_ev": -4.814778,
+        "tiles_used": 85632,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -9.264797,
+        "snr10_ev": -4.814778,
+        "shot_slope": 0.78683674,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 800,
+        "exposure_time": 0.00625,
+        "f_number": 4.0
+      },
+      "preview": {
+        "width": 1616,
+        "height": 1080,
+        "source": "jpeg_interchange",
+        "center_weighted_key_display_ev": -2.0539572,
+        "p05_display_ev": -6.0420313,
+        "p50_display_ev": -2.6943007,
+        "p95_display_ev": 2.473931,
+        "sampled_pixels": 194040
+      },
+      "scene": {
+        "proxy": {
+          "width": 512,
+          "height": 512,
+          "content_x": 0,
+          "content_y": 85,
+          "content_width": 512,
+          "content_height": 341,
+          "source_width": 6000,
+          "source_height": 4000,
+          "rendering": "fixed-neutral-srgb-v1"
+        },
+        "embedded_preview_semantic_eligible": true,
+        "models": [
+          {
+            "role": "camsdd-scene-classifier",
+            "path": "models/artifacts/camsdd_resnet50_192.onnx",
+            "sha256": "72c9b216824df37f22e984d66d8f4d7f20ce32ca09a4f0f3b43bcf75768f8160",
+            "input_name": "scene_image",
+            "input_shape": [
+              1,
+              3,
+              192,
+              288
+            ],
+            "outputs": [
+              "scene_logits"
+            ],
+            "preprocessing": "content-letterbox-288x192-rgb-u8/255-imagenet-mean-std-v1",
+            "backend": "lege-gpu-wgpu:Vulkan:NVIDIA GeForce RTX 4060 Laptop GPU"
+          }
+        ],
+        "classification": {
+          "scores": {
+            "10_Waterfall": 0.0077356333,
+            "11_Snow": 0.006794237,
+            "12_Landscape": 0.0050306255,
+            "13_Underwater": 0.00937792,
+            "14_Architecture": 0.0058867782,
+            "15_Sunset_Sunrise": 0.012459051,
+            "16_Blue_Sky": 0.011486239,
+            "17_Cloudy_Sky": 0.011385108,
+            "18_Greenery": 0.017947359,
+            "19_Autumn_leaves": 0.017910898,
+            "1_Portrait": 0.01714414,
+            "20_Flower": 0.017680725,
+            "21_Night_shot": 0.007963208,
+            "22_Stage_concert": 0.0053744656,
+            "23_Fireworks": 0.0097494945,
+            "24_Candle_light": 0.012501023,
+            "25_Neon_lights": 0.010144021,
+            "26_Indoor": 0.57845986,
+            "27_Backlight": 0.055737995,
+            "28_Text_Documents": 0.022909751,
+            "29_QR_images": 0.009394847,
+            "2_Group_portrait": 0.0056909965,
+            "30_Computer_Screens": 0.05322762,
+            "3_Kids": 0.009620475,
+            "4_Dog": 0.006362767,
+            "5_Cat": 0.022767145,
+            "6_Macro": 0.027950857,
+            "7_Food": 0.008935281,
+            "8_Beach": 0.0052542263,
+            "9_Mountain": 0.007117203
+          },
+          "top3": [
+            "26_Indoor",
+            "27_Backlight",
+            "30_Computer_Screens"
+          ],
+          "entropy": 1.9887359
+        },
+        "raw_scores": {},
+        "regions": [],
+        "policy_adjustments": [],
+        "masks": {
+          "width": 512,
+          "height": 512,
+          "masks": [
+            {
+              "kind": "face",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "person",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "sky",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "vegetation",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "water",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "snow_or_sand",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "building_or_interior",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "text_or_document",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "salient_foreground",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            }
+          ]
+        }
+      },
+      "illuminant": {
+        "version": "c5-m7-h64-v1",
+        "camera_rgb": [
+          0.36767954,
+          0.7977666,
+          0.47789142
+        ],
+        "xy": [
+          0.3588571172839835,
+          0.3629578178191169
+        ],
+        "cct_k": 4559.912055052397,
+        "duv": 0.00046623028076029635,
+        "as_shot_angular_error_deg": 0.25487787,
+        "matrix_source": "D65",
+        "proxy": {
+          "width": 384,
+          "height": 256,
+          "source_width": 6000,
+          "source_height": 4000,
+          "rendering": "pre-white-balance-camera-rgb-v1"
+        },
+        "model": {
+          "role": "c5-illuminant",
+          "path": "models/artifacts/c5_m7_h64.onnx",
+          "sha256": "f2f31d135090faae455eed6466feb095adf0aecd97347519b8c4cb4a54f9c136",
+          "input_name": "chroma_histograms",
+          "input_shape": [
+            1,
+            4,
+            64,
+            64
+          ],
+          "outputs": [
+            "ccc_filter",
+            "ccc_bias"
+          ],
+          "preprocessing": "camera-rgb-log-chroma-histogram-v1",
+          "backend": "lege-gpu-cpu-reference"
+        },
+        "backend": "lege-gpu-cpu-reference",
+        "inference_errors": []
+      },
+      "scene_lighting": {
+        "backlit": {
+          "classifier_probability": 0.055737995,
+          "classifier_top3": true,
+          "ev_split": -0.9940157,
+          "ev_split_margin": 1.25,
+          "state": "quiet"
+        },
+        "indoor": {
+          "classifier_probability": 0.57845986,
+          "classifier_top3": true,
+          "illuminant_cct_k": 4559.912055052397,
+          "cct_threshold_k": 3800.0,
+          "state": "observed"
+        },
+        "night": {
+          "low_light_score": 0.0,
+          "classifier_probability": 0.007963208,
+          "state": "quiet"
+        },
+        "macro_shot": {
+          "classifier_probability": 0.027950857,
+          "state": "quiet"
+        }
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.171875,
+          1.0,
+          1.6875,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "ppg",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -4.814778,
+          "alias_score": 0.02693967,
+          "reason": "alias_guard"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.0030134583,
+          "negative_luminance_fraction": 0.000009708333,
+          "above_one_fraction": 0.10434462,
+          "altered_fraction": 0.107158,
+          "mean_abs_delta": 0.054921992,
+          "max_abs_delta": 2.7793975
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.00011525588,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 0,
+          "dead": 16,
+          "max_correction": 1.0234375
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 2379601,
+          "reconstructed_pixels": 2465466,
+          "near_white_pixels": 1489033,
+          "fully_clipped_pixels": 1157868,
+          "clipped_1_pixels": 890568,
+          "clipped_2_pixels": 331165,
+          "clipped_3_pixels": 1157868,
+          "max_lift": 4.815183,
+          "clipped_cfa_sites": 1851789,
+          "reconstructed_cfa_sites": 1644068,
+          "affected_output_pixels": 2465466,
+          "connected_regions": 68,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.8701816,
+          "fully_clipped_cores": 167,
+          "solver_fallbacks": 4
+        }
+      },
+      "guidance_mode": "preview_guided"
+    },
+    {
+      "input": "raw/raw_backlit/_DSC1335.ARW",
+      "output": null,
+      "camera": "Sony ILCE-7C",
+      "status": "analyzed",
+      "elapsed_ms": 4030,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 239999,
+        "sample_stride": 10,
+        "p005_ev": -5.575429,
+        "p05_ev": -2.9157457,
+        "p50_ev": -1.5755869,
+        "p95_ev": -0.56617516,
+        "p995_ev": -0.054976884,
+        "center_median_ev": -0.9673448,
+        "measured_dynamic_range_ev": 5.520452,
+        "key_score": 0.14076912,
+        "target_median_ev": -0.11218262,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.00010000042,
+        "near_white_fraction": 0.0007333364,
+        "clipped_1_fraction": 0.0001833341,
+        "clipped_2_fraction": 0.000108333785,
+        "clipped_3_fraction": 0.00045000188,
+        "mean_chroma": 0.01978006,
+        "capture_ev100": 5.970854,
+        "low_light_score": 0.015247223
+      },
+      "parameters": {
+        "exposure_ev": 1.098459,
+        "black_input_ev": -4.87697,
+        "white_input_ev": 1.5,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.18,
+        "shadow_power": 0.79609466,
+        "highlight_power": 0.7218224,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -9.9557495
+      },
+      "noise": {
+        "shot_slope": 2.6912947,
+        "read_variance": 0.0,
+        "snr1_ev": -9.9557495,
+        "snr10_ev": -3.3118935,
+        "tiles_used": 94570,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -9.9557495,
+        "snr10_ev": -3.3118935,
+        "shot_slope": 2.6912947,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 2000,
+        "exposure_time": 0.00625,
+        "f_number": 2.8
+      },
+      "preview": {
+        "width": 1616,
+        "height": 1080,
+        "source": "jpeg_interchange",
+        "center_weighted_key_display_ev": -0.13275635,
+        "p05_display_ev": -2.4613805,
+        "p50_display_ev": -0.61960816,
+        "p95_display_ev": 0.67040944,
+        "sampled_pixels": 194040
+      },
+      "chroma_denoise": {
+        "strength": 0.011301655,
+        "radius": 1,
+        "guided": false,
+        "snr10_ev": -3.3118935,
+        "mean_chroma_before": 0.008054272,
+        "mean_chroma_after": 0.007069832
+      },
+      "scene": {
+        "proxy": {
+          "width": 512,
+          "height": 512,
+          "content_x": 0,
+          "content_y": 85,
+          "content_width": 512,
+          "content_height": 341,
+          "source_width": 6000,
+          "source_height": 4000,
+          "rendering": "fixed-neutral-srgb-v1"
+        },
+        "embedded_preview_semantic_eligible": true,
+        "models": [
+          {
+            "role": "camsdd-scene-classifier",
+            "path": "models/artifacts/camsdd_resnet50_192.onnx",
+            "sha256": "72c9b216824df37f22e984d66d8f4d7f20ce32ca09a4f0f3b43bcf75768f8160",
+            "input_name": "scene_image",
+            "input_shape": [
+              1,
+              3,
+              192,
+              288
+            ],
+            "outputs": [
+              "scene_logits"
+            ],
+            "preprocessing": "content-letterbox-288x192-rgb-u8/255-imagenet-mean-std-v1",
+            "backend": "lege-gpu-wgpu:Vulkan:NVIDIA GeForce RTX 4060 Laptop GPU"
+          }
+        ],
+        "classification": {
+          "scores": {
+            "10_Waterfall": 0.0057725525,
+            "11_Snow": 0.004451541,
+            "12_Landscape": 0.00256581,
+            "13_Underwater": 0.0074402876,
+            "14_Architecture": 0.004300834,
+            "15_Sunset_Sunrise": 0.007558078,
+            "16_Blue_Sky": 0.0039249384,
+            "17_Cloudy_Sky": 0.008356054,
+            "18_Greenery": 0.007344186,
+            "19_Autumn_leaves": 0.007057051,
+            "1_Portrait": 0.0031815614,
+            "20_Flower": 0.0076260646,
+            "21_Night_shot": 0.006036069,
+            "22_Stage_concert": 0.009718398,
+            "23_Fireworks": 0.0043253903,
+            "24_Candle_light": 0.0035536117,
+            "25_Neon_lights": 0.005490413,
+            "26_Indoor": 0.79627234,
+            "27_Backlight": 0.016105704,
+            "28_Text_Documents": 0.022365268,
+            "29_QR_images": 0.0040261666,
+            "2_Group_portrait": 0.0041321684,
+            "30_Computer_Screens": 0.0070408736,
+            "3_Kids": 0.0042798463,
+            "4_Dog": 0.0038375054,
+            "5_Cat": 0.019122029,
+            "6_Macro": 0.009977939,
+            "7_Food": 0.0035742952,
+            "8_Beach": 0.005087266,
+            "9_Mountain": 0.0054757167
+          },
+          "top3": [
+            "26_Indoor",
+            "28_Text_Documents",
+            "5_Cat"
+          ],
+          "entropy": 1.1567931
+        },
+        "raw_scores": {},
+        "regions": [],
+        "policy_adjustments": [],
+        "masks": {
+          "width": 512,
+          "height": 512,
+          "masks": [
+            {
+              "kind": "face",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "person",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "sky",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "vegetation",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "water",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "snow_or_sand",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "building_or_interior",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "text_or_document",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            },
+            {
+              "kind": "salient_foreground",
+              "width": 512,
+              "height": 512,
+              "threshold": 0.5019608
+            }
+          ]
+        }
+      },
+      "illuminant": {
+        "version": "c5-m7-h64-v1",
+        "camera_rgb": [
+          0.34349263,
+          0.8330034,
+          0.43372592
+        ],
+        "xy": [
+          0.3585502764811345,
+          0.38990035394380973
+        ],
+        "cct_k": 4697.906359390133,
+        "duv": 0.01322530986459178,
+        "as_shot_angular_error_deg": 2.7287152,
+        "matrix_source": "D65",
+        "proxy": {
+          "width": 384,
+          "height": 256,
+          "source_width": 6000,
+          "source_height": 4000,
+          "rendering": "pre-white-balance-camera-rgb-v1"
+        },
+        "model": {
+          "role": "c5-illuminant",
+          "path": "models/artifacts/c5_m7_h64.onnx",
+          "sha256": "f2f31d135090faae455eed6466feb095adf0aecd97347519b8c4cb4a54f9c136",
+          "input_name": "chroma_histograms",
+          "input_shape": [
+            1,
+            4,
+            64,
+            64
+          ],
+          "outputs": [
+            "ccc_filter",
+            "ccc_bias"
+          ],
+          "preprocessing": "camera-rgb-log-chroma-histogram-v1",
+          "backend": "lege-gpu-cpu-reference"
+        },
+        "backend": "lege-gpu-cpu-reference",
+        "inference_errors": []
+      },
+      "scene_lighting": {
+        "backlit": {
+          "classifier_probability": 0.016105704,
+          "classifier_top3": false,
+          "ev_split": -0.6082421,
+          "ev_split_margin": 1.25,
+          "state": "quiet"
+        },
+        "indoor": {
+          "classifier_probability": 0.79627234,
+          "classifier_top3": true,
+          "illuminant_cct_k": 4697.906359390133,
+          "cct_threshold_k": 3800.0,
+          "state": "observed"
+        },
+        "night": {
+          "low_light_score": 0.015247223,
+          "classifier_probability": 0.006036069,
+          "state": "quiet"
+        },
+        "macro_shot": {
+          "classifier_probability": 0.009977939,
+          "state": "quiet"
+        }
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.1679688,
+          1.0,
+          2.0390625,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "ppg",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -3.3118935,
+          "alias_score": 0.04223435,
+          "reason": "noise_guard"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.0011405833,
+          "negative_luminance_fraction": 0.000016916667,
+          "above_one_fraction": 0.0007032083,
+          "altered_fraction": 0.0018437917,
+          "mean_abs_delta": 0.00043824626,
+          "max_abs_delta": 3.4568439
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.00009783396,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 0,
+          "dead": 0,
+          "max_correction": 0.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 15809,
+          "reconstructed_pixels": 17675,
+          "near_white_pixels": 7964,
+          "fully_clipped_pixels": 7324,
+          "clipped_1_pixels": 7845,
+          "clipped_2_pixels": 640,
+          "clipped_3_pixels": 7324,
+          "max_lift": 4.5002594,
+          "clipped_cfa_sites": 13798,
+          "reconstructed_cfa_sites": 13248,
+          "affected_output_pixels": 17675,
+          "connected_regions": 8,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.9686045,
+          "fully_clipped_cores": 2,
+          "solver_fallbacks": 0
+        }
+      },
+      "guidance_mode": "preview_guided"
+    }
+  ]
+}

@@ -101,6 +101,9 @@ pub struct RenderOptions {
     /// Run the C5 illuminant estimator observationally. It changes no returned
     /// pixel; the estimate is reported and nothing else.
     pub illuminant: bool,
+    /// Run the CamSDD scene classifier observationally and report the fused
+    /// `scene_lighting` verdict. It changes no returned pixel.
+    pub scene_classify: bool,
 }
 
 impl Default for RenderOptions {
@@ -151,6 +154,7 @@ impl RenderOptions {
             semantic_faces: options.semantic_faces,
             semantic_model_dir: options.semantic_model_dir.clone(),
             illuminant: options.illuminant,
+            scene_classify: options.scene_classify,
         }
     }
 
@@ -273,6 +277,9 @@ pub struct RenderReport {
     /// Observational illuminant estimate, when `illuminant` asked for one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub illuminant: Option<crate::illuminant::IlluminantEvidence>,
+    /// Fused scene-lighting verdict, when `scene_classify` asked for one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene_lighting: Option<crate::scene::SceneLightingReport>,
     /// Versioned, render-neutral guidance for a downstream encoder.
     pub encoder_hints: crate::encoder_hints::EncoderProfileHints,
     pub sharpen: Option<crate::sharpen::SharpenReport>,
@@ -522,7 +529,9 @@ pub fn render_file_rgb16(
     // One shared perception hook for API and CLI at the same pipeline
     // boundary. Only the explicit sky experiment retains a render input, and
     // it is applied after analysis so the global controller cannot consume it.
-    let (scene, semantic_sky_highlights, semantic_sky_chroma) = if options.semantic {
+    let (scene, semantic_sky_highlights, semantic_sky_chroma) = if options.semantic
+        || options.scene_classify
+    {
         let (proxy, mut evidence) = crate::scene::observe(
             &linear,
             working_to_display.as_ref(),
@@ -530,7 +539,11 @@ pub fn render_file_rgb16(
             noise_floor.as_ref().map(|floor| floor.snr10_ev),
             preview_semantic_eligible,
             &options.semantic_model_dir,
-            options.semantic_faces,
+            crate::scene::PerceptionTasks {
+                segment: options.semantic,
+                faces: options.semantic_faces,
+                classify: options.scene_classify,
+            },
         )?;
         let sky_map = if options.semantic_sky_highlights > 0.0 {
             let map = crate::scene::build_sky_highlight_map(
@@ -605,6 +618,20 @@ pub fn render_file_rgb16(
     parameters.highlight_color_ratio_exponent = options.highlight_color_ratio_exponent;
     let encoder_hints =
         crate::encoder_hints::EncoderProfileHints::derive(&analysis, scene.as_ref());
+    let scene_lighting = if options.scene_classify {
+        scene
+            .as_ref()
+            .and_then(|evidence| evidence.classification.as_ref())
+            .map(|classification| {
+                crate::scene::fuse_lighting(
+                    classification,
+                    &analysis,
+                    illuminant.as_ref().and_then(|evidence| evidence.cct_k),
+                )
+            })
+    } else {
+        None
+    };
     let guidance_mode = if preview.is_some() && preview_strength > 0.0 {
         GuidanceMode::PreviewGuided
     } else {
@@ -727,6 +754,7 @@ pub fn render_file_rgb16(
             luma_denoise,
             scene,
             illuminant,
+            scene_lighting,
             encoder_hints,
             sharpen,
             color,

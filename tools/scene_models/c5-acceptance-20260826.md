@@ -15,9 +15,15 @@ sample of the `raw/arw` daylight corpus.
 | _DSC1326 | 2936 | −0.0039 | 1.53 |
 | _DSC1327 | 2972 | −0.0011 | 1.60 |
 | _DSC1328 | 3124 | −0.0015 | 1.28 |
-| _DSC1329 | 5354 | +0.0008 | 12.07 |
+| _DSC1329 | 5354 | +0.0008 | 12.07 † |
 | _DSC1330 | 5089 | +0.0041 | 2.04 |
 | _DSC1331 | 2946 | −0.0119 | 4.36 |
+
+† _DSC1329 is not an indoor frame: per the photographer (2026-08-27) it is
+an **outdoor night shot with the illuminating light out of frame**. Its
+12.07° disagreement with the camera neutral and its daylight-band CCT are
+therefore not a mixed-light indoor reading; treat it as an outlier outside
+both clusters, not as evidence either way.
 
 ## daylight corpus control (n=12, every 22nd ARW)
 

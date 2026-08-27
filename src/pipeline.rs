@@ -235,6 +235,11 @@ fn limitations(options: &RunOptions, color: &ColorReport, luma_denoised: bool) -
                     .to_string(),
             ]
         }
+    } else if options.scene_classify {
+        vec![
+            "scene classification is observational only; the classifier distribution and the fused scene_lighting verdict change no rendering decision"
+                .to_string(),
+        ]
     } else {
         vec!["global analysis only; no face, subject, scene, or depth model".to_string()]
     };
@@ -379,6 +384,7 @@ fn process_job_inner(
             luma_denoise: None,
             scene: None,
             illuminant: None,
+            scene_lighting: None,
             encoder_hints: None,
             sharpen: None,
             reference: None,
@@ -667,7 +673,9 @@ fn process_job_inner(
     // balance. The default remains report-only. The explicit sky experiment
     // retains the dense mask as a full-resolution EV map but applies it only
     // after global analysis, so semantics cannot move the exposure controller.
-    let (scene, semantic_sky_highlights, semantic_sky_chroma) = if options.semantic {
+    let (scene, semantic_sky_highlights, semantic_sky_chroma) = if options.semantic
+        || options.scene_classify
+    {
         let (proxy, mut evidence) = crate::scene::observe(
             &linear,
             working_to_display.as_ref(),
@@ -675,7 +683,11 @@ fn process_job_inner(
             noise_floor.as_ref().map(|floor| floor.snr10_ev),
             preview_semantic_eligible,
             &options.semantic_model_dir,
-            options.semantic_faces,
+            crate::scene::PerceptionTasks {
+                segment: options.semantic,
+                faces: options.semantic_faces,
+                classify: options.scene_classify,
+            },
         )?;
         if let Some(directory) = &options.dump_scene_proxy {
             dump_scene_proxy(directory, &job.input, &proxy);
@@ -838,6 +850,25 @@ fn process_job_inner(
     let encoder_hints =
         crate::encoder_hints::EncoderProfileHints::derive(&analysis, scene.as_ref());
     let parameters = parameters;
+
+    // Fused lighting verdict: classifier distribution + measured statistics
+    // (+ C5 CCT when --illuminant also ran). Observational — nothing below
+    // reads it. Absent when the classifier itself failed; the failure is in
+    // scene.inference_errors.
+    let scene_lighting = if options.scene_classify {
+        scene
+            .as_ref()
+            .and_then(|evidence| evidence.classification.as_ref())
+            .map(|classification| {
+                crate::scene::fuse_lighting(
+                    classification,
+                    &analysis,
+                    illuminant.as_ref().and_then(|evidence| evidence.cct_k),
+                )
+            })
+    } else {
+        None
+    };
 
     // The comparison the corpus work actually runs on. Available here, before
     // anything is rendered, because the controller's target and the curve it
@@ -1048,6 +1079,7 @@ fn process_job_inner(
             luma_denoise: luma_denoise.clone(),
             scene,
             illuminant,
+            scene_lighting,
             encoder_hints: Some(encoder_hints),
             sharpen: None,
             reference,
@@ -1168,6 +1200,7 @@ fn process_job_inner(
                 options.semantic,
                 options.semantic_sky_highlights > 0.0 || options.semantic_sky_chroma > 0.0,
                 options.illuminant,
+                options.scene_classify,
             ),
             application: "raw-autotune".to_string(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -1191,6 +1224,7 @@ fn process_job_inner(
             luma_denoise: luma_denoise.clone(),
             scene: scene.clone(),
             illuminant: illuminant.clone(),
+            scene_lighting: scene_lighting.clone(),
             encoder_hints: encoder_hints.clone(),
             sharpen: sharpen.clone(),
             preview: preview.clone(),
@@ -1228,6 +1262,7 @@ fn process_job_inner(
         luma_denoise,
         scene,
         illuminant,
+        scene_lighting,
         encoder_hints: Some(encoder_hints),
         sharpen,
         reference,

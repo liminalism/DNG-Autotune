@@ -215,3 +215,55 @@ under the conservative reading that trained weights are Adapted Material:
   before any weight redistribution.
 - If commercial-grade weights are ever needed: retrain on a CC-BY/CC0
   curated set (the plan's phase-1 fallback), same code.
+
+## Phase 4 — in-pipeline wiring and first paired evidence (2026-08-27)
+
+`--scene-classify` now runs `camsdd_resnet50_192.onnx` inside the render
+pipeline (lege-gpu CPU reference) on the same scene proxy the dump/adapt
+loop used: content region, PIL-parity antialiased letterbox to 288×192,
+ImageNet mean/std. Export gained a Flatten→Reshape rewrite (lege-gpu has no
+Flatten shape inference; value-identical at batch 1). Parity against the
+training venv on the dumped proxies: **top-1 identical, worst |Δp| =
+0.0064** across the raw_backlit batch (PIL's fixed-point u8 resize vs our
+f32 is the entire difference). Regression fixture:
+`tests/fixtures/camsdd/` + the `classifier_golden_matches_python_reference`
+unit test (skips when the model artifact is absent).
+
+The sidecar carries `scene.classification` (full 30-way distribution +
+top3 + entropy) and a fused observational `scene_lighting` block
+(schema 26): backlit / indoor / night / macro, each `quiet | observed |
+actionable` per the plan's corroboration rules. Tier-C classes are never
+fused. Constants and their derivations:
+
+- `BACKLIT_EV_SPLIT_MARGIN_EV = 1.25`: corpus survey 2026-08-27 (n=258
+  ARWs), `p50_ev − center_median_ev` distribution p50 −0.15, p90 0.47,
+  p95 0.72, p99 1.11, max 1.33 — the margin sits above p99 so ordinary
+  compositions cannot corroborate by accident.
+- `INDOOR_CCT_THRESHOLD_K = 3800`: inside the measured tungsten/daylight
+  gap (3398 → 4339 K) from the C5 acceptance run.
+- Night `actionable` mirrors `automatic_night_strength`'s 0.2 ramp start —
+  the verdict reports exactly where the render already acts.
+
+### What the raw_backlit batch (4 pairs, ajar-door scenes) actually showed
+
+1. **Composition mismatch, honestly reported.** The classifier calls all
+   four frames Indoor (0.58–0.87; correct as a scene description) with
+   Backlight at 1–6%, and the EV split is *negative* — the bright region
+   (the door opening) is central, so the centre outshines the surround.
+   CamSDD's Backlight class is subject-against-light; a view *through* an
+   opening is not that. Fusion verdicts: `backlit: quiet`,
+   `indoor: observed` (C5 CCT 4560–5359 K — daylight-dominated, correctly
+   refusing the tungsten corroboration).
+2. **The dominant quality gap on these frames is not tone, it is
+   highlight colour.** Exposure already matches the camera (centre-key
+   delta ≤ 0.17 EV). But the clipped exterior foliage reconstructs into
+   large pink/magenta false-colour regions under **both spatial
+   estimators** (harmonic default and raw-pyramid), while
+   `--highlight-method current` renders it nearly camera-like, and
+   `--highlight-reconstruction 0` shows the raw magenta cast the solvers
+   were supposed to fix. Evidence:
+   `docs/evidence/phase4-backlit-20260827/ablation-grid.png` (six-way
+   crop grid incl. camera JPEG). This is the standing purple-sky /
+   unswept-spatial-floor family, at much higher severity, and it — not a
+   silhouette-vs-fill tone policy — is what these frames say phase 4
+   must gate first.

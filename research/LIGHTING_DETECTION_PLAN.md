@@ -317,3 +317,23 @@ fixtures, not training data.
 So: tonight's indoor shooting covers classes 3–5 perfectly; tomorrow's
 daylight session is needed only for backlit and mixed-light. Night outdoor
 already exists in the corpus (`raw_at_night`).
+
+### §7 outcome so far (2026-08-27)
+
+- `raw/indoor_tungsten` (2026-08-26, 9 pairs) — used for the C5 phase-2
+  acceptance; tungsten/daylight separation clean. Note: _DSC1329 is an
+  outdoor night frame with the light out of frame, not a mixed-light
+  indoor scene (photographer, 2026-08-27).
+- `raw/raw_backlit` (2026-08-27, 4 pairs): ajar-door scenes, dim interior
+  looking out to bright exterior — the best available stand-in for
+  backlit. Finding: this composition is *not* CamSDD Backlight (no
+  subject against the light); the classifier correctly reads Indoor and
+  the centre-vs-surround EV split goes negative because the bright
+  opening is central. The corroboration rule stands for true contre-jour;
+  view-through-opening scenes need either the (still missing)
+  subject-in-front-of-window pairs or a different measured signal.
+  What the batch did expose is a first-order highlight-colour defect in
+  both spatial estimators (see
+  `docs/evidence/phase4-backlit-20260827/ablation-grid.png` and
+  TRAINING.md "Phase 4"): gating that beats any backlit tone policy on
+  every frame of this batch.

@@ -2,6 +2,36 @@
 
 ## Unreleased — a standalone front-end
 
+### `--scene-classify`: the CamSDD classifier runs in the pipeline, fused into a `scene_lighting` verdict (observational)
+
+New opt-in flag: `scene::infer_classifier` runs `camsdd_resnet50_192.onnx`
+on the existing semantic proxy's content region, letterboxed to 288×192
+with a PIL-parity antialiased triangle resample — the exact preprocessing
+the domain-adaptation fine-tune saw — and records the full 30-way softmax
+distribution, top-3 and entropy in `scene.classification`. A fused
+`scene_lighting` block (schema 26) applies the plan's corroboration rules:
+backlit = classifier ∧ EV split ≥ 1.25 EV (above the corpus p99 of 1.11,
+n=258), indoor = classifier ∧ C5 CCT < 3800 K (inside the measured
+tungsten/daylight gap), night stays with the authoritative
+`low_light_score` (actionable exactly at the night map's 0.2 ramp), macro
+caps at observed pending EXIF corroboration; the hand review's Tier-C
+classes are never fused. Export gained a Flatten→Reshape rewrite because
+lege-gpu lacks Flatten shape inference (value-identical at batch 1).
+
+Measurements that justify it: parity with the training venv on the
+raw_backlit proxies is top-1-identical with worst |Δp| 0.0064 (golden
+fixture: `tests/fixtures/camsdd/`); flag-off summaries byte-identical to
+the pre-change HEAD binary over an 18-frame mixed sample; repeated
+`--jobs 8` flag-on runs identical; 366 lib + integration tests, clippy
+clean. On the new paired `raw/raw_backlit` batch the fusion is honestly
+quiet on backlit (the classifier correctly reads the ajar-door scenes as
+Indoor 0.58–0.87 and the bright region is central, so the EV split is
+negative) — and the batch's real defect is spatial-highlight false
+colour: both spatial estimators paint the clipped exterior foliage
+pink/magenta while `--highlight-method current` nearly matches the camera
+(`docs/evidence/phase4-backlit-20260827/ablation-grid.png`). That
+finding, not a tone policy, is what these frames put first in phase 4.
+
 ### `--illuminant`: the C5 estimator runs in the pipeline (observational)
 
 New opt-in flag: `src/illuminant.rs` builds C5's 4-plane log-chroma

@@ -60,20 +60,32 @@ pub const SEMANTIC_POLICY_REPORT_SCHEMA_VERSION: u32 = 24;
 /// combinations. A reader that wants to know what a file contains must look at
 /// the fields; the version only promises that nothing below it changed meaning.
 pub const ILLUMINANT_REPORT_SCHEMA_VERSION: u32 = 25;
+/// Schema 26 carries `scene.classification` (the CamSDD 30-way distribution)
+/// and the fused observational `scene_lighting` block from `--scene-classify`.
+/// Like 25, it is independent of the other optional blocks: the version is the
+/// highest applicable one, and absent fields are omitted rather than nulled.
+pub const SCENE_CLASSIFY_REPORT_SCHEMA_VERSION: u32 = 26;
 
-pub const fn report_schema_version(semantic: bool, semantic_policy: bool, illuminant: bool) -> u32 {
-    let without_illuminant = if semantic_policy {
+pub const fn report_schema_version(
+    semantic: bool,
+    semantic_policy: bool,
+    illuminant: bool,
+    scene_classify: bool,
+) -> u32 {
+    let mut version = if semantic_policy {
         SEMANTIC_POLICY_REPORT_SCHEMA_VERSION
     } else if semantic {
         SEMANTIC_REPORT_SCHEMA_VERSION
     } else {
         REPORT_SCHEMA_VERSION
     };
-    if illuminant && ILLUMINANT_REPORT_SCHEMA_VERSION > without_illuminant {
-        ILLUMINANT_REPORT_SCHEMA_VERSION
-    } else {
-        without_illuminant
+    if illuminant && ILLUMINANT_REPORT_SCHEMA_VERSION > version {
+        version = ILLUMINANT_REPORT_SCHEMA_VERSION;
     }
+    if scene_classify && SCENE_CLASSIFY_REPORT_SCHEMA_VERSION > version {
+        version = SCENE_CLASSIFY_REPORT_SCHEMA_VERSION;
+    }
+    version
 }
 
 /// Name for the exposure controller's current behaviour, frozen at the colour
@@ -294,6 +306,11 @@ pub struct RunOptions {
     /// the sidecar is byte-identical. Reuses `semantic_model_dir` to find the
     /// graph, so a run that relocates the model pack relocates both.
     pub illuminant: bool,
+    /// Run the CamSDD scene classifier on the analysis proxy and record the
+    /// 30-way distribution plus the fused `scene_lighting` verdict.
+    /// Observational: it changes no output pixel, and with it off the sidecar
+    /// is byte-identical. Reuses `semantic_model_dir` like `--illuminant`.
+    pub scene_classify: bool,
     /// Copy the source EXIF into the output and embed the sRGB ICC profile.
     /// On by default: `docs/PLAN.md` criterion 2 counts this as the product,
     /// not polish, because a photo library with no capture metadata sorts an
@@ -397,6 +414,7 @@ impl RunOptions {
             semantic_faces: crate::scene::FACE_DETECTION_DEFAULT,
             semantic_model_dir: PathBuf::from(crate::scene::DEFAULT_MODEL_DIR),
             illuminant: false,
+            scene_classify: false,
             write_metadata: true,
             noise_scan: None,
             noise_profile: None,
@@ -665,6 +683,9 @@ pub struct Sidecar {
     /// `--illuminant` requested one; nothing in the render reads it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub illuminant: Option<crate::illuminant::IlluminantEvidence>,
+    /// Fused scene-lighting verdict when `--scene-classify` ran. Observational.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene_lighting: Option<crate::scene::SceneLightingReport>,
     /// Render-neutral guidance for a downstream encoder. Dense confidence
     /// bytes remain available through the in-memory API, not duplicated here.
     pub encoder_hints: crate::encoder_hints::EncoderProfileHints,
@@ -697,15 +718,15 @@ mod tests {
     #[test]
     fn encoder_profile_report_schema_is_explicit() {
         assert_eq!(
-            report_schema_version(false, false, false),
+            report_schema_version(false, false, false, false),
             REPORT_SCHEMA_VERSION
         );
         assert_eq!(
-            report_schema_version(true, false, false),
+            report_schema_version(true, false, false, false),
             SEMANTIC_REPORT_SCHEMA_VERSION
         );
         assert_eq!(
-            report_schema_version(true, true, false),
+            report_schema_version(true, true, false, false),
             SEMANTIC_POLICY_REPORT_SCHEMA_VERSION
         );
     }
@@ -713,13 +734,26 @@ mod tests {
     #[test]
     fn illuminant_evidence_takes_the_highest_applicable_schema() {
         assert_eq!(
-            report_schema_version(false, false, true),
+            report_schema_version(false, false, true, false),
             ILLUMINANT_REPORT_SCHEMA_VERSION
         );
         // Independent features, so asking for both cannot land below either.
         assert_eq!(
-            report_schema_version(true, true, true),
+            report_schema_version(true, true, true, false),
             ILLUMINANT_REPORT_SCHEMA_VERSION
+        );
+    }
+
+    #[test]
+    fn scene_classify_takes_the_highest_applicable_schema() {
+        assert_eq!(
+            report_schema_version(false, false, false, true),
+            SCENE_CLASSIFY_REPORT_SCHEMA_VERSION
+        );
+        // Independent features, so asking for everything cannot land below any.
+        assert_eq!(
+            report_schema_version(true, true, true, true),
+            SCENE_CLASSIFY_REPORT_SCHEMA_VERSION
         );
     }
 
@@ -788,6 +822,8 @@ pub struct ProcessReport {
     pub scene: Option<crate::scene::SceneEvidence>,
     /// Illuminant estimate when `--illuminant` requested one. Observational.
     pub illuminant: Option<crate::illuminant::IlluminantEvidence>,
+    /// Fused scene-lighting verdict when `--scene-classify` ran. Observational.
+    pub scene_lighting: Option<crate::scene::SceneLightingReport>,
     /// Encoder guidance when the file reached analysis.
     pub encoder_hints: Option<crate::encoder_hints::EncoderProfileHints>,
     /// Output sharpening, when one was applied.
@@ -836,6 +872,9 @@ pub struct SummaryEntry {
     /// Observational illuminant estimate; omitted unless `--illuminant` ran.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub illuminant: Option<crate::illuminant::IlluminantEvidence>,
+    /// Fused scene-lighting verdict; omitted unless `--scene-classify` ran.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scene_lighting: Option<crate::scene::SceneLightingReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoder_hints: Option<crate::encoder_hints::EncoderProfileHints>,
     #[serde(skip_serializing_if = "Option::is_none")]

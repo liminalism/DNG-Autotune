@@ -251,6 +251,15 @@ pub struct Cli {
     #[arg(long)]
     pub illuminant: bool,
 
+    /// Run the CamSDD scene classifier on the analysis proxy and record its
+    /// 30-class probabilities plus the fused scene-lighting verdict (backlit /
+    /// indoor / night / macro with their corroboration signals) in the
+    /// sidecar. Purely observational: it changes no exposure, tone, colour or
+    /// output pixel, and with it off every sidecar is byte-identical. The
+    /// graph is looked up in --semantic-model-dir (default `models/artifacts`).
+    #[arg(long)]
+    pub scene_classify: bool,
+
     /// Do not copy the source EXIF or embed an sRGB ICC profile in the output.
     /// The pixels are unaffected either way; this only strips the tags, which
     /// leaves a photo library with no capture date, camera or lens to show.
@@ -455,8 +464,11 @@ impl Cli {
             "--semantic-sky-chroma requires --semantic"
         );
         ensure!(
-            self.semantic_model_dir.is_none() || self.semantic || self.illuminant,
-            "--semantic-model-dir requires --semantic or --illuminant"
+            self.semantic_model_dir.is_none()
+                || self.semantic
+                || self.illuminant
+                || self.scene_classify,
+            "--semantic-model-dir requires --semantic, --illuminant or --scene-classify"
         );
         ensure!(
             self.preview_exposure
@@ -608,6 +620,7 @@ impl Cli {
             options.semantic_model_dir = directory;
         }
         options.illuminant = self.illuminant;
+        options.scene_classify = self.scene_classify;
         options.write_metadata = !self.no_metadata;
         options.noise_scan = self.noise_scan;
         options.noise_profile = self.noise_profile;
