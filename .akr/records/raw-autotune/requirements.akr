@@ -3,7 +3,7 @@ project raw-autotune
 
 record raw-autotune.requirement.constraints-and-non-goals/1 : requirement {
     title "Constraints And Non-goals"
-    state proposed
+    state withdrawn
     scope [ all ]
     statement """
         - Do not add an earlier clamp or reintroduce `clip_euclidean_norm_avg` semantics; `docs/white-blowout-advice.md:13` explicitly forbids it (owned path corrected the Rawler clip).
@@ -20,7 +20,7 @@ record raw-autotune.requirement.constraints-and-non-goals/1 : requirement {
 
 record raw-autotune.requirement.slice-5-continuous-log-chromaticity/1 : requirement {
     title "Slice 5 — Joint raw-domain log-chromaticity reconstruction (Phase B.5)"
-    state proposed
+    state active
     scope [ all ]
     statement """
         - **Owns:** the newer raw-domain harmonic path in `src/raw_highlight.rs`, its integration in `src/color.rs`, and the production-path decision in `src/highlight.rs`; synthetic gates belong in `src/synthetic.rs` and the renderer attribution in `src/tone.rs`.
@@ -35,7 +35,7 @@ record raw-autotune.requirement.slice-5-continuous-log-chromaticity/1 : requirem
 
 record raw-autotune.requirement.slice-7-perceptual-gamut-compressor-phase-c-7/1 : requirement {
     title "Slice 7 — Perceptual gamut compressor (Phase C.7)"
-    state proposed
+    state withdrawn
     scope [ all ]
     statement """
         - **Owns:** `src/tone.rs:102` `compress_gamut`, `src/oklab.rs`.

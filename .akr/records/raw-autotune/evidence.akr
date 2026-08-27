@@ -1,6 +1,16 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.evidence.agpl-license-field-20260827/1 : evidence {
+    title "Cargo.toml declares AGPL-3.0-or-later; no reverse JPXL dependency"
+    state verified
+    result pass
+    method command
+    observed_at git:7d33518c87c0cfc1836e4c08dcfb2563cefe0f4b
+    command "grep -n '^license' Cargo.toml && ! grep -qi jpxl Cargo.toml"
+    summary "Cargo.toml line 7 declares license AGPL-3.0-or-later, and no jpxl crate appears among the manifest dependencies, so the dependency arrow does not point back at this project."
+}
+
 record raw-autotune.evidence.archive-speed-tree-clean-20260826/1 : evidence {
     title "Tests, clippy, fmt and check clean on Linux for the archive-speed and metadata work"
     state verified

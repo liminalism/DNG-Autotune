@@ -3,7 +3,7 @@ project raw-autotune
 
 record raw-autotune.decision.agpl-boundary-and-dependency-direction/1 : decision {
     title "raw-autotune stays AGPL; the dependency arrow points at JPXL, never back"
-    state proposed
+    state active
     scope [ path "Cargo.toml", path "src/api.rs", path "src/encoder_hints.rs" ]
     decision """
         raw-autotune stays AGPL-3.0-or-later. The dependency arrow across the three-project image pipeline runs one way only: raw-autotune may depend on JPXL, and JPXL must not depend on raw-autotune, link it, or copy any of its implementation.
@@ -22,11 +22,12 @@ record raw-autotune.decision.agpl-boundary-and-dependency-direction/1 : decision
         - Anyone distributing openarc distributes an AGPL work and must offer corresponding source.
         - A future JPXL-side wish for a raw-autotune type is answered by re-declaring it there, never by vendoring.
         """
+    supported_by [ @raw-autotune.evidence.agpl-license-field-20260827 ]
 }
 
 record raw-autotune.decision.face-detection-is-off-by-default/1 : decision {
     title "Face detection is gated off: zero true positives, and nothing consumed the mask"
-    state proposed
+    state active
     scope [ path "src/cli.rs", path "src/scene.rs", path "src/types.rs" ]
     decision """
         The YuNet face detector does not run unless `--semantic-faces` (API: `RenderOptions::semantic_faces`) asks for it. `scene::FACE_DETECTION_DEFAULT` is false.
@@ -45,11 +46,15 @@ record raw-autotune.decision.face-detection-is-off-by-default/1 : decision {
         - A sidecar from a default `--semantic` run lists only the segmenter in `models`. Consumers keying off `models` length rather than role will see the difference; consumers reading `masks` will not, because the shape is unchanged.
         - Any future face work starts by re-examining the proxy size, not by re-enabling the flag and hoping.
         """
+    supported_by [
+        @raw-autotune.evidence.scene-visual-audit,
+        @raw-autotune.evidence.semantic-sidecar-shape-survives-the-face-gate-20260826
+    ]
 }
 
 record raw-autotune.decision.harmonic-highlight-is-automatic/1 : decision {
     title "The conservative harmonic estimator is the automatic highlight path"
-    state proposed
+    state active
     scope [
         path "src/api.rs",
         path "src/cli.rs",
@@ -64,12 +69,16 @@ record raw-autotune.decision.harmonic-highlight-is-automatic/1 : decision {
 
         The current per-pixel estimator remains available through `--highlight-method current` as a compatibility control. Compression-aware highlight ratio exponent 0.6 and exact external lens profiles remain opt-in and are not part of this promotion. Human review of credible sky topology is authoritative over aggregate chroma metrics for future changes.
         """
+    supported_by [
+        @raw-autotune.evidence.harmonic-default-output-identity-committed-20260810,
+        @raw-autotune.evidence.harmonic-default-profile-consistency-committed-20260810
+    ]
     author "GitHub Uploader"
 }
 
 record raw-autotune.decision.highlight-desaturation-uses-peak-preserving-white-path/1 : decision {
     title "Highlight desaturation follows a peak-preserving path to white"
-    state proposed
+    state active
     scope [ path "src/color.rs", path "src/tone.rs" ]
     decision """
         Apply highlight desaturation by continuously lifting lower display-linear RGB channels toward the brightest channel while leaving the brightest channel invariant. Keep the existing headroom cap before this mix and recompute the gamut-compression luminance anchor afterwards.
@@ -78,11 +87,12 @@ record raw-autotune.decision.highlight-desaturation-uses-peak-preserving-white-p
 
         Consequences: the existing global highlight shoulder reduces the adjacency contrast without semantic sky detection, spatial halos, or the darkening caused by contraction around luminance. Recorded colour is reduced rather than erased, and reconstruction remains governed by raw-domain clipping evidence.
         """
+    supported_by [ @raw-autotune.evidence.sky-stage-attribution-20260816-r2 ]
 }
 
 record raw-autotune.decision.key-decisions/1 : decision {
     title "Key Decisions"
-    state proposed
+    state withdrawn
     scope [ all ]
     decision """
         1. **Where the diagnostics live.** Advice says "inside the owned color path." Decision: add hooks in `src/color.rs:develop` (which calls `highlight::reconstruct` and owns the working→display matrix) to emit dumps before/after `highlight::reconstruct` and before/after `compress_gamut` in `src/tone.rs:282`. Alternative rejected: extending only `pipeline::dump_stage` (which sees `LinearImage` after develop) — it cannot see the pre-reconstruction camera-RGB buffer the advice specifies (items 1-4). Use a `--dump-stages` extension (or new `--dump-highlight-stages DIR`) that writes both the existing `LinearImage` baseline dumps and the new camera-RGB + gamut-stage PNGs, reusing `tone::render_baseline` with/without the working→display matrix consistently. Keep the "best effort, never fails the file" contract (`src/pipeline.rs:137`).
@@ -98,7 +108,7 @@ record raw-autotune.decision.key-decisions/1 : decision {
 
 record raw-autotune.decision.near-whiteness-replaces-chromaticity-solve/1 : decision {
     title "Highlight continuity comes from a near-whiteness weight, not a chromaticity prior"
-    state proposed
+    state withdrawn
     scope [ path "src/highlight.rs", path "src/synthetic.rs", path "src/tone.rs" ]
     decision """
         The neighbourhood-guided log-chromaticity reconstruction (`q` prior plus least-squares intensity solve `s*`) that ff74d3b landed is withdrawn. The `da23c5f` anchor rule is restored as the reconstruction, and the regime discontinuity it was meant to cure is removed instead by `highlight::near_whiteness` — the second-largest per-channel clip confidence — which drives the anchor width, the effective strength, and each channel's share of the lift. At its two ends the rule is exactly `da23c5f`, so every assertion of that commit holds verbatim.
@@ -111,7 +121,7 @@ record raw-autotune.decision.near-whiteness-replaces-chromaticity-solve/1 : deci
 
 record raw-autotune.decision.profile-experiments-remain-opt-in/1 : decision {
     title "Lens and compression-aware ratio experiments remain opt-in"
-    state proposed
+    state active
     scope [
         path "src/api.rs",
         path "src/cli.rs",
@@ -126,11 +136,15 @@ record raw-autotune.decision.profile-experiments-remain-opt-in/1 : decision {
 
         Harmonic highlight reconstruction is governed separately by `raw-autotune.decision.harmonic-highlight-is-automatic`; promoting that estimator does not promote the compression-ratio or exact-lens-profile experiments.
         """
+    supported_by [
+        @raw-autotune.evidence.compression-highlight-default-rollback-tests-20260810,
+        @raw-autotune.evidence.compression-highlight-visual-rejection-20260810
+    ]
 }
 
 record raw-autotune.decision.scene-classifier-training-stack/1 : decision {
     title "Model A trains in PyTorch and ships as ONNX; Burn rejected for training"
-    state proposed
+    state active
     scope [ path "models/**", path "tools/scene_models/**" ]
     decision """
         Model A (the CamSDD 30-way scene/lighting classifier) is trained in PyTorch and shipped as ONNX through the existing lege-gpu path; Burn is rejected as the training stack. Deciding points: (1) Burn's headline benefit — retiring the ONNX runtime — is void because Model B (C5) ships as ONNX regardless, so Burn inference would add a second inference stack rather than remove one; (2) option asymmetry — Burn imports ONNX but cannot export it, so PyTorch training keeps both shipping paths open (lege-gpu now, burn-import later) while Burn training forecloses ONNX, which matters in a workflow that explicitly budgets for failed drafts and rewrites; (3) the workload is recipe experiments, where torchvision/AMP/pretrained-zoo iteration is near-mechanical and Burn requires hand-rolled augmentation before experiment one; (4) the >=94% accuracy gate is calibrated against Python-stack challenge results, and the repo's model tooling (export.py, prepare.py, report.py) is already PyTorch+ONNX shaped.
@@ -141,12 +155,16 @@ record raw-autotune.decision.scene-classifier-training-stack/1 : decision {
     consequences """
         Training lives in tools/scene_models/train_camsdd.py inside a .venv-train PyTorch environment (BSD-licensed toolchain, irrelevant to AGPL shipping). ResNet-50 exports a clean lege-gpu op set. Burn remains available later as an inference-only consumer via ONNX import if a pure-Rust classifier path is ever wanted.
         """
-    supported_by [ @raw-autotune.observation.camsdd-dataset-local-and-licensed ]
+    supported_by [
+        @raw-autotune.evidence.camsdd-gate-1-finetune-20260826,
+        @raw-autotune.evidence.camsdd-gate-3-export-runtime-20260826,
+        @raw-autotune.observation.camsdd-dataset-local-and-licensed
+    ]
 }
 
 record raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1 : decision {
     title "Perception layer uses default lege-gpu prepared graphs"
-    state proposed
+    state active
     scope [
         path "Cargo.toml",
         path "examples/probe-scene-model.rs",
@@ -185,6 +203,10 @@ record raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1 : 
         may have device-initialization cost; semantic inference remains observational and
         CPU fallback remains available for portability.
         """
+    supported_by [
+        @raw-autotune.evidence.default-lege-gpu-build-20260813,
+        @raw-autotune.evidence.scene-rtx4060-pixel-identity-20260813
+    ]
 }
 
 record raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 : decision {

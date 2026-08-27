@@ -3,7 +3,7 @@ project raw-autotune
 
 record raw-autotune.policy.context-and-current-facts/1 : policy {
     title "Context And Current Facts"
-    state proposed
+    state withdrawn
     scope [ all ]
     rule """
         - **Advice diagnosis** (`docs/white-blowout-advice.md:8`): two problems in order — (1) autotuner manufactures false sky chroma during highlight reconstruction, (2) scene may still benefit from single-frame local tone mapping. Current code's three structural hazards: hard `0.98` demosaiced threshold, rule switch at 1→2 clipped channels, and `two-or-three clipped → near-white at strength 1.0` regardless of `0.75`. Output `clipped_fraction` on the defect frames is 0.0004% (`_DSC1289`) / 0.0008% (`_DSC1290`) so final clamp is not the cause.
@@ -31,7 +31,7 @@ record raw-autotune.policy.context-and-current-facts/1 : policy {
 
 record raw-autotune.policy.slice-3-new-metrics-phase-a-3-parallel-with/1 : policy {
     title "Slice 3 — New metrics (Phase A.3, parallel with Slice 2)"
-    state proposed
+    state withdrawn
     scope [ all ]
     rule """
         - **Owns:** `src/metrics.rs`, `src/highlight.rs:119` `HighlightReport`, `src/types.rs` sidecar schema, `src/analyze.rs:330` near-white accounting.
