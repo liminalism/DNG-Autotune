@@ -202,6 +202,25 @@ record raw-autotune.evidence.camsdd-gate-4-adapt-20260826/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.camsdd-inpipeline-parity-20260827/1 : evidence {
+    title "CamSDD in-pipeline parity and regression gates"
+    state verified
+    result pass
+    method command
+    observed_at git:c130e01d0b2eb60ea90e478b44b2d30e12716063
+    command "cargo test --release; target/release/raw-autotune <sample> --dry-run [--scene-classify --illuminant]"
+    artifact "tests/fixtures/camsdd/expected.json"
+    summary """
+        In-pipeline CamSDD classifier parity and regression gates, 2026-08-27.
+        Top-1 identical to the training venv on all 4 raw_backlit proxies,
+        worst |dp| 0.0064 (PIL fixed-point u8 resize vs f32 is the whole
+        difference); golden fixture test passes through lege-gpu CPU in 1.1 s.
+        Flag-off summaries byte-identical to the pre-change HEAD binary over
+        an 18-frame mixed sample; repeated --jobs 8 flag-on runs identical;
+        366 lib + integration tests pass; clippy clean.
+        """
+}
+
 record raw-autotune.evidence.cityscapes-lraspp-lege-gpu-cpu-probe/1 : evidence {
     title "Cityscapes MobileV3-LR-ASPP prepared after rewriting Clip, spatial ReduceMean, and zero-pad AveragePool. CPU session returned logits [1,19,512,512]. Remap covers sky, person, vegetation, building."
     state verified
@@ -1170,6 +1189,26 @@ record raw-autotune.evidence.scene-corpus-rtx4060/2 : evidence {
         """
     supersedes [ @raw-autotune.evidence.scene-corpus-rtx4060/1 ]
     author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.scene-lighting-corpus-fusion-20260827/1 : evidence {
+    title "SceneLighting corpus fusion outcomes (n=258)"
+    state verified
+    result pass
+    method command
+    observed_at git:c130e01d0b2eb60ea90e478b44b2d30e12716063
+    command "target/release/raw-autotune raw/arw --dry-run --scene-classify --illuminant --summary corpus-classify.json --jobs 8"
+    artifact "docs/evidence/phase4-backlit-20260827/corpus-classify-summary.json"
+    summary """
+        Corpus fusion outcomes (n=258): backlit 254 quiet / 4 observed /
+        0 actionable — the 1.25 EV margin (corpus p99 1.11) plus the
+        classifier conjunction rejects the corpus max-split frame (_DSC1133,
+        1.33 EV, Architecture); indoor actionable on exactly 5 frames, all
+        genuinely tungsten (CCT 2554-3317 K, classifier 0.80-0.95); night
+        actionable on 4 via low_light_score; macro 1 observed. On the
+        raw_backlit batch the fusion is honestly quiet (Indoor 0.58-0.87,
+        negative EV split - the bright opening is central).
+        """
 }
 
 record raw-autotune.evidence.scene-perception-validation-20260813/1 : evidence {

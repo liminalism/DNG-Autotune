@@ -775,6 +775,46 @@ record raw-autotune.work.open-questions/1 : work {
     }
 }
 
+record raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 : work {
+    title "Phase 4: in-pipeline scene classifier + SceneLighting fusion, backlit first"
+    state active
+    intent """
+        Phase 4 of research/LIGHTING_DETECTION_PLAN.md, backlit first: run the
+        trained CamSDD classifier (camsdd_resnet50_192.onnx) inside the render
+        pipeline behind an opt-in --scene-classify flag, record its 30-class
+        probabilities as observational evidence, and fuse classifier + measured
+        statistics (+C5 CCT when --illuminant is on) into a typed SceneLighting
+        verdict per the plan's corroboration rules. Backlit promotes to
+        actionable only when the classifier's Backlight verdict agrees with the
+        centre-vs-surround EV split (p50_ev vs center_median_ev) beyond a
+        corpus-derived margin. Trust tiers from the 2026-08-26 hand review
+        apply: Tier C classes (Kids, Underwater, Computer_Screens, Snow) are
+        blocklisted from the fusion. The actual render policy is wired only
+        behind its own A/B against the camera JPEG.
+        """
+    note """
+        Observational wiring landed and verified (git c130e01d, evidence
+        @raw-autotune.evidence.camsdd-inpipeline-parity-20260827 and
+        @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827).
+        Margin 1.25 EV (corpus p99 1.11, n=258); indoor CCT threshold 3800 K.
+        The raw_backlit batch is view-through-opening, not contre-jour: the
+        fusion is honestly quiet on backlit there, and the batch's dominant
+        defect is the spatial-highlight false colour
+        (@raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage)
+        - the strongest candidate for the first phase-4 render gate. Still
+        open: true subject-against-light pairs, the backlit tone policy A/B,
+        and the WB-corrector gate consuming indoor-actionable.
+        """
+    depends_on [
+        @raw-autotune.work.port-c5-illuminant-estimator,
+        @raw-autotune.work.train-camsdd-scene-classifier
+    ]
+    verified_by [
+        @raw-autotune.evidence.camsdd-inpipeline-parity-20260827,
+        @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827
+    ]
+}
+
 record raw-autotune.work.port-c5-illuminant-estimator/1 : work {
     title "Port C5 illuminant estimator (Model B) to ONNX + Rust integration"
     state completed

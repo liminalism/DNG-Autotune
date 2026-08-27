@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:c1a999dfbdc27a0f3f15f9c77c8b1aef4088f57e8d143553cf60ef0fe92961a4"
+    source_graph "sha256:af0f7d5bfa4df3cf064e31738ade160ae5e399c169070c9b86e57f9c508413e0"
 }
 
 source ".akr/project.akr" {
@@ -24,13 +24,13 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:b97e6769ece5ec772a77d7d8f4330177b54a2e2cbb37f7f1891f2f3b0e0d9854"
-    records 169
+    hash "sha256:4ccf30da6d4f5fb7c0734d605d32e0bcf410b7adec1fc8a2691d3bd13bf8b962"
+    records 171
 }
 
 source ".akr/records/raw-autotune/observations.akr" {
-    hash "sha256:d0e6e6b5972c4ae934b245f4673d597de4c62ca3efd0331e131d2db9f255006c"
-    records 3
+    hash "sha256:c30023a4e9311007b210d117dca46b1c6993fecd5f3cc8190dd4502441b3fcab"
+    records 4
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
@@ -54,8 +54,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:f827494689116f52dae7b63b1e95ef7658d20d091b57977396505bc5140b34e0"
-    records 55
+    hash "sha256:dcd20e8c180aa7a114c85ded98d897b5338c31c1feca64e3acb569fd00d46792"
+    records 56
 }
 
 resolution @raw-autotune.assessment.scene-evidence-usefulness/3 {
@@ -218,6 +218,30 @@ resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
     slot implements
     to @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1
     hash "sha256:6c5d7df560168ec083fd639cfca2f0e5e217b6abc5a163b54edd7a6ef5d949a1"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
+    slot depends_on
+    to @raw-autotune.work.port-c5-illuminant-estimator/1
+    hash "sha256:a74e90486961c74791853c7fcad251d455e6228896f8b06bf14aab708db4ab38"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
+    slot depends_on
+    to @raw-autotune.work.train-camsdd-scene-classifier/3
+    hash "sha256:1f82a2083ea761cbbb38938fb7c601143749fc266d26502a0d6293be1b6e8e69"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
+    slot verified_by
+    to @raw-autotune.evidence.camsdd-inpipeline-parity-20260827/1
+    hash "sha256:a8a8acbb01da32aeffd401bf9ef0ad7db4cce6e0325d88eaafadf749d94dbec8"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
+    slot verified_by
+    to @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827/1
+    hash "sha256:9beeb50f10f1f2c2e6c2b6d137f5bcc1c21fb81ed9b7368925ddbf64d75538f1"
 }
 
 resolution @raw-autotune.work.resolve-slice-5-open-questions/1 {
@@ -444,6 +468,11 @@ seal @raw-autotune.evidence.camsdd-gate-3-export-runtime-20260826/1 {
 seal @raw-autotune.evidence.camsdd-gate-4-adapt-20260826/1 {
     state verified
     hash "sha256:e2c7223acdb839d7f83059a39e8400780ccf37fa994e20a296f2aef77e1b99f9"
+}
+
+seal @raw-autotune.evidence.camsdd-inpipeline-parity-20260827/1 {
+    state verified
+    hash "sha256:a8a8acbb01da32aeffd401bf9ef0ad7db4cce6e0325d88eaafadf749d94dbec8"
 }
 
 seal @raw-autotune.evidence.cityscapes-lraspp-lege-gpu-cpu-probe/1 {
@@ -799,6 +828,11 @@ seal @raw-autotune.evidence.scene-corpus-rtx4060/1 {
 seal @raw-autotune.evidence.scene-corpus-rtx4060/2 {
     state verified
     hash "sha256:c4b87d4569b46abb84ae69c0dc3c37250cb05bb54a6228c0ced3ff1c391614b8"
+}
+
+seal @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827/1 {
+    state verified
+    hash "sha256:9beeb50f10f1f2c2e6c2b6d137f5bcc1c21fb81ed9b7368925ddbf64d75538f1"
 }
 
 seal @raw-autotune.evidence.scene-perception-validation-20260813/1 {
@@ -1231,6 +1265,11 @@ seal @raw-autotune.observation.night-invisible-in-fixed-tone-proxy/1 {
     hash "sha256:bafd4bee22b8b66b4793a3dd1e8141e26db27bf01e39007f259005aa30cca63d"
 }
 
+seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/1 {
+    state verified
+    hash "sha256:3cd503a65c13defdc25d69a9a70329b47cb46aa31c8911bba67149a6faa78f7e"
+}
+
 seal @raw-autotune.papercut.a-chained-focused-test-build-command-exceeded/1 {
     state verified
     hash "sha256:6379df805b543af9fc3f194f67fc6b5d3b8198dddb2a5962597a4391970679e7"
@@ -1654,6 +1693,11 @@ seal @raw-autotune.work.night-low-light-rendering/1 {
 seal @raw-autotune.work.night-low-light-rendering/2 {
     state completed
     hash "sha256:73bfd99bbcd7afa4642d370494a7d14f6afa49aafe4040d603410c6149b9be03"
+}
+
+seal @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
+    state active
+    hash "sha256:68d2b2d0564a4208dbe309f757b7205a5f10aa54bc4a0af03c91e8b3ee455520"
 }
 
 seal @raw-autotune.work.port-c5-illuminant-estimator/1 {

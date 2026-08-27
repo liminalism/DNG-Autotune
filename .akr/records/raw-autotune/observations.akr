@@ -30,3 +30,27 @@ record raw-autotune.observation.night-invisible-in-fixed-tone-proxy/1 : observat
     observed_at git:3ec22b0e0f15001166237dc8bf36de4e9edcc9a1
     method command
 }
+
+record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/1 : observation {
+    title "Spatial highlight estimators produce false colour on clipped indoor-outdoor foliage; per-pixel current matches the camera"
+    state verified
+    statement """
+        On indoor-outdoor frames with a large clipped exterior seen through an
+        opening (raw/raw_backlit, 2-3 channels clipped over ~6% of pixels, max
+        lift 4.8), both spatial highlight estimators paint the reconstructed
+        foliage with large pink/magenta false-colour regions - harmonic (the
+        default) and raw-pyramid alike - while --highlight-method current
+        renders it nearly camera-like and --highlight-reconstruction 0 shows
+        the raw magenta cast the solvers were meant to fix. Six-way crop grid
+        incl. the camera JPEG:
+        docs/evidence/phase4-backlit-20260827/ablation-grid.png. This is the
+        purple-sky / unswept-spatial-floor family at first-order severity: on
+        this batch it outweighs any backlit tone policy, and it is the defect
+        a phase-4 render gate should address first (e.g. falling back to the
+        per-pixel estimator, or bounding reconstruction chroma, on frames
+        whose clipped region is large and chromatic).
+        """
+    observed_at git:c130e01d0b2eb60ea90e478b44b2d30e12716063
+    method manual
+    watches [ "src/raw_highlight*.rs", "src/color.rs" ]
+}
