@@ -741,6 +741,56 @@ record raw-autotune.evidence.harmonic-magenta-stage-diagnosis-20260809/1 : evide
         """
 }
 
+record raw-autotune.evidence.harmonic-neutral-fallback-20260827/1 : evidence {
+    title "Harmonic guard neutral fallback: magenta cleared, coherent frames stable"
+    state superseded
+    result pass
+    method command
+    observed_at git:c09b7f95cee4a97af87a4428389819203ce2c749
+    command "16-frame clipped/sky corpus A/B + purple-sky question frames + night batch; before = pre-fix HEAD binary, after = neutral-fallback build"
+    artifact "docs/evidence/harmonic-neutral-fallback-20260827/README.md"
+    summary """
+        Magenta false-colour root cause found and fixed: the joint chroma
+        solve's region-global heterogeneity guard attenuated toward the
+        clipped floor (chroma = clipping order, not scene). Probe at
+        _DSC1334 cell (1200,600): harmonic G 1.748 (true ~1.71), guard
+        output 1.146. Fix: fallback target is neutral chroma at harmonic
+        luminance; discount unchanged; coherent regions unchanged. A/B:
+        every changed frame improves; cloudy-sky/sunset frames 0.00%
+        changed; purple-sky patch population (_DSC1282/1283/1290) clears;
+        broad faint cast (_DSC1288/1289) untouched - separate cause, still
+        open. Night blown screen renders neutral. 366+ tests, clippy clean,
+        repeated --jobs 8 identical. Default pixels move on clipped frames:
+        profile advances to archive-auto-v7.
+        """
+}
+
+record raw-autotune.evidence.harmonic-neutral-fallback-20260827/2 : evidence {
+    title "Harmonic guard neutral fallback: magenta cleared, coherent frames stable"
+    state verified
+    result pass
+    method command
+    observed_at git:c09b7f95cee4a97af87a4428389819203ce2c749
+    command "16-frame clipped/sky corpus A/B + purple-sky question frames + night batch; before = pre-fix HEAD binary, after = neutral-fallback build"
+    artifact "docs/evidence/harmonic-neutral-fallback-20260827/README.md"
+    summary """
+        Magenta false-colour root cause found and fixed: the joint chroma
+        solve's region-global heterogeneity guard attenuated toward the
+        clipped floor (chroma = clipping order, not scene). Probe at
+        _DSC1334 cell (1200,600): harmonic G 1.748 (true ~1.71), guard
+        output 1.146. Fix: fallback target is neutral chroma at harmonic
+        luminance; discount unchanged; coherent regions unchanged. A/B:
+        every changed frame improves; cloudy-sky/sunset frames 0.00%
+        changed; purple-sky patch population (_DSC1282/1283/1290) clears;
+        broad faint cast (_DSC1288/1289) untouched - separate cause, still
+        open. Night blown screen renders neutral. 366+ tests, clippy clean,
+        repeated --jobs 8 identical. Default pixels move on clipped frames:
+        profile advances to archive-auto-v7.
+        """
+    resolves [ @raw-autotune.question.purple-sky-standing-after-slice-5 ]
+    supersedes [ @raw-autotune.evidence.harmonic-neutral-fallback-20260827/1 ]
+}
+
 record raw-autotune.evidence.harmonic-real-frame-rss-20260809/1 : evidence {
     title "Three Sony ILCE-7C 24 MP frames completed without failure in 3:28.04 at 1,027,352 kB maximum RSS; 5,864,316 output pixels were rebuilt."
     state verified

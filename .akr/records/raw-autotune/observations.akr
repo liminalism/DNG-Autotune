@@ -33,7 +33,7 @@ record raw-autotune.observation.night-invisible-in-fixed-tone-proxy/1 : observat
 
 record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/1 : observation {
     title "Spatial highlight estimators produce false colour on clipped indoor-outdoor foliage; per-pixel current matches the camera"
-    state verified
+    state superseded
     statement """
         On indoor-outdoor frames with a large clipped exterior seen through an
         opening (raw/raw_backlit, 2-3 channels clipped over ~6% of pixels, max
@@ -53,4 +53,34 @@ record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliag
     observed_at git:c130e01d0b2eb60ea90e478b44b2d30e12716063
     method manual
     watches [ "src/raw_highlight*.rs", "src/color.rs" ]
+}
+
+record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/2 : observation {
+    title "Spatial-highlight false colour: root-caused to the heterogeneity guard's clipped-floor fallback; fixed in c09b7f9, residuals listed"
+    state verified
+    statement """
+        On indoor-outdoor frames with a large clipped exterior seen through an
+        opening (raw/raw_backlit), both spatial highlight estimators painted
+        the reconstructed area with large pink/magenta false-colour regions
+        while --highlight-method current rendered it nearly camera-like.
+        Root cause (found 2026-08-27, fixed in git c09b7f9): the joint chroma
+        solve's region-global heterogeneity guard attenuated toward the
+        clipped floor, whose chroma is the sensor's clipping order, not the
+        scene — discarding a correct harmonic colour-line reconstruction
+        (probed G 1.75 predicted vs 1.15 after the guard, ~1.71 true). The
+        guard now falls back to neutral chroma at the harmonic luminance;
+        the corpus-wide pink-patch population clears with coherent skies and
+        sunsets byte-stable.
+
+        Remaining follow-ups: (1) a weak residual pink patch top-right of
+        _DSC1282 — likely cells with partial pairwise trust keeping a
+        contaminated joint prediction; (2) the broad faint lavender cast on
+        _DSC1288/1289, a separate cause untouched by this fix; (3) whether a
+        local (windowed) coherence would beat the region-global scalar.
+        """
+    observed_at git:c09b7f95cee4a97af87a4428389819203ce2c749
+    method manual
+    watches [ "src/raw_highlight*.rs", "src/color.rs" ]
+    supersedes [ @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/1 ]
+    verified_by [ @raw-autotune.evidence.harmonic-neutral-fallback-20260827 ]
 }

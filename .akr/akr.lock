@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:af0f7d5bfa4df3cf064e31738ade160ae5e399c169070c9b86e57f9c508413e0"
+    source_graph "sha256:47300a32436f5f28fa10dd0e697ef402a0949110c7b580215e559689945dfb43"
 }
 
 source ".akr/project.akr" {
@@ -24,13 +24,13 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:4ccf30da6d4f5fb7c0734d605d32e0bcf410b7adec1fc8a2691d3bd13bf8b962"
-    records 171
+    hash "sha256:e456b964fce0289eb5ba0955e969a1360bca8efdbc17baeecae70a162a95a484"
+    records 173
 }
 
 source ".akr/records/raw-autotune/observations.akr" {
-    hash "sha256:c30023a4e9311007b210d117dca46b1c6993fecd5f3cc8190dd4502441b3fcab"
-    records 4
+    hash "sha256:47b9f4bc44823c981ae2be65684de7972f80d0e203886e97f6e32c3a5ecba357"
+    records 5
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
@@ -44,8 +44,8 @@ source ".akr/records/raw-autotune/policies.akr" {
 }
 
 source ".akr/records/raw-autotune/questions.akr" {
-    hash "sha256:972b0171731d716f95b06af5e99ddf09becb225dfed94d0edf80c7e32e5a0a32"
-    records 17
+    hash "sha256:9926f15259949f1066147ec0021992c6fd153c0482925890eb9e6b33c69c6a59"
+    records 18
 }
 
 source ".akr/records/raw-autotune/requirements.akr" {
@@ -128,6 +128,18 @@ resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1
     slot resolves
     to @raw-autotune.question.unfitted-partial-cell-floor/2
     hash "sha256:2cee9210fb907d5a8ca45080b328d7ddb4e582803dabdf88f54e2034493f396f"
+}
+
+resolution @raw-autotune.evidence.harmonic-neutral-fallback-20260827/2 {
+    slot resolves
+    to @raw-autotune.question.purple-sky-standing-after-slice-5/2
+    hash "sha256:8e1e27bebafb139a982391dd53736153fecf5b09d3cf6f7de4f5147e435eb2a7"
+}
+
+resolution @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/2 {
+    slot verified_by
+    to @raw-autotune.evidence.harmonic-neutral-fallback-20260827/2
+    hash "sha256:1497052cb96652af312583ab4be416f4e528a7fd872260074e740b83d3f03133"
 }
 
 resolution @raw-autotune.question.deleted-chroma-hull-clamp/1 {
@@ -663,6 +675,16 @@ seal @raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 {
 seal @raw-autotune.evidence.harmonic-magenta-stage-diagnosis-20260809/1 {
     state verified
     hash "sha256:15426a68456a11afd74138733beb7644c6d3801e2f2d800b14a2e9ea7535f114"
+}
+
+seal @raw-autotune.evidence.harmonic-neutral-fallback-20260827/1 {
+    state superseded
+    hash "sha256:24399d93bb95f865b4dd7c64624ab23796c9732ca1c5c082268805aa655282d5"
+}
+
+seal @raw-autotune.evidence.harmonic-neutral-fallback-20260827/2 {
+    state verified
+    hash "sha256:1497052cb96652af312583ab4be416f4e528a7fd872260074e740b83d3f03133"
 }
 
 seal @raw-autotune.evidence.harmonic-real-frame-rss-20260809/1 {
@@ -1266,8 +1288,13 @@ seal @raw-autotune.observation.night-invisible-in-fixed-tone-proxy/1 {
 }
 
 seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/1 {
+    state superseded
+    hash "sha256:62bd8eff1cc910e80749ababdecb28610b3b34bf9257e76c3f2ff39b9ff1b6d0"
+}
+
+seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/2 {
     state verified
-    hash "sha256:3cd503a65c13defdc25d69a9a70329b47cb46aa31c8911bba67149a6faa78f7e"
+    hash "sha256:8612105e18ea2dc1fc55168e1edd5bfdb98edc53f3ba778b99ebcb26d9282b8e"
 }
 
 seal @raw-autotune.papercut.a-chained-focused-test-build-command-exceeded/1 {
@@ -1586,8 +1613,13 @@ seal @raw-autotune.question.prediction-band-below-clip-ramp/2 {
 }
 
 seal @raw-autotune.question.purple-sky-standing-after-slice-5/1 {
-    state open
-    hash "sha256:7ff426bb30f913535e89ba068dfdadce3bd0f0649bb0262f2d4c28b9cbb7a520"
+    state superseded
+    hash "sha256:6257fdfbccc8fc4c7df32225fc98bda7fbfbb7068b6c0af9ccc3cd5f4b9426de"
+}
+
+seal @raw-autotune.question.purple-sky-standing-after-slice-5/2 {
+    state resolved
+    hash "sha256:8e1e27bebafb139a982391dd53736153fecf5b09d3cf6f7de4f5147e435eb2a7"
 }
 
 seal @raw-autotune.question.spatial-highlight-floor-not-swept/1 {

@@ -167,7 +167,7 @@ record raw-autotune.question.prediction-band-below-clip-ramp/2 : question {
 
 record raw-autotune.question.purple-sky-standing-after-slice-5/1 : question {
     title "Whether the lavender-sky defect survives Slice 5 is unverified, not unresolved"
-    state open
+    state superseded
     question """
         Is the residual lavender/purple sky defect still present after the Slice 5 joint raw-domain log-chromaticity estimator?
 
@@ -177,6 +177,32 @@ record raw-autotune.question.purple-sky-standing-after-slice-5/1 : question {
 
         Settling this needs a render of those five frames on the current default and someone looking at them, recorded as evidence. Until then nothing should cite that document as saying the defect is open, and nothing should cite Slice 5 as saying it is closed.
         """
+}
+
+record raw-autotune.question.purple-sky-standing-after-slice-5/2 : question {
+    title "Lavender-sky after Slice 5 — answered: patch population survived, fixed by neutral fallback; faint cast separate"
+    state resolved
+    question """
+        Is the residual lavender/purple sky defect still present after the Slice 5 joint raw-domain log-chromaticity estimator?
+
+        docs/PURPLE_SKY_PROBLEM_SCOPE.md was prepared on 2026-08-08 against ff74d3b2 and declared the defect unresolved. The Slice 5 estimator merged on 2026-08-23 in e42d481, and CHANGELOG.md records it as removing "the source of the visible 1<->2 clip-state discontinuity in skies", moving _DSC1289's rendered output by 0.286% RMSE.
+
+        That is not the same claim. The document always described two populations with different causes — a broad faint lavender cast and edge-localized purple fringing — and the clip-state discontinuity is at most one of them. Settling this needed a render of _DSC1282, _DSC1283, _DSC1288, _DSC1289 and _DSC1290 on the current default and someone looking at them, recorded as evidence.
+        """
+    resolution """
+        Answered 2026-08-27 by rendering all five frames before/after the
+        harmonic neutral-fallback fix (git c09b7f9,
+        @raw-autotune.evidence.harmonic-neutral-fallback-20260827): the
+        patch/fringe population WAS still present after Slice 5 — its cause
+        was the joint solve's heterogeneity guard attenuating toward clipped
+        chroma — and is eliminated on _DSC1282/1283/1290 (small residual
+        patch remains top-right of _DSC1282). The broad faint lavender cast
+        (_DSC1288/1289) is untouched by the fix (<0.1% pixels changed): it is
+        a separate cause and is tracked as the remaining open item in
+        @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage's
+        follow-up note rather than by keeping this question open.
+        """
+    supersedes [ @raw-autotune.question.purple-sky-standing-after-slice-5/1 ]
 }
 
 record raw-autotune.question.spatial-highlight-floor-not-swept/1 : question {
