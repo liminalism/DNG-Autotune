@@ -27,7 +27,12 @@ matrix. It does not implement the creative/profile-rendering layers:
 These are not missing sensor calibration. A DCP hue/saturation map or look
 table is an optional creative LUT applied after the camera has already been
 converted colorimetrically: it can make skin warmer, foliage greener, skies
-deeper, or emulate a vendor picture style. The matrix path answers what colour
+deeper, or emulate a vendor picture style. (The visible consequence on bright
+blue-violet sky — we render it faithfully where the camera JPEG drives it to
+white — is a recorded decision, AKR
+`decision.faithful-blue-violet-sky-over-camera-white-shoulder`; a calibrated
+table is tracked as `work.calibrated-hue-sat-table-candidate-d`.) The matrix
+path answers what colour
 was measured; these tables choose how that colour should look.
 
 Mixed-light correction exists separately under `--local-white-balance`; it is

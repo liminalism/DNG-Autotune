@@ -8,11 +8,14 @@ that is, what to run, and what is left.
 that date. Read every number here as version-stamped, not current.** Work landed
 since then — automatic night tone and luma denoising (2026-08-13), opt-in
 semantic scene masks (2026-08-13), the Slice 5 joint raw-domain
-log-chromaticity estimator (2026-08-23), and the archive-speed spatial-highlight
-floor plus the in-memory EXIF/ICC surface (2026-08-26) — is recorded in
+log-chromaticity estimator (2026-08-23), the archive-speed spatial-highlight
+floor plus the in-memory EXIF/ICC surface (2026-08-26), the CamSDD scene
+classifier / C5 illuminant observational sidecars (`--scene-classify`,
+`--illuminant`, 2026-08-26/27), and the harmonic false-colour fixes
+(neutral-guard fallback then base neutralization, 2026-08-27) — is recorded in
 `CHANGELOG.md` and in the AKR ledger, and is reflected here only where a section
 below says so explicitly. `REPORT_SCHEMA_VERSION` is now 22 (23/24 for the
-semantic sidecars) and `AUTO_PROFILE_VERSION` is `archive-auto-v6`.
+semantic sidecars) and `AUTO_PROFILE_VERSION` is `archive-auto-v8`.
 
 Two things below are known to disagree with each other or with the code, and are
 called out here rather than silently left:
@@ -21,9 +24,15 @@ called out here rather than silently left:
   took the saturation ratio to 1.27; the acceptance table at the end still
   expects 1.35 to 1.45. One of the two is stale and neither has been
   re-measured. Do not quote either as settled.
-- `docs/PURPLE_SKY_PROBLEM_SCOPE.md` predates the Slice 5 merge and is now
-  marked "needs re-verification" rather than "unresolved". Nothing here should
-  be read as saying the lavender-sky defect is closed.
+- `docs/PURPLE_SKY_PROBLEM_SCOPE.md` predates the Slice 5 merge. As of
+  2026-08-27 the pink/magenta *patch* population is fixed (`archive-auto-v8`,
+  `docs/evidence/harmonic-base-neutralization-20260827/`), and the broad
+  lavender *cast* on bright sky was measured to be faithful rendering of a
+  genuinely blue-violet scene — kept deliberately over the camera's stronger
+  white shoulder (AKR
+  `decision.faithful-blue-violet-sky-over-camera-white-shoulder`). The scope
+  document's Candidate D (calibrated hue/sat table) remains the recorded path
+  if matrix colour ever proves insufficient.
 
 ## Short answer
 
