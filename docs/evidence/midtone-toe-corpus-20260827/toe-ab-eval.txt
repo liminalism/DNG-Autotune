@@ -1,0 +1,58 @@
+111 joined pairs
+
+Shift of OUR render (toe - baseline), display EV:
+         p05       p25       p50       p75       p95
+  median      -0.17     -0.03     -0.00     +0.00     +0.00
+  mean        -0.20     -0.07     -0.02     +0.00     +0.01
+  min         -1.13     -0.77     -0.56     -0.25     -0.04
+  max         -0.02     +0.04     +0.07     +0.08     +0.13
+
+|ours - camera| median, baseline -> toe:
+  p05: 0.74 -> 0.69
+  p25: 0.41 -> 0.40
+  p50: 0.14 -> 0.13
+  p75: 0.23 -> 0.23
+  p95: 0.28 -> 0.28
+
+Signed (ours - camera) median, baseline -> toe:
+  p05: +0.44 -> +0.26
+  p25: +0.27 -> +0.24
+  p50: -0.01 -> -0.01
+  p75: -0.15 -> -0.15
+  p95: -0.22 -> -0.22
+
+Largest p05 moves (toe - baseline):
+  raw_3rd_batch/_DSC1253: -1.13
+  indoor_tungsten/_DSC1327: -0.67
+  indoor_tungsten/_DSC1326: -0.53
+  indoor_tungsten/_DSC1325: -0.46
+  indoor_tungsten/_DSC1324: -0.45
+  raw_3rd_batch/_DSC1275: -0.41
+  raw_3rd_batch/_DSC1276: -0.39
+  raw_3rd_batch/20260729_115256: -0.39
+
+Frames further from camera by > 0.15 EV at any percentile:
+  raw_3rd_batch/20260729_115256 p05: |d| 0.20 -> 0.59  (class=low_key, lls=0.00)
+  raw_3rd_batch/20260729_115936 p05: |d| 0.67 -> 0.88  (class=normal, lls=0.00)
+  raw_3rd_batch/20260729_120739 p05: |d| 1.27 -> 1.59  (class=high_key, lls=0.00)
+  raw_3rd_batch/20260729_120741 p05: |d| 0.78 -> 1.14  (class=high_key, lls=0.00)
+  raw_3rd_batch/20260729_121459 p05: |d| 0.86 -> 1.04  (class=normal, lls=0.00)
+  raw_3rd_batch/20260729_121501 p05: |d| 1.01 -> 1.18  (class=normal, lls=0.00)
+  raw_3rd_batch/20260729_144236 p05: |d| 1.08 -> 1.28  (class=normal, lls=0.00)
+  raw_3rd_batch/20260729_144859 p05: |d| 0.40 -> 0.76  (class=normal, lls=0.00)
+  raw_3rd_batch/20260729_155636 p05: |d| 0.24 -> 0.39  (class=normal, lls=0.00)
+  raw_3rd_batch/_DSC1251 p05: |d| 0.29 -> 0.47  (class=high_dynamic_range, lls=0.72)
+  raw_3rd_batch/_DSC1253 p05: |d| 1.13 -> 2.26  (class=high_dynamic_range, lls=1.00)
+  raw_3rd_batch/_DSC1253 p25: |d| 1.63 -> 2.40  (class=high_dynamic_range, lls=1.00)
+  raw_3rd_batch/_DSC1253 p50: |d| 2.36 -> 2.93  (class=high_dynamic_range, lls=1.00)
+  raw_3rd_batch/_DSC1253 p75: |d| 3.42 -> 3.67  (class=high_dynamic_range, lls=1.00)
+  raw_3rd_batch/_DSC1270 p05: |d| 0.02 -> 0.23  (class=normal, lls=0.00)
+  raw_better/20260728_114302 p05: |d| 0.26 -> 0.43  (class=normal, lls=0.00)
+  raw_better/20260728_114339 p05: |d| 1.29 -> 1.52  (class=high_key, lls=0.00)
+  raw_better/20260728_114354 p05: |d| 1.16 -> 1.45  (class=high_key, lls=0.00)
+  raw_better/20260728_114421 p05: |d| 0.54 -> 0.70  (class=normal, lls=0.00)
+  raw_better/20260728_114510 p05: |d| 1.03 -> 1.22  (class=normal, lls=0.00)
+  raw_better/20260728_114518 p05: |d| 0.36 -> 0.70  (class=normal, lls=0.00)
+  raw_better/20260728_114537 p05: |d| 0.21 -> 0.45  (class=normal, lls=0.00)
+  raw_better/20260728_114612 p05: |d| 0.35 -> 0.59  (class=normal, lls=0.00)
+  total: 23

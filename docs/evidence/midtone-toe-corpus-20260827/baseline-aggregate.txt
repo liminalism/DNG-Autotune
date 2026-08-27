@@ -1,0 +1,113 @@
+
+ALL PAIRS  (n=111)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +0.44     +0.27     -0.01     -0.15     -0.22
+  mean        +0.50     +0.29     +0.03     -0.12     -0.18
+  p10         -0.80     -0.53     -0.52     -0.61     -0.95
+  p90         +1.33     +1.01     +0.39     +0.34     +0.27
+
+set arw_better  (n=13)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +0.98     +0.36     -0.04     -0.15     -0.27
+  mean        +0.83     +0.40     -0.03     -0.18     -0.26
+  p10         +0.25     +0.12     -0.10     -0.43     -0.51
+  p90         +1.32     +0.72     +0.03     +0.02     +0.12
+
+set indoor_tungsten  (n=9)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +1.40     +1.01     +0.17     -0.13     -1.00
+  mean        +1.56     +1.18     +0.45     -0.18     -0.92
+  p10         +1.05     +0.80     +0.05     -0.82     -1.27
+  p90         +2.43     +1.59     +1.16     +0.45     -0.34
+
+set raw_3rd_batch  (n=56)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +0.56     +0.34     -0.00     -0.20     -0.26
+  mean        +0.59     +0.32     +0.05     -0.13     -0.12
+  p10         -0.82     -0.63     -0.59     -0.92     -0.83
+  p90         +1.29     +1.05     +0.53     +0.51     +0.45
+
+set raw_backlit  (n=4)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +0.72     +0.39     +0.12     +0.01     -0.05
+  mean        +0.68     +0.51     +0.12     -0.02     -0.05
+  p10         +0.34     +0.29     +0.05     -0.17     -0.22
+  p90         +0.97     +0.82     +0.18     +0.09     +0.13
+
+set raw_better  (n=21)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      -0.36     -0.26     -0.22     -0.14     -0.11
+  mean        -0.43     -0.23     -0.19     -0.14     -0.13
+  p10         -1.03     -0.82     -0.52     -0.48     -0.37
+  p90         +0.11     +0.33     +0.29     +0.22     +0.10
+
+set raw_extremely_bright  (n=8)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +0.36     +0.13     -0.02     +0.07     +0.14
+  mean        +0.44     +0.12     -0.02     +0.09     +0.16
+  p10         +0.05     -0.02     -0.08     -0.01     +0.07
+  p90         +0.95     +0.24     +0.05     +0.19     +0.27
+
+class flat  (n=1)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      -0.25     -0.19     -0.22     -0.26     -0.28
+  mean        -0.25     -0.19     -0.22     -0.26     -0.28
+  p10         -0.25     -0.19     -0.22     -0.26     -0.28
+  p90         -0.25     -0.19     -0.22     -0.26     -0.28
+
+class high_dynamic_range  (n=13)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +1.15     +0.79     +0.16     -0.41     -0.95
+  mean        +1.18     +0.77     +0.30     -0.37     -0.61
+  p10         -0.21     -0.52     -0.97     -1.46     -1.51
+  p90         +2.47     +1.99     +1.42     +0.99     +0.13
+
+class high_key  (n=15)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +0.88     +0.13     -0.06     -0.05     +0.08
+  mean        +0.34     +0.09     -0.14     -0.06     +0.03
+  p10         -1.23     -0.81     -0.47     -0.29     -0.33
+  p90         +1.37     +0.75     +0.11     +0.19     +0.26
+
+class low_key  (n=6)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +0.02     +0.22     +0.12     +0.07     -0.27
+  mean        +0.02     +0.18     +0.08     +0.08     -0.27
+  p10         -0.68     -0.36     -0.24     -0.31     -0.55
+  p90         +0.73     +0.69     +0.36     +0.48     +0.00
+
+class normal  (n=76)
+         p05       p25       p50       p75       p95   (ours - camera, display EV)
+  median      +0.37     +0.26     -0.01     -0.17     -0.22
+  mean        +0.46     +0.26     +0.01     -0.11     -0.14
+  p10         -0.64     -0.47     -0.50     -0.55     -0.57
+  p90         +1.18     +0.83     +0.29     +0.31     +0.32
+
+Correlation of dEV with analyzer fields (Pearson r, n where field present):
+  measured_dynamic_range_ev    vs d(p05): r=+0.31 (n=111)
+  measured_dynamic_range_ev    vs d(p50): r=+0.20 (n=111)
+  measured_dynamic_range_ev    vs d(p95): r=-0.31 (n=111)
+  key_score                    vs d(p05): r=+0.01 (n=111)
+  key_score                    vs d(p50): r=-0.05 (n=111)
+  key_score                    vs d(p95): r=+0.21 (n=111)
+  low_light_score              vs d(p05): r=+0.11 (n=111)
+  low_light_score              vs d(p50): r=-0.03 (n=111)
+  low_light_score              vs d(p95): r=-0.57 (n=111)
+  center_median_ev             vs d(p05): r=-0.61 (n=111)
+  center_median_ev             vs d(p50): r=-0.72 (n=111)
+  center_median_ev             vs d(p95): r=-0.30 (n=111)
+  near_white_fraction          vs d(p05): r=+0.03 (n=111)
+  near_white_fraction          vs d(p50): r=-0.15 (n=111)
+  near_white_fraction          vs d(p95): r=-0.22 (n=111)
+
+Largest |d p50_ev| frames:
+  raw_3rd_batch/_DSC1276       p05+11.31 p25+3.84 p50+3.18 p75+3.23 p95+3.16  class=normal lls=0.00
+  raw_3rd_batch/_DSC1275       p05+3.12 p25+2.91 p50+3.09 p75+3.02 p95+2.88  class=high_dynamic_range lls=0.00
+  raw_3rd_batch/_DSC1253       p05-1.13 p25-1.63 p50-2.36 p75-3.42 p95-1.54  class=high_dynamic_range lls=1.00
+  raw_3rd_batch/_DSC1277       p05+2.23 p25+2.09 p50+2.33 p75+2.34 p95+1.85  class=normal lls=0.00
+  raw_3rd_batch/_DSC1278       p05+1.79 p25+1.92 p50+2.09 p75+2.06 p95+1.51  class=normal lls=0.00
+  indoor_tungsten/_DSC1324       p05+2.48 p25+2.10 p50+1.51 p75+1.16 p95-1.11  class=high_dynamic_range lls=1.00
+  raw_3rd_batch/_DSC1257       p05+1.67 p25+1.55 p50+1.09 p75-0.61 p95-0.99  class=high_dynamic_range lls=1.00
+  raw_3rd_batch/_DSC1251       p05-0.29 p25-0.62 p50-1.08 p75-1.26 p95-0.52  class=high_dynamic_range lls=0.72
+  indoor_tungsten/_DSC1327       p05+2.42 p25+1.46 p50+1.07 p75-0.00 p95-1.00  class=high_dynamic_range lls=0.01
+  raw_3rd_batch/20260729_144425 p05-0.83 p25-0.73 p50-0.89 p75-0.75 p95-0.31  class=normal lls=0.00

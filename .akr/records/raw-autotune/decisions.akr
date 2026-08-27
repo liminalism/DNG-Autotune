@@ -122,6 +122,20 @@ record raw-autotune.decision.key-decisions/1 : decision {
     }
 }
 
+record raw-autotune.decision.midtone-and-shadow-placement-stays/1 : decision {
+    title "The view transform's midtone and shadow placement stays; no added contrast ships"
+    state active
+    scope [ path "src/analyze.rs", path "src/tone.rs" ]
+    decision """
+        Keep the current curve placement. The corpus measurement answered the work item's question: against the paired camera JPEGs the midtone placement already matches (median dEV(p50) -0.01 EV over 111 pairs), and the one systematic deviation below middle grey - a +0.44 EV shadow-toe lift on Sony frames - is bimodal across the corpus, so the only global lever (black_output_linear, whose halving was implemented and corpus-gated) trades a marginal median improvement for regressions on exactly the frames the work item said must not be crushed: night, low-key and Samsung pairs that already sit at or below the camera's toe.
+
+        The retained shadow detail relative to the camera's harder crush is deliberate archival behaviour, and the camera JPEG is a reference, not ground truth: Sony's toe treatment is scene-adaptive (DRO), and emulating a vendor's adaptive look per scene is out of scope. The highlight-end shortfall (-0.22 EV at p95) is the already-recorded white-shoulder divergence and is governed by decision.faithful-blue-violet-sky-over-camera-white-shoulder.
+
+        Consequence: black_output_linear keeps its values; any future toe change must come with per-scene evidence stronger than a vendor comparison, through the full default-affecting gate.
+        """
+    supported_by [ @raw-autotune.evidence.midtone-toe-corpus-20260827 ]
+}
+
 record raw-autotune.decision.near-whiteness-replaces-chromaticity-solve/1 : decision {
     title "Highlight continuity comes from a near-whiteness weight, not a chromaticity prior"
     state withdrawn

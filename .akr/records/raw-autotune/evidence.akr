@@ -1017,6 +1017,16 @@ record raw-autotune.evidence.lege-gpu-adapter-skip-tests/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.midtone-toe-corpus-20260827/1 : evidence {
+    title "111-pair corpus: midtones match the camera; the toe deficit is bimodal and a global black cannot close it"
+    state verified
+    result pass
+    method command
+    observed_at git:4a877fbc8395ab5d6b16c5ead9d2a1df3b353028
+    command "python3 docs/evidence/midtone-toe-corpus-20260827/compare_percentiles.py renders && python3 docs/evidence/midtone-toe-corpus-20260827/aggregate.py renders-percentiles.json && python3 docs/evidence/midtone-toe-corpus-20260827/ab_eval.py"
+    summary "Across 111 RAW+camera-JPEG pairs the median dEV(p50) is -0.01 EV, refuting the entry hypothesis of a ~2x midtone lift, which came from Windows Photo Viewer rendering the same files far darker than the camera itself. The systematic deviations are a +0.44 EV median shadow-toe lift on Sony sets (Samsung inverts the sign) and -0.22 EV at p95 (the recorded white-shoulder divergence). Halving black_output_linear to 0.0006 moved only the toe (p05 -0.17 EV median, p50/p95 unchanged) but pushed 21 already-matched-or-darker frames further from the camera, including night frame _DSC1253 across four percentiles; median absolute toe error improved only 0.74 to 0.69 EV. Full tables, A/B sheet and measurement code in docs/evidence/midtone-toe-corpus-20260827/."
+}
+
 record raw-autotune.evidence.mobileone-lege-gpu-cpu-probe/1 : evidence {
     title "Reparameterized MobileOne-S0 prepared as scene_image 1x3x224x224. CPU session returned logits [1,1000]. Recorded as an ImageNet backbone, not SceneScores."
     state verified

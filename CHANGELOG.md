@@ -2,6 +2,29 @@
 
 ## Unreleased — a standalone front-end
 
+### Midtone/shadow contrast measured against 111 camera pairs — no change ships
+
+The standing "our curve sits ~2× above reference renderers below the
+highlight end" hypothesis (from a Windows Photo Viewer comparison of
+_DSC1289) was resolved by measuring both renderings of 111 RAW+JPEG
+pairs across six sets with one code path. Against the paired **camera
+JPEGs** — the reference the regression gate names — the midtone lift
+does not exist: median dEV(p50) is −0.01 EV, and on _DSC1289 itself our
+p50 is 92 vs the camera's 89 (WPV renders it at 49). What is systematic
+is a +0.44 EV shadow-toe lift on Sony sets (the camera crushes deep
+shadows harder; the Samsung phone JPEG inverts the sign) and −0.22 EV at
+p95, the already-recorded white-shoulder divergence. The one global
+lever — `black_output_linear`, set by eye in the initial commit — was
+halved and corpus-gated: it moves only the toe (p05 −0.17 EV median,
+p50/p95 untouched) but pushes 21 already-matched-or-darker frames
+further from the camera, night frame _DSC1253 across four percentiles.
+Decision: keep the current placement; the retained shadow detail is
+deliberate archival behaviour and Sony's toe treatment is scene-adaptive
+vendor tone. Evidence, A/B sheet and measurement code in
+`docs/evidence/midtone-toe-corpus-20260827/`; ledger records
+`evidence.midtone-toe-corpus-20260827` and
+`decision.midtone-and-shadow-placement-stays`. No pixel moves.
+
 ### Harmonic highlight fix: the support blend's base is neutralized like its target — `archive-auto-v8`
 
 Sibling of the v7 fix below, found by probing the residual pink patch in

@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:4f97646d21ff677124f6da312b62d3c7c8637b5ad3b4fd8ba45e01c38b4b87d2"
+    source_graph "sha256:e1eba1a54214815ea388f2ef966ddc84e5f465f2f5590d25f5ce6ed571d9f10d"
 }
 
 source ".akr/project.akr" {
@@ -19,13 +19,13 @@ source ".akr/records/raw-autotune/assessments.akr" {
 }
 
 source ".akr/records/raw-autotune/decisions.akr" {
-    hash "sha256:18f8be9a269e5f230da16a2222d95fcf9ec2c43eeb78d76cfbdbc3a2f75e976e"
-    records 11
+    hash "sha256:e6210808acac157f77a526aac4b2c49db760cf7f44304bf3e71a964b85061a4d"
+    records 12
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:12e431d3ff72c07bad67c519da0797c1da8f9f91c5ac0062d0eacd3cc2e83717"
-    records 176
+    hash "sha256:8dcf25d18fa5e8c96c156a727bdd074fd706d4a48b2ce8dd32185cd532b99558"
+    records 177
 }
 
 source ".akr/records/raw-autotune/observations.akr" {
@@ -54,8 +54,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:5a58ed5f4bce1dfc7ff7797420a09c8f340c2a17cb364b4811b4128ea2ae2254"
-    records 59
+    hash "sha256:f61ddff1f990bfa870b184423db739ab3cd179a0d7471e5af1d8b746d87d63c9"
+    records 60
 }
 
 resolution @raw-autotune.assessment.scene-evidence-usefulness/3 {
@@ -116,6 +116,12 @@ resolution @raw-autotune.decision.highlight-desaturation-uses-peak-preserving-wh
     slot supported_by
     to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/2
     hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
+}
+
+resolution @raw-autotune.decision.midtone-and-shadow-placement-stays/1 {
+    slot supported_by
+    to @raw-autotune.evidence.midtone-toe-corpus-20260827/1
+    hash "sha256:888d3c03cc08a799dff8bd8846305466ccfdfae9201b510160cf8a5bd2c99d0b"
 }
 
 resolution @raw-autotune.decision.profile-experiments-remain-opt-in/1 {
@@ -320,6 +326,12 @@ resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
     slot implements
     to @raw-autotune.decision.scene-perception-uses-lege-gpu-prepared-graphs/1
     hash "sha256:2c866fb307728b486077116bd9304dd45bcf3d9a3e65523c633377926ec468e5"
+}
+
+resolution @raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/2 {
+    slot verified_by
+    to @raw-autotune.evidence.midtone-toe-corpus-20260827/1
+    hash "sha256:888d3c03cc08a799dff8bd8846305466ccfdfae9201b510160cf8a5bd2c99d0b"
 }
 
 resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
@@ -538,6 +550,11 @@ seal @raw-autotune.decision.highlight-desaturation-uses-peak-preserving-white-pa
 seal @raw-autotune.decision.key-decisions/1 {
     state withdrawn
     hash "sha256:06e2d81deba889f7dfa434fe88c70b917957e73230eb1cb899aad7c31992fd62"
+}
+
+seal @raw-autotune.decision.midtone-and-shadow-placement-stays/1 {
+    state active
+    hash "sha256:31882277aff7dae6b979a476c1d869832ef755ee256d846f116774046ab772e5"
 }
 
 seal @raw-autotune.decision.near-whiteness-replaces-chromaticity-solve/1 {
@@ -928,6 +945,11 @@ seal @raw-autotune.evidence.lavender-cast-is-faithful-rendering-20260827/1 {
 seal @raw-autotune.evidence.lege-gpu-adapter-skip-tests/1 {
     state verified
     hash "sha256:13d7d3986009cdcec595fb3ee4c5190e53e190bb8aec719a1c5f6f6f356c1744"
+}
+
+seal @raw-autotune.evidence.midtone-toe-corpus-20260827/1 {
+    state verified
+    hash "sha256:888d3c03cc08a799dff8bd8846305466ccfdfae9201b510160cf8a5bd2c99d0b"
 }
 
 seal @raw-autotune.evidence.mobileone-lege-gpu-cpu-probe/1 {
@@ -1936,8 +1958,13 @@ seal @raw-autotune.work.lege-gpu-onnx-session/1 {
 }
 
 seal @raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/1 {
-    state active
-    hash "sha256:7ef105dc63eed185c1d4816629ac3e7024924da93ba4740e801772b221ebe2e2"
+    state superseded
+    hash "sha256:7b4c663453d537f34c64281edd82593a238189999b7daa477e70765c47fec114"
+}
+
+seal @raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/2 {
+    state completed
+    hash "sha256:09001911d20d026b191b1522959fa95e3b2bb390e255520528ea6f18d99b445e"
 }
 
 seal @raw-autotune.work.night-low-light-rendering/1 {

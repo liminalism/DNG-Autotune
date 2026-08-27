@@ -650,7 +650,7 @@ record raw-autotune.work.lege-gpu-onnx-session/1 : work {
 
 record raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/1 : work {
     title "Midtone/shadow contrast: why our curve sits ~2x above reference renderers below the highlight end"
-    state active
+    state superseded
     scope [ path "src/analyze.rs", path "src/tone.rs" ]
     intent """
         Decide whether the view transform's midtone and shadow placement should carry more contrast, using _DSC1289 as the entry case and the full corpus as the gate. This is a default-affecting tone question, deliberately separated from the highlight chromaticity work, which is opt-in and cannot move unattended output.
@@ -666,6 +666,29 @@ record raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/1 : 
         First steps when picked up. Reproduce the percentile comparison across the paired-JPEG corpus, not just _DSC1289, and establish whether the ~2x midtone lift is systematic or specific to high-dynamic-range backlit scenes. If systematic, the question is the curve's shadow placement; if scene-dependent, it is the analyzer's target/contrast selection for this tonal class. Only then propose a change.
         """
     derived_from [ @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 ]
+}
+
+record raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/2 : work {
+    title "Midtone/shadow contrast: why our curve sits ~2x above reference renderers below the highlight end"
+    state completed
+    scope [ path "src/analyze.rs", path "src/tone.rs" ]
+    intent """
+        Decide whether the view transform's midtone and shadow placement should carry more contrast, using _DSC1289 as the entry case and the full corpus as the gate. This is a default-affecting tone question, deliberately separated from the highlight chromaticity work, which is opt-in and cannot move unattended output.
+
+        Entry observation. On _DSC1289 the rendered highlight end matches Windows Photo Viewer's render of the same ARW within 2 percent (p95 210.5 against 214.9) while every lower percentile sits about twice as high (p50 92.1 against 49.4, p25 57.9 against 29.3, p05 29.4 against 14.3). The visible consequence the user reported is that genuine veiling flare around sky-backlit foliage becomes conspicuous: the flare itself is in the capture and is relatively weaker than Windows' (near/far 1.144 against 1.172), but our lifted midtones put it on display.
+
+        What is already ruled out. Not highlight reconstruction, sharpening, or chroma denoise: each was ablated and the near/far foliage gradient was unchanged. Not the automatic exposure: sidecar target_median_ev -0.23569 agrees with the embedded preview oracle's center_weighted_key_display_ev -0.27450 to 0.04 EV, so the camera would place the subject where we place it. Do not re-open either without new evidence.
+
+        Where the mechanism lives. src/tone.rs owns the hue-preserving, middle-gray-anchored view transform; the per-frame parameters recorded for this file are black_input_ev -3.85744, white_input_ev 4.79819, black_output_ev -7.22882, white_output_ev 2.45213, exposure_ev 1.03732, with analysis key_score -0.28211, tonal_class normal, measured_dynamic_range_ev 7.85563, center_median_ev -1.02991. The shadow rolloff and the input-to-output EV mapping are the levers; exposure_ev is not.
+
+        Why this needs care, not a quick fix. The curve is the product's look and applies to every frame by default, so CLAUDE.md's regression gate applies in full: a --dry-run --summary field-by-field diff over the corpus, cargo test --release, clippy, and --jobs 8 determinism. Any change must be justified against paired camera JPEGs across the corpus rather than one backlit frame, because more contrast will crush shadow detail on night and interior frames where the current placement was paired-validated. Windows Photo Viewer is a reference point, not ground truth: it is one vendor's aesthetic, and the project already records that camera JPEGs include creative rendering.
+
+        First steps when picked up. Reproduce the percentile comparison across the paired-JPEG corpus, not just _DSC1289, and establish whether the ~2x midtone lift is systematic or specific to high-dynamic-range backlit scenes. If systematic, the question is the curve's shadow placement; if scene-dependent, it is the analyzer's target/contrast selection for this tonal class. Only then propose a change.
+        """
+    note "Completed 2026-08-27: the entry hypothesis was refuted against the paired camera JPEGs (median dEV(p50) -0.01 EV, n=111); the systematic toe deficit was measured, the black_output_linear lever was implemented and corpus-gated, and the measured decision is to keep the current placement. See docs/evidence/midtone-toe-corpus-20260827/."
+    derived_from [ @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 ]
+    supersedes [ @raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers/1 ]
+    verified_by [ @raw-autotune.evidence.midtone-toe-corpus-20260827 ]
 }
 
 record raw-autotune.work.night-low-light-rendering/1 : work {
