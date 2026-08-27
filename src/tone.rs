@@ -40,6 +40,16 @@ fn to_u16(value: f32) -> u16 {
 /// `highlight_norm == 1.0` cannot clip.
 const HIGHLIGHT_NORM_RAMP: f32 = 0.5;
 
+/// How far a near-white *measured* highlight travels toward white at the top of
+/// the display range. See the comment at its use in [`render_pixel_local`].
+///
+/// This is a constant rather than a `ToneParams` field on purpose: it is not a
+/// look, it is what the renderer does with a hue it knows was not measured, so
+/// `neutral`'s documented promise to add no chroma opinion is not in tension
+/// with it. The rule is inert wherever nothing reached the sensor's clip point,
+/// which is most of most frames.
+const CLIPPED_HIGHLIGHT_WHITE: f32 = 1.0;
+
 /// Hermite ramp on `[0, 1]`, clamped outside.
 #[inline]
 fn smoothstep(t: f32) -> f32 {
@@ -528,9 +538,35 @@ fn render_pixel_stages(
     // removes a recorded blue/lavender strip beside a reconstructed near-white
     // region without inventing a spatial halo or collapsing the region onto its
     // much lower luminance.
+    // Near-white *measured* highlights take the same path to white, but driven
+    // by raw clip evidence rather than by display brightness.
+    //
+    // `highlight_desaturation` alone cannot separate the two populations this
+    // has to tell apart, because they sit at the same place on the display
+    // curve. A deep blue sky and a blown hazy one both land their brightest
+    // channel at the white point, so any shoulder strong enough to whiten the
+    // second washes out the first: raising `highlight_desaturation` from 0.16 to
+    // 0.80 took `_DSC1289`'s sky green deficit from 27.1% to 5.0%, and in the
+    // same run took `_DSC1262`'s — a real blue sky the camera itself renders at
+    // 47.7% — from 43.6% down to 20.6%. A steeper ramp does not help; the two
+    // populations overlap in `normalized_highlight`, not in clip state.
+    //
+    // Clip state separates them exactly. Over the same sky window, 57-92% of
+    // `_DSC1288/1289/1290`'s green sites are at the sensor's clip point and a
+    // quarter to two thirds of the blue ones are, while `_DSC1262`, `_DSC1265`,
+    // `_DSC1249` and `_DSC1276` have none at all. Where two channels are at the
+    // clip point the pixel's chromaticity is an artefact of *which channel
+    // saturated first*, not a measurement of the scene, and white is the honest
+    // answer; where nothing clipped, this term is exactly zero and the frame
+    // renders as it did before.
+    let clipped_white_mix = (CLIPPED_HIGHLIGHT_WHITE
+        * crate::highlight::near_whiteness_from_uncertainty(reconstruction_uncertainty)
+        * normalized_highlight)
+        .clamp(0.0, 1.0);
+    let white_mix = highlight_white_mix.max(clipped_white_mix);
     let white_anchor = rgb[0].max(rgb[1]).max(rgb[2]);
     for channel in &mut rgb {
-        *channel += (white_anchor - *channel) * highlight_white_mix;
+        *channel += (white_anchor - *channel) * white_mix;
     }
 
     let gamut_anchor = luminance(rgb).clamp(params.black_output_linear, 1.0);

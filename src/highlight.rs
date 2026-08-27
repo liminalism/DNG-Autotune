@@ -228,6 +228,25 @@ pub fn synthesis_gate(uncertainty: f32) -> f32 {
     (r * (0.75 + 0.25 * u)).clamp(0.0, 1.0)
 }
 
+/// [`near_whiteness`], recovered from the same scalar uncertainty map.
+///
+/// The map stores the *mean* of the three per-channel clip confidences, so one
+/// fully clipped channel lands at `u = 1/3` and two at `u = 2/3`. `3u - 1`,
+/// clamped, reproduces `near_whiteness`'s fixed points exactly on that line: 0
+/// while at most one channel is at the clip point — a genuinely coloured
+/// highlight, whose two survivors still define a real hue — and 1 once a second
+/// one is, which is where the pixel's hue stops being a measurement.
+///
+/// This is deliberately *not* [`synthesis_gate`]: that gate answers "was any of
+/// this pixel invented?" and reaches 0.83 with a single clipped channel, which
+/// is the right question for withholding a chroma *boost* but far too eager for
+/// anything that drives a pixel toward white. A sunset whose red channel alone
+/// is clipped must keep its colour.
+#[inline]
+pub fn near_whiteness_from_uncertainty(uncertainty: f32) -> f32 {
+    (3.0 * uncertainty.clamp(0.0, 1.0) - 1.0).clamp(0.0, 1.0)
+}
+
 /// Clipped-channel count at or above which a pixel is reported as near-white.
 ///
 /// Two is the threshold because two clipped channels are already enough to
