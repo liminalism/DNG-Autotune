@@ -5,7 +5,7 @@ build {
     tool "akr 0.4.0"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:aa23b9cf3a8d0718ecb83a3337409c1e0ade57fed8e6cd7ae8c43e61e66d266f"
+    source_graph "sha256:d66b7ed21ca8cf5daf5def2e1a02aaf42837b34c48115019352f586e2441f7da"
 }
 
 source ".akr/project.akr" {
@@ -24,18 +24,18 @@ source ".akr/records/raw-autotune/decisions.akr" {
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:d6ea7eda1e139b2abe00027d2ae02429fe3d170dbee4abdb00956f6b962ce06d"
-    records 186
+    hash "sha256:f4def7a904d5accb6c0f69547a0ded3d62ee2e5dade191e71d101008e4a00718"
+    records 187
 }
 
 source ".akr/records/raw-autotune/observations.akr" {
-    hash "sha256:eb831cca1656def8d06258380263eb1017e03fd28851d48fafd3bfe3784ed06d"
-    records 11
+    hash "sha256:2abd0b96d0fa76ceab95681e9d72f3960c5d05f5956892db04577f108a1a1bec"
+    records 12
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
-    hash "sha256:0ee10dfe8040a5c7228462c18f1ef8114fa7b7789b3d16814d35021d7f32032f"
-    records 65
+    hash "sha256:a67e14b922e5c50c52f79a35eefbbac2143c6963ca6a4a7071f2d4f8369dbbbf"
+    records 66
 }
 
 source ".akr/records/raw-autotune/policies.akr" {
@@ -120,8 +120,8 @@ resolution @raw-autotune.decision.harmonic-highlight-is-automatic/1 {
 
 resolution @raw-autotune.decision.highlight-desaturation-uses-peak-preserving-white-path/1 {
     slot supported_by
-    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/2
-    hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
+    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/3
+    hash "sha256:f95210e34b95ff20c3de58625b927757ef8644151bc48e2b0b79cc1964d52f60"
 }
 
 resolution @raw-autotune.decision.indoor-actionable-does-not-enable-local-wb/1 {
@@ -298,6 +298,18 @@ resolution @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-f
     hash "sha256:1497052cb96652af312583ab4be416f4e528a7fd872260074e740b83d3f03133"
 }
 
+resolution @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4 {
+    slot verified_by
+    to @raw-autotune.evidence.harmonic-neutral-fallback-20260827/2
+    hash "sha256:1497052cb96652af312583ab4be416f4e528a7fd872260074e740b83d3f03133"
+}
+
+resolution @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4 {
+    slot verified_by
+    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/3
+    hash "sha256:f95210e34b95ff20c3de58625b927757ef8644151bc48e2b0b79cc1964d52f60"
+}
+
 resolution @raw-autotune.question.deleted-chroma-hull-clamp/1 {
     slot derived_from
     to @raw-autotune.requirement.slice-5-continuous-log-chromaticity/1
@@ -384,26 +396,26 @@ resolution @raw-autotune.question.unfitted-partial-cell-floor/2 {
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/2 {
     slot derived_from
-    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
-    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4
+    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
 }
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/3 {
     slot derived_from
-    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
-    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4
+    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
 }
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/4 {
     slot derived_from
-    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
-    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4
+    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
 }
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 {
     slot derived_from
-    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
-    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4
+    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
 }
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 {
@@ -648,8 +660,8 @@ resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 {
 
 resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 {
     slot verified_by
-    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/2
-    hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
+    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/3
+    hash "sha256:f95210e34b95ff20c3de58625b927757ef8644151bc48e2b0b79cc1964d52f60"
 }
 
 resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7 {
@@ -660,8 +672,8 @@ resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7 {
 
 resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7 {
     slot verified_by
-    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/2
-    hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
+    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/3
+    hash "sha256:f95210e34b95ff20c3de58625b927757ef8644151bc48e2b0b79cc1964d52f60"
 }
 
 resolution @raw-autotune.work.train-camsdd-scene-classifier/1 {
@@ -1554,8 +1566,13 @@ seal @raw-autotune.evidence.sky-stage-attribution-20260816-r2/1 {
 }
 
 seal @raw-autotune.evidence.sky-stage-attribution-20260816-r2/2 {
+    state superseded
+    hash "sha256:ff034f4f5efd1d08c2586ed4da12e4408f7835e649e0a6fc2dabc3bd0c953dd1"
+}
+
+seal @raw-autotune.evidence.sky-stage-attribution-20260816-r2/3 {
     state verified
-    hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
+    hash "sha256:f95210e34b95ff20c3de58625b927757ef8644151bc48e2b0b79cc1964d52f60"
 }
 
 seal @raw-autotune.evidence.slice-1-diagnostic-dumps-verify/1 {
@@ -1759,8 +1776,13 @@ seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage
 }
 
 seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3 {
+    state superseded
+    hash "sha256:a3236d5f4d9027c14d33d063c989453201351b69efefb6b508e6e6cb9be4a474"
+}
+
+seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4 {
     state verified
-    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
 }
 
 seal @raw-autotune.papercut.a-chained-focused-test-build-command-exceeded/1 {
@@ -1956,6 +1978,11 @@ seal @raw-autotune.papercut.pdftotext-poppler-not-installed-on-this-windows/1 {
 seal @raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp/1 {
     state verified
     hash "sha256:c0067b95fc86fdcd14a8bd26cf374b5b78935b60cdba1741f8c49b499f3a14dc"
+}
+
+seal @raw-autotune.papercut.refreshing-the-retained-sky-stage-evaluation-on/1 {
+    state verified
+    hash "sha256:12c8a38da8e3100cf2ec60f50e247f102b7bd663f1a22866eeac183943934f30"
 }
 
 seal @raw-autotune.papercut.rtx-4060-wgpu-on-linux-is-currently-unusable/1 {

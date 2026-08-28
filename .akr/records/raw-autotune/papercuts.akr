@@ -441,6 +441,17 @@ record raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp/1 : pap
     created_at 2026-08-08
 }
 
+record raw-autotune.papercut.refreshing-the-retained-sky-stage-evaluation-on/1 : papercut {
+    title "Refreshing the retained sky-stage evaluation on Linux failed because…"
+    state verified
+    statement """
+        Refreshing the retained sky-stage evaluation on Linux failed because evaluate_sky_stages.py selected target/release/examples/probe-png16.exe, a Windows binary, and got Exec format error. Probe selection should prefer the host-native executable or validate it before launch.
+        """
+    observed_at git:ebe3125f684fe47c0711bfb513580717a741f31e
+    author "codex"
+    created_at 2026-08-28
+}
+
 record raw-autotune.papercut.rtx-4060-wgpu-on-linux-is-currently-unusable/1 : papercut {
     title "RTX 4060 wgpu on Linux is currently unusable; scene inference stays on…"
     state verified
