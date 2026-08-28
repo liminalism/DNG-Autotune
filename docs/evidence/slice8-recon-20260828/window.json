@@ -1,0 +1,29 @@
+{
+  "bright": "raw/raw_backlit2/_DSC1349.ARW",
+  "dark": "raw/raw_backlit2/_DSC1348.ARW",
+  "ev_scale": 3.35,
+  "shift": [
+    0,
+    0
+  ],
+  "reconstructed_pixels": 462590,
+  "usable": 462590,
+  "on": {
+    "n": 462590,
+    "chroma_rmse": 0.039259087557040794,
+    "chroma_p50": 0.024919485673308372,
+    "chroma_p90": 0.06324069574475288,
+    "hue_p90_deg": 142.2094289351112,
+    "chroma_mean": 0.047933676138563225,
+    "chroma_gt_mean": 0.0340718140207058
+  },
+  "off": {
+    "n": 462590,
+    "chroma_rmse": 0.17746999068091254,
+    "chroma_p50": 0.08598847687244415,
+    "chroma_p90": 0.3252110853791237,
+    "hue_p90_deg": 169.92036700168836,
+    "chroma_mean": 0.15895105377299243,
+    "chroma_gt_mean": 0.0340718140207058
+  }
+}

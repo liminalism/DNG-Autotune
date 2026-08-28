@@ -113,7 +113,7 @@ record raw-autotune.question.grid-valid-mean-confidence/2 : question {
 
 record raw-autotune.question.memory-planner-cannot-use-the-spatial-floor/1 : question {
     title "The --jobs planner still reserves worst-case harmonic memory the floor often does not spend"
-    state open
+    state superseded
     question """
         The memory planner cannot see the spatial highlight floor. Should it be able to?
 
@@ -123,6 +123,41 @@ record raw-autotune.question.memory-planner-cannot-use-the-spatial-floor/1 : que
 
         This is the concrete residue of the "overall memory usage needs tuning" item on the raw-autotune side: the wall-clock half was addressed by the floor, the planner half was not.
         """
+}
+
+record raw-autotune.question.memory-planner-cannot-use-the-spatial-floor/2 : question {
+    title "Planner keeps CFA worst-case reserve; LinearRaw no longer pays harmonic"
+    state resolved
+    question """
+        The memory planner cannot see the spatial highlight floor. Should it be able to?
+
+        memory.rs sizes --jobs from a per-pixel reserve, and HighlightMethod::Harmonic contributes 64 bytes per pixel on top of the base. That reserve is chosen before any file is decoded, so the planner cannot know which frames will decline the solve. Peak RSS falls in practice on a clean batch — measured 2,749,016 KB to 2,701,532 KB on a 29-frame Sony sample — but the planned worker count does not change at all, so on a clean batch the program still under-parallelises against the memory it actually uses.
+
+        Three options, none costed. Reserve the Current figure and grow the pool when a frame turns out to need the solver, which breaks the current guarantee that a plan cannot be exceeded. Probe the clipped-site fraction from headers or a decimated decode before planning, which costs a partial decode per file. Or accept the worst-case reserve as the price of the determinism and memory-safety guarantees, which is the current answer and may well be the right one.
+
+        This is the concrete residue of the "overall memory usage needs tuning" item on the raw-autotune side: the wall-clock half was addressed by the floor, the planner half was not.
+        """
+    resolution """
+        Answered 2026-08-27
+        (@raw-autotune.evidence.linear-raw-planner-reserve-20260827,
+        @raw-autotune.evidence.spatial-floor-census-20260827).
+
+        For Bayer frames: keep the worst-case Harmonic reserve (option C).
+        Option A (grow the pool) breaks the plan-cannot-be-exceeded
+        guarantee. Option B (probe clip fraction before planning) is a
+        decode: the floor census itself took 3:25 for 381 CFA files, and a
+        header cannot see clip confidence. 211/381 CFA frames still clear
+        1e-5, so a mixed Sony batch is sized on 24 MP Harmonic either way.
+
+        For LinearRaw: the planner now reads photometric interpretation
+        from the same TIFF directory it already probes for dimensions.
+        Expert RAW never runs reconstruct_cfa, so it is budgeted as Current.
+        Ten 50 MP files (the "200 MP" DNGs, 8160x6120) drop from 5.644 GiB
+        to 2.667 GiB; a mixed batch takes the max per-file cost (24 MP Bayer
+        Harmonic at 2.782 GiB binds) and those files can join. That is the
+        knowable subset; the floor itself remains invisible until decode.
+        """
+    supersedes [ @raw-autotune.question.memory-planner-cannot-use-the-spatial-floor/1 ]
 }
 
 record raw-autotune.question.prediction-band-below-clip-ramp/1 : question {
@@ -207,7 +242,7 @@ record raw-autotune.question.purple-sky-standing-after-slice-5/2 : question {
 
 record raw-autotune.question.spatial-highlight-floor-not-swept/1 : question {
     title "The spatial highlight floor is conservative but unswept, and leans on a different statistic than it gates on"
-    state open
+    state superseded
     question """
         DEFAULT_SPATIAL_CLIPPED_FLOOR is 1e-5 and has never been swept. What is the right value, and against which statistic?
 
@@ -217,6 +252,46 @@ record raw-autotune.question.spatial-highlight-floor-not-swept/1 : question {
 
         Related and separate: reconstruct_cfa's pre-existing has_reconstruction_authority early return reports the requested method rather than Current, so a frame that does no spatial work by that route still routes to spatial_report_and_uncertainty downstream. Making the two consistent would move those frames' output, so it was left alone. Whether it should be changed is part of this question.
         """
+}
+
+record raw-autotune.question.spatial-highlight-floor-not-swept/2 : question {
+    title "Spatial floor swept: keep 1e-5; empty band was a reporting artifact"
+    state resolved
+    question """
+        DEFAULT_SPATIAL_CLIPPED_FLOOR is 1e-5 and has never been swept. What is the right value, and against which statistic?
+
+        Two gaps. First, the corpus measurement it leans on — docs/HDR_EVALUATION.md's census of all 58 files in raw/raw_3rd_batch, median 0.0003%, p90 1.9%, max 12.4%, nine frames above 1% and those the ones flagged by eye — counts pixels with two or more channels clipped, while the floor counts CFA sites at or above VALID_CONFIDENCE_MAX, which is a strictly larger population. The three-orders-of-magnitude margin is therefore indicative, not exact. Second, no sweep of the constant itself against the paired-camera corpus has been run.
+
+        The sweep is cheap to set up because clipped_cfa_sites is already in every sidecar: a --dry-run --summary over the corpus gives the whole distribution without rendering, and the 29-frame sample already shows a wide empty band between 0 and 7.3e-6 sites-fraction, so the answer may be that any floor inside that band behaves identically and the constant does not matter much. That has not been established on the full corpus.
+
+        Related and separate: reconstruct_cfa's pre-existing has_reconstruction_authority early return reports the requested method rather than Current, so a frame that does no spatial work by that route still routes to spatial_report_and_uncertainty downstream. Making the two consistent would move those frames' output, so it was left alone. Whether it should be changed is part of this question.
+        """
+    resolution """
+        Answered 2026-08-27 by a 381-file CFA census
+        (@raw-autotune.evidence.spatial-floor-census-20260827). Keep 1e-5;
+        gate on CFA sites, not on two-plus demosaiced pixels.
+
+        The empty-band hypothesis is false: 71 frames sit in (0, 1e-5) with
+        1-224 clipped CFA sites. The 29-frame empty band was a reporting
+        artifact (declined frames sidecared clipped_cfa_sites as 0); folding
+        the raw count onto the Current report
+        (@raw-autotune.evidence.declined-floor-reports-clipped-cfa-sites-20260827)
+        made the sweep possible. 1e-5 remains the intended few-hundred-isolated-sites
+        cost cutoff; the HDR-evaluation defect frames are at >=1%, three orders
+        above. A quality A/B of those 71 against camera JPEGs was not run and
+        would be required to move the constant.
+
+        CFA-site fraction exceeds two-plus pixel fraction on 254/285 frames
+        with any clip, confirming the populations differ in the expected
+        direction. The floor gates a CFA solver, so it keeps comparing CFA
+        sites.
+
+        The has_reconstruction_authority early return still reports the
+        requested method on 98 zero-authority frames. Leave it: every CFA
+        site on those frames is below CLIP_RAMP_LOW, so Current would also
+        be a no-op, and this census did not A/B a method-label change.
+        """
+    supersedes [ @raw-autotune.question.spatial-highlight-floor-not-swept/1 ]
 }
 
 record raw-autotune.question.status-doc-standing-verification/1 : question {

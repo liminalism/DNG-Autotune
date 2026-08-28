@@ -1,0 +1,11 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+   Compiling raw-autotune v0.1.19 (/mnt/Samsung980_1TB/Rust-projects/raw-autotune)
+    Finished `release` profile [optimized] target(s) in 52.37s
+     Running `target/release/examples/probe-highlight-gt raw/raw_backlit2/_DSC1349.ARW raw/raw_backlit2/_DSC1348.ARW 3.35`
+develop ON raw/raw_backlit2/_DSC1349.ARW
+develop OFF raw/raw_backlit2/_DSC1349.ARW
+develop dark raw/raw_backlit2/_DSC1348.ARW
+shift (0, 0) reconstructed=462590

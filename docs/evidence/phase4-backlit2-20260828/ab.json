@@ -1,0 +1,264 @@
+[
+  {
+    "file": "_DSC1337.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -1.7752444,
+    "backlight_p": 0.027734924,
+    "top3": [
+      "18_Greenery",
+      "14_Architecture",
+      "3_Kids"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": 0.06331015,
+    "hue_mean": 23.359531,
+    "sat_ratio": 1.2248492,
+    "p50_ev": -3.1899645,
+    "center_median_ev": -1.4147202
+  },
+  {
+    "file": "_DSC1338.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -1.3664262,
+    "backlight_p": 0.019085472,
+    "top3": [
+      "14_Architecture",
+      "16_Blue_Sky",
+      "8_Beach"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": 1.2665012,
+    "hue_mean": 26.406975,
+    "sat_ratio": 1.0706555,
+    "p50_ev": -4.939542,
+    "center_median_ev": -3.5731156
+  },
+  {
+    "file": "_DSC1339.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -1.4572806,
+    "backlight_p": 0.010384033,
+    "top3": [
+      "14_Architecture",
+      "3_Kids",
+      "26_Indoor"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": 0.050760508,
+    "hue_mean": 20.035046,
+    "sat_ratio": 1.0646843,
+    "p50_ev": -3.46037,
+    "center_median_ev": -2.0030894
+  },
+  {
+    "file": "_DSC1340.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -2.0784245,
+    "backlight_p": 0.015801048,
+    "top3": [
+      "14_Architecture",
+      "18_Greenery",
+      "3_Kids"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": 0.106894255,
+    "hue_mean": 22.192478,
+    "sat_ratio": 0.8451509,
+    "p50_ev": -3.1963873,
+    "center_median_ev": -1.1179628
+  },
+  {
+    "file": "_DSC1341.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -0.37964773,
+    "backlight_p": 0.008970414,
+    "top3": [
+      "18_Greenery",
+      "8_Beach",
+      "10_Waterfall"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": 0.77499104,
+    "hue_mean": 23.735325,
+    "sat_ratio": 0.91857463,
+    "p50_ev": -3.3773077,
+    "center_median_ev": -2.99766
+  },
+  {
+    "file": "_DSC1342.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "observed",
+    "ev_split": 0.20950949,
+    "backlight_p": 0.15668519,
+    "top3": [
+      "1_Portrait",
+      "27_Backlight",
+      "16_Blue_Sky"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": -0.0066160113,
+    "hue_mean": 22.476198,
+    "sat_ratio": 1.0801412,
+    "p50_ev": -1.5226233,
+    "center_median_ev": -1.7321328,
+    "nopreview_key_delta": 0.4289738,
+    "nopreview_hue_mean": 22.477064
+  },
+  {
+    "file": "_DSC1343.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "observed",
+    "ev_split": 0.16682172,
+    "backlight_p": 0.5466211,
+    "top3": [
+      "27_Backlight",
+      "16_Blue_Sky",
+      "1_Portrait"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": 0.012242675,
+    "hue_mean": 17.737734,
+    "sat_ratio": 1.061237,
+    "p50_ev": -1.7621853,
+    "center_median_ev": -1.929007,
+    "nopreview_key_delta": 0.639268,
+    "nopreview_hue_mean": 17.812174
+  },
+  {
+    "file": "_DSC1344.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -0.93460107,
+    "backlight_p": 0.019761695,
+    "top3": [
+      "16_Blue_Sky",
+      "18_Greenery",
+      "8_Beach"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": -0.0045904517,
+    "hue_mean": 19.618055,
+    "sat_ratio": 1.0878956,
+    "p50_ev": -1.4882455,
+    "center_median_ev": -0.5536444
+  },
+  {
+    "file": "_DSC1345.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "observed",
+    "ev_split": -1.1549388,
+    "backlight_p": 0.6656239,
+    "top3": [
+      "27_Backlight",
+      "16_Blue_Sky",
+      "18_Greenery"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": -0.007963359,
+    "hue_mean": 17.81641,
+    "sat_ratio": 1.0820843,
+    "p50_ev": -1.287983,
+    "center_median_ev": -0.1330441,
+    "nopreview_key_delta": -0.5352888,
+    "nopreview_hue_mean": 17.780077
+  },
+  {
+    "file": "_DSC1346.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "observed",
+    "ev_split": -1.5317457,
+    "backlight_p": 0.31392345,
+    "top3": [
+      "27_Backlight",
+      "16_Blue_Sky",
+      "23_Fireworks"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": 0.32479215,
+    "hue_mean": 23.541233,
+    "sat_ratio": 1.0648694,
+    "p50_ev": -5.5313563,
+    "center_median_ev": -3.9996107,
+    "nopreview_key_delta": 3.5091803,
+    "nopreview_hue_mean": 23.39781
+  },
+  {
+    "file": "_DSC1347.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "observed",
+    "ev_split": -1.8277836,
+    "backlight_p": 0.28566912,
+    "top3": [
+      "27_Backlight",
+      "16_Blue_Sky",
+      "8_Beach"
+    ],
+    "indoor_state": "quiet",
+    "key_delta": 0.37743473,
+    "hue_mean": 24.164135,
+    "sat_ratio": 1.04128,
+    "p50_ev": -5.2990446,
+    "center_median_ev": -3.471261,
+    "nopreview_key_delta": 3.7259405,
+    "nopreview_hue_mean": 24.23275
+  },
+  {
+    "file": "_DSC1348.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -0.72854424,
+    "backlight_p": 0.09802377,
+    "top3": [
+      "26_Indoor",
+      "27_Backlight",
+      "18_Greenery"
+    ],
+    "indoor_state": "observed",
+    "key_delta": 1.496572,
+    "hue_mean": 27.55985,
+    "sat_ratio": 1.0205464,
+    "p50_ev": -5.19606,
+    "center_median_ev": -4.467516
+  },
+  {
+    "file": "_DSC1349.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -0.7606406,
+    "backlight_p": 0.039373644,
+    "top3": [
+      "26_Indoor",
+      "27_Backlight",
+      "18_Greenery"
+    ],
+    "indoor_state": "observed",
+    "key_delta": 0.009632587,
+    "hue_mean": 24.843563,
+    "sat_ratio": 1.1825242,
+    "p50_ev": -2.2041345,
+    "center_median_ev": -1.4434938
+  },
+  {
+    "file": "_DSC1350.ARW",
+    "guidance": "preview_guided",
+    "backlit_state": "quiet",
+    "ev_split": -0.7442088,
+    "backlight_p": 0.04528972,
+    "top3": [
+      "26_Indoor",
+      "27_Backlight",
+      "18_Greenery"
+    ],
+    "indoor_state": "observed",
+    "key_delta": -0.00076279044,
+    "hue_mean": 27.088581,
+    "sat_ratio": 1.7581475,
+    "p50_ev": -2.016679,
+    "center_median_ev": -1.2724702
+  }
+]

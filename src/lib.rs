@@ -17,6 +17,7 @@ pub mod encoder_hints;
 pub mod files;
 pub mod highlight;
 pub mod hotpixels;
+pub mod huesatmap;
 pub mod illuminant;
 pub mod lens;
 pub mod levels;

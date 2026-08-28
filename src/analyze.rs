@@ -125,7 +125,7 @@ fn derive_params(
     let safety_margin = match preset {
         Preset::Neutral => 0.65,
         Preset::Auto => 0.40,
-        Preset::Punchy => 0.22,
+        Preset::Standard | Preset::Vivid => 0.22,
     };
 
     let mut black_input_ev = p005 + exposure_ev - safety_margin;
@@ -154,7 +154,7 @@ fn derive_params(
     let minimum_input_range = match preset {
         Preset::Neutral => 5.5,
         Preset::Auto => 5.0,
-        Preset::Punchy => 4.5,
+        Preset::Standard | Preset::Vivid => 4.5,
     };
     let input_range = white_input_ev - black_input_ev;
     if input_range < minimum_input_range {
@@ -167,7 +167,9 @@ fn derive_params(
     let contrast = match preset {
         Preset::Neutral => (1.02 - 0.010 * (final_input_range - 7.0).max(0.0)).clamp(0.90, 1.02),
         Preset::Auto => (1.18 - 0.018 * (final_input_range - 7.0).max(0.0)).clamp(0.92, 1.18),
-        Preset::Punchy => (1.30 - 0.015 * (final_input_range - 7.0).max(0.0)).clamp(1.05, 1.30),
+        Preset::Standard | Preset::Vivid => {
+            (1.30 - 0.015 * (final_input_range - 7.0).max(0.0)).clamp(1.05, 1.30)
+        }
     };
 
     // `highlight_norm` trades highlight retention against punch: at 1.0 no
@@ -181,8 +183,9 @@ fn derive_params(
     // a scene-dependent one. Scaling by 1.20 lands `auto` at 1.017 of the
     // camera while hard clipping stays at a 0.001% median against the camera's
     // 1.076%. 1.30 was measurably worse: clipping rose to a 0.308% median.
-    // `punchy` moved by the same factor to keep it above `auto`; `neutral`
-    // keeps 1.00 because its documented job is to add no chroma opinion.
+    // `standard` (formerly punchy) sits above `auto`; `neutral` keeps 1.00
+    // because its documented job is to add no chroma opinion. `vivid` shares
+    // the standard curve; the HueSatMap is applied later.
     let (
         black_output_linear,
         white_output_linear,
@@ -193,7 +196,7 @@ fn derive_params(
     ) = match preset {
         Preset::Neutral => (0.0025, 0.965, 1.00, 0.00, 0.10, 1.00),
         Preset::Auto => (0.0012, 0.985, 1.22, 0.08, 0.16, 1.00),
-        Preset::Punchy => (0.0008, 0.995, 1.27, 0.16, 0.13, 0.70),
+        Preset::Standard | Preset::Vivid => (0.0008, 0.995, 1.27, 0.16, 0.13, 0.70),
     };
 
     let black_output_ev = (black_output_linear / MID_GRAY).log2();
@@ -475,7 +478,7 @@ pub fn analyze(
     let key_target_ev = match preset {
         Preset::Neutral => key_score * 0.35,
         Preset::Auto => key_score * 0.65,
-        Preset::Punchy => key_score * 0.50,
+        Preset::Standard | Preset::Vivid => key_score * 0.50,
     };
 
     let mut target_median_ev = key_target_ev;
@@ -778,8 +781,8 @@ mod tests {
     }
 
     /// The presets have to stay ordered in chroma for their names to mean
-    /// anything: `neutral` adds no opinion, `auto` is the one measured against
-    /// the camera-JPEG corpus, and `punchy` sits above it.
+    /// anything: `neutral` adds no opinion, `auto` is the archive curve, and
+    /// `standard` sits above it. `vivid` shares the standard curve.
     #[test]
     fn preset_saturation_stays_ordered() {
         let saturation = |preset| {
@@ -790,12 +793,14 @@ mod tests {
         };
         let neutral = saturation(Preset::Neutral);
         let auto = saturation(Preset::Auto);
-        let punchy = saturation(Preset::Punchy);
+        let standard = saturation(Preset::Standard);
+        let vivid = saturation(Preset::Vivid);
 
         assert_eq!(neutral, 1.00);
+        assert_eq!(vivid, standard);
         assert!(
-            neutral < auto && auto < punchy,
-            "neutral {neutral} < auto {auto} < punchy {punchy}"
+            neutral < auto && auto < standard,
+            "neutral {neutral} < auto {auto} < standard {standard}"
         );
     }
 
@@ -813,7 +818,12 @@ mod tests {
         )
         .unwrap()
         .0;
-        for preset in [Preset::Neutral, Preset::Auto, Preset::Punchy] {
+        for preset in [
+            Preset::Neutral,
+            Preset::Auto,
+            Preset::Standard,
+            Preset::Vivid,
+        ] {
             for exposure_ev in [-1.5, 0.0, 0.85, 2.0] {
                 let unscaled = derive_params(&stats, preset, exposure_ev, None, 1.0);
                 // The pre-knob expression, spelled out.

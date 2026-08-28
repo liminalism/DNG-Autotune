@@ -80,6 +80,8 @@ pub struct RenderOptions {
     pub spatial_highlight_floor: f32,
     pub full_dng_color: bool,
     pub lens_correction: crate::lens::LensCorrectionMode,
+    pub hue_sat_map: Option<std::sync::Arc<crate::huesatmap::HueSatMap>>,
+    pub hue_sat_map_strength: f32,
     /// Build the EXIF payload and ICC profile on [`RenderedRgb16Image`], the
     /// same bytes the CLI writers embed. `false` leaves both `None` and skips
     /// the one extra metadata parse of the source file; it never changes pixels.
@@ -147,6 +149,8 @@ impl RenderOptions {
             spatial_highlight_floor: options.spatial_highlight_floor,
             full_dng_color: options.full_dng_color,
             lens_correction: options.lens_correction,
+            hue_sat_map: options.hue_sat_map.clone(),
+            hue_sat_map_strength: options.hue_sat_map_strength,
             metadata: options.write_metadata,
             semantic: options.semantic,
             semantic_sky_highlights: options.semantic_sky_highlights,
@@ -486,6 +490,8 @@ pub fn render_file_rgb16(
                     lens_correction: options.lens_correction,
                     dump_stages: None,
                     illuminant_proxy: options.illuminant,
+                    hue_sat_map: options.hue_sat_map.clone(),
+                    hue_sat_map_strength: options.hue_sat_map_strength,
                 },
             )?,
             RawColorPath::Rawler => (develop_rawler(&raw)?, ColorReport::rawler(&raw), None, None),
@@ -867,6 +873,8 @@ mod tests {
         assert_eq!(api.highlight_method, batch.highlight_method);
         assert_eq!(api.full_dng_color, batch.full_dng_color);
         assert_eq!(api.lens_correction, batch.lens_correction);
+        assert!(api.hue_sat_map.is_none());
+        assert_eq!(api.hue_sat_map_strength, 0.0);
     }
 
     #[test]

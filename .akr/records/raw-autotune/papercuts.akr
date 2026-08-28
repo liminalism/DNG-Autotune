@@ -23,6 +23,18 @@ record raw-autotune.papercut.a-combined-read-only-akr-get-for-three-known/1 : pa
     created_at 2026-08-10
 }
 
+record raw-autotune.papercut.a-focused-verification-command-passed-three/1 : papercut {
+    title "A focused verification command passed three separate test-name filters…"
+    state verified
+    statement """
+        A focused verification command passed three separate test-name filters to `cargo test`, but Cargo accepts only one positional TESTNAME. Retried with the shared `cli::tests::` prefix.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    about "cargo"
+    author "codex"
+    created_at 2026-08-28
+}
+
 record raw-autotune.papercut.a-fresh-evidence-add-used-an-inferred-expansion/1 : papercut {
     title "A fresh evidence_add used an inferred expansion of the displayed short…"
     state verified
@@ -90,6 +102,28 @@ record raw-autotune.papercut.akr-check-passed-with-commit-none-before-commit/1 :
     created_at 2026-08-10
 }
 
+record raw-autotune.papercut.akr-evidence-add-summary-that-starts-with/1 : papercut {
+    title "akr evidence add --summary that starts with --bundle is parsed as a…"
+    state verified
+    statement """
+        akr evidence add --summary that starts with --bundle is parsed as a flag (AKR-C002). Don't start summaries with a double-dash token.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    author "grok"
+    created_at 2026-08-28
+}
+
+record raw-autotune.papercut.akr-evidence-add-then-complete-in-the-same/1 : papercut {
+    title "akr evidence add then complete in the same overlay: complete cannot…"
+    state verified
+    statement """
+        akr evidence add then complete in the same overlay: complete cannot resolve the new evidence until akr build. First slice-8 evidence add also vanished after a second add + build; re-adding after build stuck. akr complete --check cited evidence does not resolve is often a stale lock, not a bad citation.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    author "grok"
+    created_at 2026-08-28
+}
+
 record raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 : papercut {
     title "akr explain assessment lists optional as_of but not that it requires a…"
     state verified
@@ -111,6 +145,18 @@ record raw-autotune.papercut.akr-get-shows-a-record-key-and-revision-but-not/1 :
     observed_at git:c6cb8cf451e805c3bfda165df545b9293787ed32
     author "codex"
     created_at 2026-08-09
+}
+
+record raw-autotune.papercut.akr-mcp-server-failed-to-connect-at-session/1 : papercut {
+    title "AKR MCP server failed to connect at session start (timeout); fell back…"
+    state verified
+    statement """
+        AKR MCP server failed to connect at session start (timeout); fell back to akr CLI. knowledge.start/context still work via CLI.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    about "akr"
+    author "grok"
+    created_at 2026-08-27
 }
 
 record raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does/1 : papercut {
@@ -136,6 +182,30 @@ record raw-autotune.papercut.akr-revise-from-help-describes-a-replacement/1 : pa
     created_at 2026-08-09
 }
 
+record raw-autotune.papercut.akr-revise-from-on-an-active-work-head-without/1 : papercut {
+    title "akr revise --from on an active work head, without --state, created rev…"
+    state verified
+    statement """
+        akr revise --from on an active work head, without --state, created rev 2 as proposed and dropped the live head out of active. Had to akr revise --state active to put it back. --from should preserve state unless the fragment sets it.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    about "akr"
+    author "grok"
+    created_at 2026-08-27
+}
+
+record raw-autotune.papercut.akr-revise-from-with-a-partial-fragment-dropped/1 : papercut {
+    title "akr revise --from with a partial fragment dropped unspecified slots:…"
+    state verified
+    statement """
+        akr revise --from with a partial fragment dropped unspecified slots: slice-8 lost acceptance+scope, phase-4 lost depends_on+verified_by, Candidate D lost scope+derived_from. Restore by a second --from that lists every slot. Partial --from is not a merge.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    about "akr"
+    author "grok"
+    created_at 2026-08-27
+}
+
 record raw-autotune.papercut.akr-search-prints-record-identifiers-with/1 : papercut {
     title "akr search prints record identifiers with revision suffixes (for…"
     state verified
@@ -156,6 +226,17 @@ record raw-autotune.papercut.akr-supersede-documented-with-a-replacement-key/1 :
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
     author "codex"
     created_at 2026-08-10
+}
+
+record raw-autotune.papercut.camsdd-is-a-30-class-scene-jpeg-dataset-and-has/1 : papercut {
+    title "CamSDD is a 30-class scene-JPEG dataset and has no colour chart; the…"
+    state verified
+    statement """
+        CamSDD is a 30-class scene-JPEG dataset and has no colour chart; the photographer brief mentioning it as a Candidate D option was a misfire. ART/RT DCP ProfileCopyright=public domain is the table. Display-stage dumps clip at 1.0 so they cannot score reconstruction GT that lives above white; need scene-linear (probe-highlight-gt).
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    author "grok"
+    created_at 2026-08-28
 }
 
 record raw-autotune.papercut.cargo-test-accepts-one-positional-testname/1 : papercut {
@@ -380,6 +461,29 @@ record raw-autotune.papercut.running-several-read-only-akr-search-commands/1 : p
     observed_at git:40ae8487291b0e5c20174966c27a02ff0619d6bd
     author "codex"
     created_at 2026-08-09
+}
+
+record raw-autotune.papercut.staging-the-spatial-floor-csv-warned-that-crlf/1 : papercut {
+    title "Staging the spatial-floor CSV warned that CRLF will normalize to LF on…"
+    state verified
+    statement """
+        Staging the spatial-floor CSV warned that CRLF will normalize to LF on the next Git touch. The evidence generator should write LF explicitly, or the repository should declare the CSV policy in .gitattributes.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    about "git"
+    author "codex"
+    created_at 2026-08-28
+}
+
+record raw-autotune.papercut.started-a-381-file-dry-run-spatial-highlight/1 : papercut {
+    title "Started a 381-file --dry-run --spatial-highlight-floor 1 census for the…"
+    state verified
+    statement """
+        Started a 381-file --dry-run --spatial-highlight-floor 1 census for the floor sweep, then found declined frames drop clipped_cfa_sites (HighlightReport::into_report hardcodes 0; only spatial_report_and_uncertainty copies the raw count). Killed the run; the fold belongs in color.rs before another corpus pass.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    author "grok"
+    created_at 2026-08-27
 }
 
 record raw-autotune.papercut.state-only-revise-on-sealed-work-head-l002/1 : papercut {

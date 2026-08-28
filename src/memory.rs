@@ -36,12 +36,24 @@
 //! Windows — the kernel's own estimate of what can be handed out without
 //! swapping, which is the right question and not the same as free memory.
 //!
-//! # Why the largest file in the batch sets the pace
+//! # Why the most expensive file in the batch sets the pace
 //!
 //! Workers pull from a shared queue, so any worker may hold any file, and a
 //! batch mixing 10 MP phone frames with 50 MP Expert RAW ones can put the five
 //! biggest in flight together. Sizing on the batch maximum is the only bound
 //! that holds; sizing on the mean would be wrong exactly when it mattered.
+//!
+//! "Most expensive" is not always "most pixels". Expert RAW is LinearRaw — already
+//! demosaiced in-camera — so `reconstruct_cfa` never runs and the harmonic
+//! 64 B/px reserve would be paid for a solver that cannot run. The planner reads
+//! photometric interpretation from the same TIFF directory it already probes for
+//! dimensions, and a LinearRaw file is budgeted as `Current` even when the
+//! requested method is Harmonic. A mixed batch then takes the max of those
+//! per-file costs: a 24 MP Bayer frame at Harmonic can out-cost a 50 MP
+//! LinearRaw frame at Current, and that is the number `--jobs` is sized on.
+//!
+//! The planner still cannot see the archive-speed spatial floor (that needs a
+//! decode). LinearRaw is knowable from the header; the floor is not.
 //!
 //! Nothing here changes what is rendered. A file develops identically alone or
 //! in a batch (`docs/PLAN.md`, "determinism is a product property"), so the
@@ -226,13 +238,32 @@ pub fn peak_bytes_for_highlight(
     lens_correction: crate::lens::LensCorrectionMode,
     highlight_method: crate::raw_highlight::HighlightMethod,
 ) -> u64 {
+    peak_bytes_for_input(pixels, lens_correction, highlight_method, true)
+}
+
+/// Budgeted peak for one file, given whether a spatial estimator can run on it.
+///
+/// `spatial_possible` is false for LinearRaw (Expert RAW): the mosaic solver
+/// is never called, so the harmonic/pyramid reserve would be fiction. Unknown
+/// or CFA files pass `true` and pay the requested method's extra.
+pub fn peak_bytes_for_input(
+    pixels: u64,
+    lens_correction: crate::lens::LensCorrectionMode,
+    highlight_method: crate::raw_highlight::HighlightMethod,
+    spatial_possible: bool,
+) -> u64 {
+    let method = if spatial_possible {
+        highlight_method
+    } else {
+        crate::raw_highlight::HighlightMethod::Current
+    };
     let bytes_per_pixel = PEAK_BYTES_PER_PIXEL
         + if lens_correction == crate::lens::LensCorrectionMode::ProfileExact {
             PROFILE_EXTRA_BYTES_PER_PIXEL
         } else {
             0
         }
-        + highlight_method.extra_bytes_per_pixel();
+        + method.extra_bytes_per_pixel();
     PER_IMAGE_OVERHEAD_BYTES.saturating_add(pixels.saturating_mul(bytes_per_pixel))
 }
 
@@ -319,6 +350,22 @@ pub fn available_bytes() -> Option<u64> {
 /// `None` for anything that is not a readable TIFF, which the caller estimates
 /// from the file size instead.
 pub fn raw_dimensions(path: &Path) -> Option<(u32, u32)> {
+    raw_probe(path).map(|(width, height, _photometric)| (width, height))
+}
+
+/// Pixel count companion to [`raw_dimensions`].
+pub fn raw_pixels(path: &Path) -> Option<u64> {
+    let (width, height) = raw_dimensions(path)?;
+    u64::from(width)
+        .checked_mul(u64::from(height))
+        .filter(|pixels| *pixels > 0)
+}
+
+/// Dimensions and photometric of the raw IFD, without touching pixel data.
+///
+/// Photometric is `None` when the tag is missing. The caller treats LinearRaw
+/// as "spatial highlight cannot run" and everything else as "it might".
+fn raw_probe(path: &Path) -> Option<(u32, u32, Option<u32>)> {
     let file = File::open(path).ok()?;
     let mut reader = BufReader::new(file);
     let tiff = GenericTiffReader::new(&mut reader, 0, 0, None, &[TAG_SUB_IFDS]).ok()?;
@@ -334,24 +381,16 @@ pub fn raw_dimensions(path: &Path) -> Option<(u32, u32)> {
             )
         })
         .into_iter()
-        .filter_map(dimensions_of)
-        .max_by_key(|&(width, height)| u64::from(width) * u64::from(height));
+        .filter_map(dimensions_and_photo)
+        .max_by_key(|&(width, height, _)| u64::from(width) * u64::from(height));
     if raw.is_some() {
         return raw;
     }
 
     tiff.find_ifds_with_filter(|_| true)
         .into_iter()
-        .filter_map(dimensions_of)
-        .max_by_key(|&(width, height)| u64::from(width) * u64::from(height))
-}
-
-/// Pixel count companion to [`raw_dimensions`].
-pub fn raw_pixels(path: &Path) -> Option<u64> {
-    let (width, height) = raw_dimensions(path)?;
-    u64::from(width)
-        .checked_mul(u64::from(height))
-        .filter(|pixels| *pixels > 0)
+        .filter_map(dimensions_and_photo)
+        .max_by_key(|&(width, height, _)| u64::from(width) * u64::from(height))
 }
 
 fn dimensions_of(ifd: &IFD) -> Option<(u32, u32)> {
@@ -360,18 +399,50 @@ fn dimensions_of(ifd: &IFD) -> Option<(u32, u32)> {
     (width > 0 && height > 0).then_some((width, height))
 }
 
+fn dimensions_and_photo(ifd: &IFD) -> Option<(u32, u32, Option<u32>)> {
+    let (width, height) = dimensions_of(ifd)?;
+    Some((width, height, entry_u32(ifd, TAG_PHOTOMETRIC)))
+}
+
 fn entry_u32(ifd: &IFD, tag: u16) -> Option<u32> {
     ifd.get_entry(tag).map(|entry| entry.value.force_u32(0))
 }
 
+/// LinearRaw is already demosaiced; a missing or CFA photometric might still
+/// run `reconstruct_cfa`, so the safe default is "spatial possible".
+fn spatial_highlight_possible(photometric: Option<u32>) -> bool {
+    !matches!(photometric, Some(PHOTOMETRIC_LINEAR_RAW))
+}
+
+struct InputProbe {
+    pixels: u64,
+    from_directory: bool,
+    spatial_possible: bool,
+}
+
 /// Pixels in one input: probed from the TIFF directory, or estimated from the
-/// size on disk when that fails.
-fn pixels_for(path: &Path) -> (u64, bool) {
-    match raw_pixels(path) {
-        Some(pixels) => (pixels, true),
+/// size on disk when that fails. Estimated inputs are assumed spatial-capable
+/// so the budget cannot shrink on a guess.
+fn probe_input(path: &Path) -> InputProbe {
+    match raw_probe(path) {
+        Some((width, height, photometric)) => {
+            let pixels = u64::from(width)
+                .checked_mul(u64::from(height))
+                .filter(|count| *count > 0)
+                .unwrap_or(0);
+            InputProbe {
+                pixels,
+                from_directory: true,
+                spatial_possible: spatial_highlight_possible(photometric),
+            }
+        }
         None => {
             let bytes = std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0);
-            (bytes.saturating_mul(ASSUMED_PIXELS_PER_BYTE), false)
+            InputProbe {
+                pixels: bytes.saturating_mul(ASSUMED_PIXELS_PER_BYTE),
+                from_directory: false,
+                spatial_possible: true,
+            }
         }
     }
 }
@@ -416,20 +487,24 @@ pub fn plan_with_highlight_method(
         .unwrap_or(1);
 
     let mut largest_pixels = 0;
+    let mut per_image_bytes = 0;
     let mut probed = 0;
     let mut estimated = 0;
     for job in jobs {
-        let (pixels, from_directory) = pixels_for(&job.input);
-        largest_pixels = largest_pixels.max(pixels);
-        if from_directory {
+        let probe = probe_input(&job.input);
+        largest_pixels = largest_pixels.max(probe.pixels);
+        per_image_bytes = per_image_bytes.max(peak_bytes_for_input(
+            probe.pixels,
+            lens_correction,
+            highlight_method,
+            probe.spatial_possible,
+        ));
+        if probe.from_directory {
             probed += 1;
         } else {
             estimated += 1;
         }
     }
-
-    let per_image_bytes =
-        peak_bytes_for_highlight(largest_pixels, lens_correction, highlight_method);
     let available_bytes = available_bytes();
 
     let workers = match (requested, available_bytes) {
@@ -607,5 +682,45 @@ mod tests {
             harmonic_profile - current,
             pixels * (PROFILE_EXTRA_BYTES_PER_PIXEL + 64)
         );
+    }
+
+    #[test]
+    fn linear_raw_does_not_reserve_harmonic_bytes() {
+        let pixels = 49_939_200; // 8160×6120 Expert RAW
+        let lens = crate::lens::LensCorrectionMode::Embedded;
+        let harmonic = crate::raw_highlight::HighlightMethod::Harmonic;
+        let cfa = peak_bytes_for_input(pixels, lens, harmonic, true);
+        let linear = peak_bytes_for_input(pixels, lens, harmonic, false);
+        assert_eq!(
+            linear,
+            peak_bytes_for_highlight(pixels, lens, crate::raw_highlight::HighlightMethod::Current)
+        );
+        assert_eq!(cfa - linear, pixels * 64);
+    }
+
+    #[test]
+    fn mixed_batch_ceiling_is_the_max_per_file_cost_not_max_pixels_times_harmonic() {
+        let lens = crate::lens::LensCorrectionMode::Embedded;
+        let harmonic = crate::raw_highlight::HighlightMethod::Harmonic;
+        // 50 MP LinearRaw cannot run the solver; 24 MP Bayer can.
+        let linear_50mp = peak_bytes_for_input(49_939_200, lens, harmonic, false);
+        let bayer_24mp = peak_bytes_for_input(24_337_152, lens, harmonic, true);
+        let naive = peak_bytes_for_highlight(49_939_200, lens, harmonic);
+        assert!(
+            bayer_24mp > linear_50mp,
+            "24 MP harmonic ({bayer_24mp}) should bind over 50 MP LinearRaw ({linear_50mp})"
+        );
+        assert!(
+            naive > bayer_24mp,
+            "sizing 50 MP as harmonic ({naive}) over-reserves against the real ceiling ({bayer_24mp})"
+        );
+    }
+
+    #[test]
+    fn spatial_highlight_possible_is_false_only_for_linear_raw() {
+        assert!(!spatial_highlight_possible(Some(PHOTOMETRIC_LINEAR_RAW)));
+        assert!(spatial_highlight_possible(Some(PHOTOMETRIC_CFA)));
+        assert!(spatial_highlight_possible(None));
+        assert!(spatial_highlight_possible(Some(2)));
     }
 }

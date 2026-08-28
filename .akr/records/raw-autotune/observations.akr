@@ -31,6 +31,186 @@ record raw-autotune.observation.night-invisible-in-fixed-tone-proxy/1 : observat
     method command
 }
 
+record raw-autotune.observation.remaining-work-blocked-on-user-captures/1 : observation {
+    title "Remaining phase-4 / slice-8 / Candidate D work is blocked on user captures and a licence call"
+    state superseded
+    statement """
+        After the 2026-08-27 indoor WB A/B and the spatial-floor census, the
+        three live planning heads cannot proceed in code. The photographer
+        brief is docs/CAPTURE-AND-LICENCE-NEEDED.md. A later agent must read
+        that file and this observation before touching those heads.
+
+        Phase 4
+        (@raw-autotune.work.phase-4-backlit-scene-lighting-wiring):
+        observational classifier + fusion has shipped; indoor-actionable must
+        not enable --local-white-balance
+        (@raw-autotune.decision.indoor-actionable-does-not-enable-local-wb).
+        Remaining render policy is backlit silhouette-vs-fill, blocked on
+        true subject-against-light RAW+JPEG pairs. raw/raw_backlit is
+        view-through-door, not contre-jour. Mixed window+tungsten pairs would
+        be needed before revisiting local-WB; they are not a reason to
+        un-gate it on indoor-actionable.
+
+        Slice 8
+        (@raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation):
+        stage attribution is done; check
+        local-tone-hdr-remain-colour-neutral is unsatisfied. Do not promote
+        --local-tone or --hdr. Blocked on exposure-bracket ground truth
+        (clipped frame A + 1-2 stops darker frame B of the same coloured
+        highlight).
+
+        Candidate D
+        (@raw-autotune.work.calibrated-hue-sat-table-candidate-d):
+        no hue/sat table code until data exists. Either a ColorChecker plus
+        sky-bracket capture on the user's A7C, or a file-by-file licence
+        review of Adobe DCP (cannot ship) / Darktable-RawTherapee tables
+        (GPL-3 code is combinable with AGPL; data may be Adobe-derived;
+        GPL-2-only is incompatible). Do not copy Adobe HueSatMap values
+        into src/.
+
+        Also already done in this working tree, not yet committed: spatial
+        floor census (keep 1e-5), declined-frame clipped_cfa_sites fold,
+        LinearRaw planner reserve, indoor WB A/B evidence. Do not discard
+        that dirt; do not mix it into a capture-driven change.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    method observation
+    blocks [
+        @raw-autotune.work.calibrated-hue-sat-table-candidate-d,
+        @raw-autotune.work.phase-4-backlit-scene-lighting-wiring,
+        @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation
+    ]
+}
+
+record raw-autotune.observation.remaining-work-blocked-on-user-captures/2 : observation {
+    title "Remaining slice-8 / Candidate D work is blocked on user captures and a licence call"
+    state superseded
+    statement """
+        Photographer brief: docs/CAPTURE-AND-LICENCE-NEEDED.md. A later agent
+        must read that file and this observation before touching the remaining
+        heads.
+
+        Phase 4
+        (@raw-autotune.work.phase-4-backlit-scene-lighting-wiring) is no
+        longer blocked on captures. raw/raw_backlit2 was the contre-jour set;
+        indoor WB and backlit fill were both measured and rejected
+        (@raw-autotune.decision.indoor-actionable-does-not-enable-local-wb,
+        @raw-autotune.decision.backlit-tone-policy-does-not-ship). Do not
+        reopen those without mixed-light pairs (local-WB) or a new reason
+        the preview oracle is wrong (backlit).
+
+        Slice 8
+        (@raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation):
+        stage attribution is done; check
+        local-tone-hdr-remain-colour-neutral is unsatisfied. Do not promote
+        --local-tone or --hdr. Blocked on exposure-bracket ground truth
+        (clipped frame A + 1-2 stops darker frame B of the same coloured
+        highlight).
+
+        Candidate D
+        (@raw-autotune.work.calibrated-hue-sat-table-candidate-d):
+        no hue/sat table code until data exists. Either a ColorChecker plus
+        sky-bracket capture on the user's A7C, or a file-by-file licence
+        review of Adobe DCP (cannot ship) / Darktable-RawTherapee tables
+        (GPL-3 code is combinable with AGPL; data may be Adobe-derived;
+        GPL-2-only is incompatible). Do not copy Adobe HueSatMap values
+        into src/.
+
+        Also already done in this working tree, not yet committed: spatial
+        floor census (keep 1e-5), declined-frame clipped_cfa_sites fold,
+        LinearRaw planner reserve, indoor WB A/B, backlit2 A/B. Do not
+        discard that dirt; do not mix it into a capture-driven change.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    method observation
+    blocks [
+        @raw-autotune.work.calibrated-hue-sat-table-candidate-d,
+        @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation
+    ]
+    supersedes [ @raw-autotune.observation.remaining-work-blocked-on-user-captures/1 ]
+}
+
+record raw-autotune.observation.remaining-work-blocked-on-user-captures/3 : observation {
+    title "Remaining slice-8 / Candidate D work is blocked on user captures and a licence call"
+    state superseded
+    statement """
+        Photographer brief: docs/CAPTURE-AND-LICENCE-NEEDED.md. A later agent
+        must read that file and this observation before touching the remaining
+        heads.
+
+        Phase 4
+        (@raw-autotune.work.phase-4-backlit-scene-lighting-wiring) is no
+        longer blocked on captures. raw/raw_backlit2 was the contre-jour set;
+        indoor WB and backlit fill were both measured and rejected
+        (@raw-autotune.decision.indoor-actionable-does-not-enable-local-wb,
+        @raw-autotune.decision.backlit-tone-policy-does-not-ship). Do not
+        reopen those without mixed-light pairs (local-WB) or a new reason
+        the preview oracle is wrong (backlit).
+
+        Slice 8
+        (@raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation):
+        stage attribution is done; check
+        local-tone-hdr-remain-colour-neutral is unsatisfied. Do not promote
+        --local-tone or --hdr. Blocked on exposure-bracket ground truth
+        (clipped frame A + 1-2 stops darker frame B of the same coloured
+        highlight).
+
+        Candidate D
+        (@raw-autotune.work.calibrated-hue-sat-table-candidate-d):
+        no hue/sat table code until data exists. Either a ColorChecker plus
+        sky-bracket capture on the user's A7C, or a file-by-file licence
+        review of Adobe DCP (cannot ship) / Darktable-RawTherapee tables
+        (GPL-3 code is combinable with AGPL; data may be Adobe-derived;
+        GPL-2-only is incompatible). Do not copy Adobe HueSatMap values
+        into src/.
+
+        Also already done in this working tree, not yet committed: spatial
+        floor census (keep 1e-5), declined-frame clipped_cfa_sites fold,
+        LinearRaw planner reserve, indoor WB A/B, backlit2 A/B. Do not
+        discard that dirt; do not mix it into a capture-driven change.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    method observation
+    blocks [
+        @raw-autotune.work.calibrated-hue-sat-table-candidate-d,
+        @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation
+    ]
+    supersedes [ @raw-autotune.observation.remaining-work-blocked-on-user-captures/2 ]
+}
+
+record raw-autotune.observation.slice8-and-candidate-d-unblocked-20260828/1 : observation {
+    title "Slice 8 GT pairs and Candidate D public-domain DCP unblocked the remaining heads"
+    state superseded
+    statement """
+        Photographer brief docs/CAPTURE-AND-LICENCE-NEEDED.md is still the capture/licence note, but the two remaining heads it blocked are no longer waiting on data.
+
+        Slice 8 (@raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation) used the backlit2 exposure pairs: hand-to-sky _DSC1345 vs _DSC1346 (−3.68 EV) and window _DSC1349 vs _DSC1348 (+3.35 EV). Scene-linear GT chroma shows reconstruction closer to the dark frame than reconstruction-disabled; hue is not a usable gate on handheld brackets. --local-tone and --hdr stay opt-in. Check local-tone-hdr-remain-colour-neutral is satisfied; the work is completed.
+
+        Candidate D (@raw-autotune.work.calibrated-hue-sat-table-candidate-d): CamSDD has no colour chart. A ColorChecker is not available. The ART/RawTherapee SONY ILCE-7C.dcp is ProfileCopyright=public domain. --hue-sat-map ships default-off (src/huesatmap.rs, profiles/SONY_ILCE-7C.dcp). Remaining: held-out sky vs camera JPEG, no unattended enablement. Adobe DCP contents still must not be committed.
+
+        Phase 4 remains closed (indoor WB and backlit fill both rejected). Working-tree dirt from the floor census, LinearRaw planner, indoor A/B and backlit2 A/B is still uncommitted; do not discard it. Slice-8/Candidate D code is in the same tree; keep commits split if committing.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    method command
+}
+
+record raw-autotune.observation.slice8-and-candidate-d-unblocked-20260828/2 : observation {
+    title "Slice 8 GT pairs and Candidate D public-domain DCP unblocked the remaining heads"
+    state verified
+    statement """
+        Photographer brief docs/CAPTURE-AND-LICENCE-NEEDED.md is still the capture/licence note, but the two remaining heads it blocked are no longer waiting on data.
+
+        Slice 8 (@raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation) used the backlit2 exposure pairs: hand-to-sky _DSC1345 vs _DSC1346 (−3.68 EV) and window _DSC1349 vs _DSC1348 (+3.35 EV). Scene-linear GT chroma shows reconstruction closer to the dark frame than reconstruction-disabled; hue is not a usable gate on handheld brackets. --local-tone and --hdr stay opt-in. Check local-tone-hdr-remain-colour-neutral is satisfied; the work is completed.
+
+        Candidate D (@raw-autotune.work.calibrated-hue-sat-table-candidate-d): CamSDD has no colour chart. A ColorChecker is not available. The ART/RawTherapee SONY ILCE-7C.dcp is ProfileCopyright=public domain. --hue-sat-map ships default-off (src/huesatmap.rs, profiles/SONY_ILCE-7C.dcp). Remaining: held-out sky vs camera JPEG, no unattended enablement. Adobe DCP contents still must not be committed.
+
+        Phase 4 remains closed (indoor WB and backlit fill both rejected). Working-tree dirt from the floor census, LinearRaw planner, indoor A/B and backlit2 A/B is still uncommitted; do not discard it. Slice-8/Candidate D code is in the same tree; keep commits split if committing.
+        """
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    method command
+    supersedes [ @raw-autotune.observation.slice8-and-candidate-d-unblocked-20260828/1 ]
+}
+
 record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/1 : observation {
     title "Spatial highlight estimators produce false colour on clipped indoor-outdoor foliage; per-pixel current matches the camera"
     state superseded

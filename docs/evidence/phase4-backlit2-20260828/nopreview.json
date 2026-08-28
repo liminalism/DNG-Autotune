@@ -1,0 +1,1440 @@
+{
+  "schema_version": 22,
+  "application_version": "0.1.19",
+  "automatic_profile_version": "archive-auto-v8",
+  "preset": "auto",
+  "controller_version": "v1",
+  "raw_color_path": "owned",
+  "working_space": "srgb",
+  "dry_run": false,
+  "total": 5,
+  "completed": 5,
+  "skipped": 0,
+  "failed": 0,
+  "tonal_class_counts": {
+    "HighKey": 1,
+    "Normal": 4
+  },
+  "exposure_ev": {
+    "count": 5,
+    "min": 0.86561745,
+    "p10": 0.86561745,
+    "median": 1.9663261,
+    "p90": 4.77372,
+    "max": 4.77372,
+    "mean": 2.7586083
+  },
+  "colourfulness": {
+    "count": 5,
+    "min": 57.943226,
+    "p10": 57.943226,
+    "median": 60.209286,
+    "p90": 65.87585,
+    "max": 65.87585,
+    "mean": 61.123466
+  },
+  "near_white_fraction": {
+    "count": 5,
+    "min": 0.06906,
+    "p10": 0.06906,
+    "median": 0.07932,
+    "p90": 0.271256,
+    "max": 0.271256,
+    "mean": 0.11998241
+  },
+  "luminance_entropy": {
+    "count": 5,
+    "min": 7.4672985,
+    "p10": 7.4672985,
+    "median": 7.576475,
+    "p90": 7.6015,
+    "max": 7.6015,
+    "mean": 7.552893
+  },
+  "average_gradient": {
+    "count": 5,
+    "min": 2.1423547,
+    "p10": 2.1423547,
+    "median": 2.2380123,
+    "p90": 9.045302,
+    "max": 9.045302,
+    "mean": 4.7149544
+  },
+  "snr10_ev": {
+    "count": 5,
+    "min": -7.774269,
+    "p10": -7.774269,
+    "median": -7.7494397,
+    "p90": -7.507839,
+    "max": -7.507839,
+    "mean": -7.675503
+  },
+  "low_light_score": {
+    "count": 5,
+    "min": 0.0,
+    "p10": 0.0,
+    "median": 0.0,
+    "p90": 0.0,
+    "max": 0.0,
+    "mean": 0.0
+  },
+  "reference_pairs": 5,
+  "reference_center_weighted_key_ev_delta": {
+    "count": 5,
+    "min": -0.5352888,
+    "p10": -0.5352888,
+    "median": 0.639268,
+    "p90": 3.7259405,
+    "max": 3.7259405,
+    "mean": 1.5536149
+  },
+  "reference_colourfulness_delta": {
+    "count": 5,
+    "min": 9.659985,
+    "p10": 9.659985,
+    "median": 16.281605,
+    "p90": 38.53158,
+    "max": 38.53158,
+    "mean": 23.290173
+  },
+  "reference_mean_level_delta": {
+    "count": 5,
+    "min": -10.394981,
+    "p10": -10.394981,
+    "median": 10.328499,
+    "p90": 75.82207,
+    "max": 75.82207,
+    "mean": 31.140957
+  },
+  "reference_saturation_ratio": {
+    "count": 5,
+    "min": 1.0207161,
+    "p10": 1.0207161,
+    "median": 1.0406607,
+    "p90": 1.1156062,
+    "max": 1.1156062,
+    "mean": 1.052789
+  },
+  "reference_highlight_saturation_ratio": {
+    "count": 5,
+    "min": 1.340609,
+    "p10": 1.340609,
+    "median": 1.4529423,
+    "p90": 16.35618,
+    "max": 16.35618,
+    "mean": 6.593956
+  },
+  "reference_hue_median_degrees": {
+    "count": 5,
+    "min": 4.4868402,
+    "p10": 4.4868402,
+    "median": 5.58773,
+    "p90": 9.00346,
+    "max": 9.00346,
+    "mean": 6.5326843
+  },
+  "reference_hue_p90_degrees": {
+    "count": 5,
+    "min": 54.354168,
+    "p10": 54.354168,
+    "median": 71.026794,
+    "p90": 84.78729,
+    "max": 84.78729,
+    "mean": 68.12419
+  },
+  "reference_hue_mean_degrees": {
+    "count": 5,
+    "min": 17.780077,
+    "p10": 17.780077,
+    "median": 22.477064,
+    "p90": 24.23275,
+    "max": 24.23275,
+    "mean": 21.139975
+  },
+  "reference_hue_pairs": 5,
+  "guidance_mode_counts": {
+    "independent": 5
+  },
+  "independent": {
+    "files": 5,
+    "reference_pairs": 5,
+    "center_weighted_key_ev_delta": {
+      "count": 5,
+      "min": -0.5352888,
+      "p10": -0.5352888,
+      "median": 0.639268,
+      "p90": 3.7259405,
+      "max": 3.7259405,
+      "mean": 1.5536149
+    },
+    "saturation_ratio": {
+      "count": 5,
+      "min": 1.0207161,
+      "p10": 1.0207161,
+      "median": 1.0406607,
+      "p90": 1.1156062,
+      "max": 1.1156062,
+      "mean": 1.052789
+    },
+    "highlight_saturation_ratio": {
+      "count": 5,
+      "min": 1.340609,
+      "p10": 1.340609,
+      "median": 1.4529423,
+      "p90": 16.35618,
+      "max": 16.35618,
+      "mean": 6.593956
+    },
+    "colourfulness_delta": {
+      "count": 5,
+      "min": 9.659985,
+      "p10": 9.659985,
+      "median": 16.281605,
+      "p90": 38.53158,
+      "max": 38.53158,
+      "mean": 23.290173
+    },
+    "mean_level_delta": {
+      "count": 5,
+      "min": -10.394981,
+      "p10": -10.394981,
+      "median": 10.328499,
+      "p90": 75.82207,
+      "max": 75.82207,
+      "mean": 31.140957
+    },
+    "hue_median_degrees": {
+      "count": 5,
+      "min": 4.4868402,
+      "p10": 4.4868402,
+      "median": 5.58773,
+      "p90": 9.00346,
+      "max": 9.00346,
+      "mean": 6.5326843
+    },
+    "hue_p90_degrees": {
+      "count": 5,
+      "min": 54.354168,
+      "p10": 54.354168,
+      "median": 71.026794,
+      "p90": 84.78729,
+      "max": 84.78729,
+      "mean": 68.12419
+    },
+    "hue_mean_degrees": {
+      "count": 5,
+      "min": 17.780077,
+      "p10": 17.780077,
+      "median": 22.477064,
+      "p90": 24.23275,
+      "max": 24.23275,
+      "mean": 21.139975
+    },
+    "hue_pairs": 5
+  },
+  "preview_guided": {
+    "files": 0,
+    "reference_pairs": 0,
+    "center_weighted_key_ev_delta": null,
+    "saturation_ratio": null,
+    "highlight_saturation_ratio": null,
+    "colourfulness_delta": null,
+    "mean_level_delta": null,
+    "hue_median_degrees": null,
+    "hue_p90_degrees": null,
+    "hue_mean_degrees": null,
+    "hue_pairs": 0
+  },
+  "clip_altered_fraction": {
+    "count": 5,
+    "min": 0.007026458,
+    "p10": 0.007026458,
+    "median": 0.011820417,
+    "p90": 0.14952709,
+    "max": 0.14952709,
+    "mean": 0.061900444
+  },
+  "clip_mean_abs_delta": {
+    "count": 5,
+    "min": 0.000047893078,
+    "p10": 0.000047893078,
+    "median": 0.00042304798,
+    "p90": 0.0016772718,
+    "max": 0.0016772718,
+    "mean": 0.000571484
+  },
+  "nondeterministic_illuminant_files": 0,
+  "pooled_groups": {},
+  "files": [
+    {
+      "input": "raw/raw_backlit2/_DSC1342.ARW",
+      "output": ".agent/scratch/phase4-backlit2/nopreview/_DSC1342_auto.jpg",
+      "camera": "Sony ILCE-7C",
+      "status": "completed",
+      "elapsed_ms": 7544,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 240000,
+        "sample_stride": 10,
+        "p005_ev": -6.4083843,
+        "p05_ev": -5.4532595,
+        "p50_ev": -1.5226233,
+        "p95_ev": 0.6977582,
+        "p995_ev": 2.2240646,
+        "center_median_ev": -1.7321328,
+        "measured_dynamic_range_ev": 8.632449,
+        "key_score": 0.2780442,
+        "target_median_ev": 0.18072872,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.00007916667,
+        "near_white_fraction": 0.006370833,
+        "clipped_1_fraction": 0.0025916668,
+        "clipped_2_fraction": 0.0012625,
+        "clipped_3_fraction": 0.0027375,
+        "mean_chroma": 0.10023995,
+        "capture_ev100": 14.965784,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 1.8290577,
+        "black_input_ev": -4.9793267,
+        "white_input_ev": 4.4531226,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1362158,
+        "shadow_power": 0.78264374,
+        "highlight_power": 2.0633957,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -14.418125
+      },
+      "measured": {
+        "colourfulness": 65.87585,
+        "clipped_fraction": 0.0,
+        "near_white_fraction": 0.07932,
+        "crushed_fraction": 0.0,
+        "mean_level": 118.094284,
+        "mean_saturation": 0.43267348,
+        "mean_saturation_highlight": 0.30365565,
+        "highlight_pixels": 46147,
+        "luminance_entropy": 7.6015,
+        "average_gradient": 2.2380123,
+        "sampled_pixels": 250000
+      },
+      "noise": {
+        "shot_slope": 0.12208219,
+        "read_variance": 0.0,
+        "snr1_ev": -14.418125,
+        "snr10_ev": -7.774269,
+        "tiles_used": 94246,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -14.418125,
+        "snr10_ev": -7.774269,
+        "shot_slope": 0.12208219,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 100,
+        "exposure_time": 0.002,
+        "f_number": 8.0
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.009828833,
+        "mean_correction": 0.0014325533
+      },
+      "reference": {
+        "path": "raw/raw_backlit2/_DSC1342.JPG",
+        "width": 6000,
+        "height": 4000,
+        "center_weighted_key_display_ev": -0.22805415,
+        "p05_display_ev": -5.8367176,
+        "p50_display_ev": -0.026832595,
+        "p95_display_ev": 1.8365943,
+        "measured": {
+          "colourfulness": 49.594242,
+          "clipped_fraction": 0.00488,
+          "near_white_fraction": 0.007616,
+          "crushed_fraction": 0.0,
+          "mean_level": 108.695755,
+          "mean_saturation": 0.41300464,
+          "mean_saturation_highlight": 0.20899361,
+          "highlight_pixels": 45360,
+          "luminance_entropy": 7.667505,
+          "average_gradient": 1.2285511,
+          "sampled_pixels": 250000
+        },
+        "delta": {
+          "center_weighted_key_display_ev": 0.4289738,
+          "colourfulness": 16.281605,
+          "mean_saturation": 0.019668847,
+          "saturation_ratio": 1.0476238,
+          "mean_level": 9.398529,
+          "near_white_fraction": 0.071704,
+          "crushed_fraction": 0.0,
+          "luminance_entropy": -0.06600475,
+          "highlight_saturation_ratio": 1.4529423,
+          "hue": {
+            "median_degrees": 5.58773,
+            "p90_degrees": 84.78729,
+            "max_degrees": 179.9897,
+            "mean_degrees": 22.477064,
+            "comparable_pixels": 172342,
+            "chroma_ratio": 1.2944531,
+            "grid_width": 512,
+            "grid_height": 341
+          }
+        }
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.2929688,
+          1.0,
+          1.6367188,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "rcd",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -7.774269,
+          "alias_score": 0.011583047,
+          "reason": "moderate_low_alias"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.005560208,
+          "negative_luminance_fraction": 4.5833335e-7,
+          "above_one_fraction": 0.0062638335,
+          "altered_fraction": 0.011820417,
+          "mean_abs_delta": 0.0016772718,
+          "max_abs_delta": 6.299369
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.000014258037,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 0,
+          "dead": 152,
+          "max_correction": 0.3265086
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 106304,
+          "reconstructed_pixels": 118397,
+          "near_white_pixels": 50908,
+          "fully_clipped_pixels": 10474,
+          "clipped_1_pixels": 55396,
+          "clipped_2_pixels": 40434,
+          "clipped_3_pixels": 10474,
+          "max_lift": 3.8698888,
+          "clipped_cfa_sites": 68334,
+          "reconstructed_cfa_sites": 69831,
+          "affected_output_pixels": 118397,
+          "connected_regions": 40,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.83726126,
+          "fully_clipped_cores": 8,
+          "solver_fallbacks": 1
+        }
+      },
+      "guidance_mode": "independent"
+    },
+    {
+      "input": "raw/raw_backlit2/_DSC1343.ARW",
+      "output": ".agent/scratch/phase4-backlit2/nopreview/_DSC1343_auto.jpg",
+      "camera": "Sony ILCE-7C",
+      "status": "completed",
+      "elapsed_ms": 6129,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 240000,
+        "sample_stride": 10,
+        "p005_ev": -6.288421,
+        "p05_ev": -5.3708,
+        "p50_ev": -1.7621853,
+        "p95_ev": 0.8505566,
+        "p995_ev": 1.4949836,
+        "center_median_ev": -1.929007,
+        "measured_dynamic_range_ev": 7.783405,
+        "key_score": 0.16007325,
+        "target_median_ev": 0.10404761,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.0003625,
+        "near_white_fraction": 0.0015583333,
+        "clipped_1_fraction": 0.00073333335,
+        "clipped_2_fraction": 0.00015833334,
+        "clipped_3_fraction": 0.00077083334,
+        "mean_chroma": 0.11808011,
+        "capture_ev100": 14.321928,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 1.9663261,
+        "black_input_ev": -4.722095,
+        "white_input_ev": 3.8613098,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1514987,
+        "shadow_power": 0.75219566,
+        "highlight_power": 1.8132395,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -14.403103
+      },
+      "measured": {
+        "colourfulness": 61.821434,
+        "clipped_fraction": 0.0,
+        "near_white_fraction": 0.271256,
+        "crushed_fraction": 0.0,
+        "mean_level": 120.07875,
+        "mean_saturation": 0.43264064,
+        "mean_saturation_highlight": 0.3192838,
+        "highlight_pixels": 83583,
+        "luminance_entropy": 7.4672985,
+        "average_gradient": 2.2204418,
+        "sampled_pixels": 250000
+      },
+      "noise": {
+        "shot_slope": 0.12336002,
+        "read_variance": 0.0,
+        "snr1_ev": -14.403103,
+        "snr10_ev": -7.759247,
+        "tiles_used": 94540,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -14.403103,
+        "snr10_ev": -7.759247,
+        "shot_slope": 0.12336002,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 100,
+        "exposure_time": 0.003125,
+        "f_number": 8.0
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.010292917,
+        "mean_correction": 0.0015324926
+      },
+      "reference": {
+        "path": "raw/raw_backlit2/_DSC1343.JPG",
+        "width": 6000,
+        "height": 4000,
+        "center_weighted_key_display_ev": -0.52077234,
+        "p05_display_ev": -5.4676304,
+        "p50_display_ev": -0.21592024,
+        "p95_display_ev": 1.9531511,
+        "measured": {
+          "colourfulness": 46.410667,
+          "clipped_fraction": 0.001028,
+          "near_white_fraction": 0.00336,
+          "crushed_fraction": 0.0,
+          "mean_level": 109.75025,
+          "mean_saturation": 0.42385995,
+          "mean_saturation_highlight": 0.2366982,
+          "highlight_pixels": 71582,
+          "luminance_entropy": 7.6086593,
+          "average_gradient": 1.1324142,
+          "sampled_pixels": 250000
+        },
+        "delta": {
+          "center_weighted_key_display_ev": 0.639268,
+          "colourfulness": 15.410767,
+          "mean_saturation": 0.008780688,
+          "saturation_ratio": 1.0207161,
+          "mean_level": 10.328499,
+          "near_white_fraction": 0.267896,
+          "crushed_fraction": 0.0,
+          "luminance_entropy": -0.14136076,
+          "highlight_saturation_ratio": 1.3489069,
+          "hue": {
+            "median_degrees": 5.087535,
+            "p90_degrees": 54.354168,
+            "max_degrees": 179.96349,
+            "mean_degrees": 17.812174,
+            "comparable_pixels": 173808,
+            "chroma_ratio": 1.3104304,
+            "grid_width": 512,
+            "grid_height": 341
+          }
+        }
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.2734375,
+          1.0,
+          1.6484375,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "rcd",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -7.759247,
+          "alias_score": 0.010102382,
+          "reason": "moderate_low_alias"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.0055342084,
+          "negative_luminance_fraction": 0.0000016666667,
+          "above_one_fraction": 0.0014924167,
+          "altered_fraction": 0.007026458,
+          "mean_abs_delta": 0.00042304798,
+          "max_abs_delta": 3.055005
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.000015531808,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 1,
+          "dead": 0,
+          "max_correction": 0.1524111
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 22678,
+          "reconstructed_pixels": 27138,
+          "near_white_pixels": 8150,
+          "fully_clipped_pixels": 4799,
+          "clipped_1_pixels": 14528,
+          "clipped_2_pixels": 3351,
+          "clipped_3_pixels": 4799,
+          "max_lift": 4.851073,
+          "clipped_cfa_sites": 15764,
+          "reconstructed_cfa_sites": 16699,
+          "affected_output_pixels": 27138,
+          "connected_regions": 21,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.9296668,
+          "fully_clipped_cores": 1,
+          "solver_fallbacks": 0
+        }
+      },
+      "guidance_mode": "independent"
+    },
+    {
+      "input": "raw/raw_backlit2/_DSC1345.ARW",
+      "output": ".agent/scratch/phase4-backlit2/nopreview/_DSC1345_auto.jpg",
+      "camera": "Sony ILCE-7C",
+      "status": "completed",
+      "elapsed_ms": 5964,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 240000,
+        "sample_stride": 10,
+        "p005_ev": -6.438799,
+        "p05_ev": -5.762588,
+        "p50_ev": -1.287983,
+        "p95_ev": 0.55611765,
+        "p995_ev": 1.3055899,
+        "center_median_ev": -0.1330441,
+        "measured_dynamic_range_ev": 7.7443886,
+        "key_score": 0.41630435,
+        "target_median_ev": 0.27059782,
+        "tonal_class": "high_key",
+        "near_black_fraction": 0.000016666667,
+        "near_white_fraction": 0.00125,
+        "clipped_1_fraction": 0.00035833335,
+        "clipped_2_fraction": 0.000275,
+        "clipped_3_fraction": 0.00067083334,
+        "mean_chroma": 0.11145698,
+        "capture_ev100": 14.60964,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 0.86561745,
+        "black_input_ev": -5.9731817,
+        "white_input_ev": 2.5712075,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1522009,
+        "shadow_power": 0.95206505,
+        "highlight_power": 1.2081544,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -14.393296
+      },
+      "measured": {
+        "colourfulness": 59.76754,
+        "clipped_fraction": 0.0,
+        "near_white_fraction": 0.077376,
+        "crushed_fraction": 0.0,
+        "mean_level": 96.73015,
+        "mean_saturation": 0.49743053,
+        "mean_saturation_highlight": 0.32644886,
+        "highlight_pixels": 32552,
+        "luminance_entropy": 7.52427,
+        "average_gradient": 2.1423547,
+        "sampled_pixels": 250000
+      },
+      "noise": {
+        "shot_slope": 0.12420145,
+        "read_variance": 0.0,
+        "snr1_ev": -14.393296,
+        "snr10_ev": -7.7494397,
+        "tiles_used": 94560,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -14.393296,
+        "snr10_ev": -7.7494397,
+        "shot_slope": 0.12420145,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 100,
+        "exposure_time": 0.004,
+        "f_number": 10.0
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.014938042,
+        "mean_correction": 0.0012704125
+      },
+      "reference": {
+        "path": "raw/raw_backlit2/_DSC1345.JPG",
+        "width": 6000,
+        "height": 4000,
+        "center_weighted_key_display_ev": 0.84355724,
+        "p05_display_ev": -6.2647767,
+        "p50_display_ev": 0.21355689,
+        "p95_display_ev": 1.7645035,
+        "measured": {
+          "colourfulness": 50.107555,
+          "clipped_fraction": 0.001044,
+          "near_white_fraction": 0.001812,
+          "crushed_fraction": 0.0,
+          "mean_level": 107.12513,
+          "mean_saturation": 0.44588363,
+          "mean_saturation_highlight": 0.24350789,
+          "highlight_pixels": 55558,
+          "luminance_entropy": 7.477776,
+          "average_gradient": 1.2511686,
+          "sampled_pixels": 250000
+        },
+        "delta": {
+          "center_weighted_key_display_ev": -0.5352888,
+          "colourfulness": 9.659985,
+          "mean_saturation": 0.0515469,
+          "saturation_ratio": 1.1156062,
+          "mean_level": -10.394981,
+          "near_white_fraction": 0.075564,
+          "crushed_fraction": 0.0,
+          "luminance_entropy": 0.046494007,
+          "highlight_saturation_ratio": 1.340609,
+          "hue": {
+            "median_degrees": 4.4868402,
+            "p90_degrees": 57.122566,
+            "max_degrees": 179.99886,
+            "mean_degrees": 17.780077,
+            "comparable_pixels": 173826,
+            "chroma_ratio": 1.178996,
+            "grid_width": 512,
+            "grid_height": 341
+          }
+        }
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.2773438,
+          1.0,
+          1.6484375,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "rcd",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -7.7494397,
+          "alias_score": 0.0107066985,
+          "reason": "moderate_low_alias"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.010269667,
+          "negative_luminance_fraction": 0.000002375,
+          "above_one_fraction": 0.0012564583,
+          "altered_fraction": 0.011525959,
+          "mean_abs_delta": 0.0004920481,
+          "max_abs_delta": 4.7557125
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.000015038736,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 0,
+          "dead": 7,
+          "max_correction": 0.18931843
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 23784,
+          "reconstructed_pixels": 29090,
+          "near_white_pixels": 9610,
+          "fully_clipped_pixels": 4852,
+          "clipped_1_pixels": 14174,
+          "clipped_2_pixels": 4758,
+          "clipped_3_pixels": 4852,
+          "max_lift": 6.1863503,
+          "clipped_cfa_sites": 15451,
+          "reconstructed_cfa_sites": 16000,
+          "affected_output_pixels": 29090,
+          "connected_regions": 22,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.9166458,
+          "fully_clipped_cores": 1,
+          "solver_fallbacks": 0
+        }
+      },
+      "guidance_mode": "independent"
+    },
+    {
+      "input": "raw/raw_backlit2/_DSC1346.ARW",
+      "output": ".agent/scratch/phase4-backlit2/nopreview/_DSC1346_auto.jpg",
+      "camera": "Sony ILCE-7C",
+      "status": "completed",
+      "elapsed_ms": 5374,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 239552,
+        "sample_stride": 10,
+        "p005_ev": -11.061953,
+        "p05_ev": -9.588356,
+        "p50_ev": -5.5313563,
+        "p95_ev": -3.0884442,
+        "p995_ev": -2.444549,
+        "center_median_ev": -3.9996107,
+        "measured_dynamic_range_ev": 8.617403,
+        "key_score": 0.24832454,
+        "target_median_ev": 0.16141094,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.31816474,
+        "near_white_fraction": 0.00005009351,
+        "clipped_1_fraction": 0.0,
+        "clipped_2_fraction": 0.000012523377,
+        "clipped_3_fraction": 0.00003757013,
+        "mean_chroma": 0.008054453,
+        "capture_ev100": 18.287712,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 4.77372,
+        "black_input_ev": -6.688233,
+        "white_input_ev": 2.7291708,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1364866,
+        "shadow_power": 1.0514978,
+        "highlight_power": 1.2648882,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -11.662998
+      },
+      "measured": {
+        "colourfulness": 60.209286,
+        "clipped_fraction": 0.0,
+        "near_white_fraction": 0.1029,
+        "crushed_fraction": 0.0,
+        "mean_level": 98.17733,
+        "mean_saturation": 0.54141843,
+        "mean_saturation_highlight": 0.3141853,
+        "highlight_pixels": 40956,
+        "luminance_entropy": 7.5949235,
+        "average_gradient": 9.045302,
+        "sampled_pixels": 250000
+      },
+      "noise": {
+        "shot_slope": 0.10656556,
+        "read_variance": 0.59146154,
+        "snr1_ev": -11.662998,
+        "snr10_ev": -7.507839,
+        "tiles_used": 94623,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -11.662998,
+        "snr10_ev": -7.507839,
+        "shot_slope": 0.10656556,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 100,
+        "exposure_time": 0.0003125,
+        "f_number": 10.0
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.17640767,
+        "mean_correction": 0.006685251
+      },
+      "reference": {
+        "path": "raw/raw_backlit2/_DSC1346.JPG",
+        "width": 6000,
+        "height": 4000,
+        "center_weighted_key_display_ev": -3.3271973,
+        "p05_display_ev": -9.211956,
+        "p50_display_ev": -4.2162786,
+        "p95_display_ev": -1.8917322,
+        "measured": {
+          "colourfulness": 21.677704,
+          "clipped_fraction": 0.000056,
+          "near_white_fraction": 0.000068,
+          "crushed_fraction": 0.210148,
+          "mean_level": 22.355265,
+          "mean_saturation": 0.5209262,
+          "mean_saturation_highlight": 0.025192987,
+          "highlight_pixels": 64,
+          "luminance_entropy": 5.2197204,
+          "average_gradient": 0.6539152,
+          "sampled_pixels": 250000
+        },
+        "delta": {
+          "center_weighted_key_display_ev": 3.5091803,
+          "colourfulness": 38.53158,
+          "mean_saturation": 0.020492256,
+          "saturation_ratio": 1.0393381,
+          "mean_level": 75.82207,
+          "near_white_fraction": 0.102832,
+          "crushed_fraction": -0.210148,
+          "luminance_entropy": 2.3752031,
+          "highlight_saturation_ratio": 12.471141,
+          "hue": {
+            "median_degrees": 8.497855,
+            "p90_degrees": 71.026794,
+            "max_degrees": 179.9426,
+            "mean_degrees": 23.39781,
+            "comparable_pixels": 131125,
+            "chroma_ratio": 2.0837793,
+            "grid_width": 512,
+            "grid_height": 341
+          }
+        }
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.2929688,
+          1.0,
+          1.6328125,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "rcd",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -7.507839,
+          "alias_score": 0.006734929,
+          "reason": "moderate_low_alias"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.1494758,
+          "negative_luminance_fraction": 0.0037375,
+          "above_one_fraction": 0.000051291667,
+          "altered_fraction": 0.14952709,
+          "mean_abs_delta": 0.000047893078,
+          "max_abs_delta": 2.692051
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.004732312,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 0,
+          "dead": 0,
+          "max_correction": 0.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 1163,
+          "reconstructed_pixels": 1308,
+          "near_white_pixels": 888,
+          "fully_clipped_pixels": 699,
+          "clipped_1_pixels": 275,
+          "clipped_2_pixels": 189,
+          "clipped_3_pixels": 699,
+          "max_lift": 2.9394293,
+          "clipped_cfa_sites": 958,
+          "reconstructed_cfa_sites": 889,
+          "affected_output_pixels": 1308,
+          "connected_regions": 1,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.9474054,
+          "fully_clipped_cores": 1,
+          "solver_fallbacks": 0
+        }
+      },
+      "guidance_mode": "independent"
+    },
+    {
+      "input": "raw/raw_backlit2/_DSC1347.ARW",
+      "output": ".agent/scratch/phase4-backlit2/nopreview/_DSC1347_auto.jpg",
+      "camera": "Sony ILCE-7C",
+      "status": "completed",
+      "elapsed_ms": 4627,
+      "baseline_exposure_ev": 0.0,
+      "analysis": {
+        "sampled_pixels": 239842,
+        "sample_stride": 10,
+        "p005_ev": -10.488008,
+        "p05_ev": -9.2968645,
+        "p50_ev": -5.2990446,
+        "p95_ev": -2.8483326,
+        "p995_ev": -2.0787544,
+        "center_median_ev": -3.471261,
+        "measured_dynamic_range_ev": 8.409253,
+        "key_score": 0.2399163,
+        "target_median_ev": 0.15594558,
+        "tonal_class": "normal",
+        "near_black_fraction": 0.2867888,
+        "near_white_fraction": 0.00017511529,
+        "clipped_1_fraction": 0.000008338823,
+        "clipped_2_fraction": 0.000012508234,
+        "clipped_3_fraction": 0.00015843764,
+        "mean_chroma": 0.009274104,
+        "capture_ev100": 18.287712,
+        "low_light_score": 0.0
+      },
+      "parameters": {
+        "exposure_ev": 4.35832,
+        "black_input_ev": -6.5296874,
+        "white_input_ev": 2.679566,
+        "black_output_linear": 0.0012,
+        "white_output_linear": 0.985,
+        "black_output_ev": -7.228819,
+        "white_output_ev": 2.4521267,
+        "contrast": 1.1402334,
+        "shadow_power": 1.0299563,
+        "highlight_power": 1.2459921,
+        "saturation": 1.22,
+        "vibrance": 0.08,
+        "highlight_desaturation": 0.16,
+        "highlight_color_ratio_exponent": 1.0,
+        "highlight_norm": 1.0,
+        "noise_floor_ev": -11.818061
+      },
+      "measured": {
+        "colourfulness": 57.943226,
+        "clipped_fraction": 0.0,
+        "near_white_fraction": 0.06906,
+        "crushed_fraction": 0.000004,
+        "mean_level": 92.834206,
+        "mean_saturation": 0.5351515,
+        "mean_saturation_highlight": 0.3158204,
+        "highlight_pixels": 32703,
+        "luminance_entropy": 7.576475,
+        "average_gradient": 7.928662,
+        "sampled_pixels": 250000
+      },
+      "noise": {
+        "shot_slope": 0.10522446,
+        "read_variance": 0.47000995,
+        "snr1_ev": -11.818061,
+        "snr10_ev": -7.5867186,
+        "tiles_used": 94613,
+        "saturation": 14848.0
+      },
+      "noise_floor": {
+        "snr1_ev": -11.818061,
+        "snr10_ev": -7.5867186,
+        "shot_slope": 0.10522446,
+        "pooled": false,
+        "source": "frame",
+        "group_key": null,
+        "group_n": null
+      },
+      "shot": {
+        "iso": 100,
+        "exposure_time": 0.0003125,
+        "f_number": 10.0
+      },
+      "encoder_hints": {
+        "schema_version": 2,
+        "grain": "no_preference"
+      },
+      "sharpen": {
+        "amount": 0.75,
+        "radius": 1,
+        "headroom_limited_fraction": 0.15808909,
+        "mean_correction": 0.005868729
+      },
+      "reference": {
+        "path": "raw/raw_backlit2/_DSC1347.JPG",
+        "width": 6000,
+        "height": 4000,
+        "center_weighted_key_display_ev": -3.549418,
+        "p05_display_ev": -9.211956,
+        "p50_display_ev": -4.6322455,
+        "p95_display_ev": -1.88582,
+        "measured": {
+          "colourfulness": 21.376303,
+          "clipped_fraction": 0.000176,
+          "near_white_fraction": 0.000212,
+          "crushed_fraction": 0.165448,
+          "mean_level": 22.283531,
+          "mean_saturation": 0.514242,
+          "mean_saturation_highlight": 0.019308934,
+          "highlight_pixels": 116,
+          "luminance_entropy": 5.297548,
+          "average_gradient": 0.6355366,
+          "sampled_pixels": 250000
+        },
+        "delta": {
+          "center_weighted_key_display_ev": 3.7259405,
+          "colourfulness": 36.566925,
+          "mean_saturation": 0.020909488,
+          "saturation_ratio": 1.0406607,
+          "mean_level": 70.550674,
+          "near_white_fraction": 0.068848,
+          "crushed_fraction": -0.165444,
+          "luminance_entropy": 2.2789273,
+          "highlight_saturation_ratio": 16.35618,
+          "hue": {
+            "median_degrees": 9.00346,
+            "p90_degrees": 73.33012,
+            "max_degrees": 179.97679,
+            "mean_degrees": 24.23275,
+            "comparable_pixels": 137047,
+            "chroma_ratio": 2.0625312,
+            "grid_width": 512,
+            "grid_height": 341
+          }
+        }
+      },
+      "color": {
+        "path": "owned",
+        "working_space": "srgb",
+        "illuminant": "D65",
+        "illuminants_available": [
+          "A",
+          "D65"
+        ],
+        "white_balance": [
+          2.3007812,
+          1.0,
+          1.6289062,
+          0.0
+        ],
+        "cam_to_working": [
+          1.6353865,
+          -0.42196247,
+          -0.21342388,
+          -0.13107215,
+          1.542707,
+          -0.4116351,
+          0.0114296675,
+          -0.41959298,
+          1.4081635
+        ],
+        "camera_channels": 3,
+        "demosaic": {
+          "requested": "auto",
+          "resolved": "rcd",
+          "selector_version": "bayer-auto-v1",
+          "snr10_ev": -7.5867186,
+          "alias_score": 0.008196767,
+          "reason": "moderate_low_alias"
+        },
+        "clip_cost": {
+          "negative_fraction": 0.12942608,
+          "negative_luminance_fraction": 0.0019015,
+          "above_one_fraction": 0.00017620833,
+          "altered_fraction": 0.1296023,
+          "mean_abs_delta": 0.00021715896,
+          "max_abs_delta": 4.1386137
+        },
+        "rescale": {
+          "policy": "preserve",
+          "black_levels": [
+            512.0,
+            512.0,
+            512.0,
+            512.0
+          ],
+          "white_levels": [
+            15360.0,
+            15360.0,
+            15360.0,
+            15360.0
+          ],
+          "repeat_width": 2,
+          "repeat_height": 2,
+          "repeat_cpp": 1,
+          "repeat_colors": [
+            "RED",
+            "GREEN",
+            "GREEN",
+            "BLUE"
+          ],
+          "sub_black_fraction": 0.0024429727,
+          "min_normalized": -0.03448276,
+          "max_normalized": 1.0688982
+        },
+        "hot_pixels": {
+          "strength": 0.5,
+          "examined": 24337152,
+          "hot": 0,
+          "dead": 0,
+          "max_correction": 0.0
+        },
+        "highlight_reconstruction": {
+          "method": "harmonic",
+          "strength": 1.0,
+          "clipped_pixels": 4107,
+          "reconstructed_pixels": 4418,
+          "near_white_pixels": 3478,
+          "fully_clipped_pixels": 3196,
+          "clipped_1_pixels": 629,
+          "clipped_2_pixels": 282,
+          "clipped_3_pixels": 3196,
+          "max_lift": 6.3509398,
+          "clipped_cfa_sites": 3681,
+          "reconstructed_cfa_sites": 3548,
+          "affected_output_pixels": 4418,
+          "connected_regions": 1,
+          "knee_corrected_sites": 0,
+          "mean_fit_quality": 0.97216594,
+          "fully_clipped_cores": 1,
+          "solver_fallbacks": 0
+        }
+      },
+      "guidance_mode": "independent"
+    }
+  ]
+}

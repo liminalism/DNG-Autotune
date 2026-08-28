@@ -86,26 +86,24 @@ impl HighlightMethod {
 /// the project before the harmonic promotion — already handles isolated clipped
 /// pixels.
 ///
-/// `1e-5` is 0.001% of sites, i.e. about 240 sites on a 24 MP mosaic. It is
-/// chosen conservatively rather than swept. The supporting corpus measurement is
-/// `docs/HDR_EVALUATION.md`, which classified every pixel of all 58 files in
-/// `raw/raw_3rd_batch` by clipped-channel count: the two-or-more-channel fraction
-/// has a **median of 0.0003%** (3e-6, below this floor), a **p90 of 1.9%** and a
-/// **maximum of 12.4%**, and the frames that were independently flagged by eye as
-/// having a highlight defect are the nine above 1% — three orders of magnitude
-/// above the floor. So the floor separates "nothing to reconstruct" from every
-/// frame the corpus has ever shown a highlight problem on, with a wide margin on
-/// both sides.
+/// `1e-5` is 0.001% of sites, i.e. about 240 sites on a 24 MP mosaic. The
+/// supporting corpus measurement is `docs/HDR_EVALUATION.md`, which classified
+/// every pixel of all 58 files in `raw/raw_3rd_batch` by clipped-channel count:
+/// the two-or-more-channel fraction has a **median of 0.0003%** (3e-6, below
+/// this floor), a **p90 of 1.9%** and a **maximum of 12.4%**, and the frames
+/// that were independently flagged by eye as having a highlight defect are the
+/// nine above 1% — three orders of magnitude above the floor. So the floor
+/// separates "nothing to reconstruct" from every frame the corpus has ever
+/// shown a highlight problem on, with a wide margin on both sides.
 ///
-/// Two honest caveats, recorded in the AKR ledger as an open question
-/// (`raw-autotune.question.spatial-highlight-floor-not-swept`):
-///
-/// - that measurement counts *pixels with two or more channels clipped*, while
-///   this floor counts *CFA sites at or above [`VALID_CONFIDENCE_MAX`]*, which is
-///   a strictly larger population. The two are not the same statistic, so the
-///   margin above is indicative rather than exact;
-/// - no sweep of this constant against the paired-camera corpus has been run.
-///   `clipped_cfa_sites` is reported for every frame precisely so one can be.
+/// Swept 2026-08-27 on all 381 CFA files (`docs/evidence/spatial-floor-sweep-20260827/`):
+/// 99 frames at zero sites, 71 in (0, 1e-5) with 1–224 sites, 211 at or above
+/// the floor. The 29-frame "empty band" was a reporting artifact. 1e-5 is kept
+/// as this "few hundred isolated sites" cutoff; a quality A/B of those 71
+/// would be needed to move it. The floor continues to gate on CFA sites, not
+/// on two-or-more-channel demosaiced pixels. `clipped_cfa_sites` is counted
+/// for every spatial pass, including a declined one, and folded onto the
+/// Current sidecar report.
 pub const DEFAULT_SPATIAL_CLIPPED_FLOOR: f32 = 1.0e-5;
 
 /// Parameters that define one pre-demosaic reconstruction pass.

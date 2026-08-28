@@ -417,6 +417,9 @@ impl Tally {
             clipped_2_pixels: self.clipped_2 as usize,
             clipped_3_pixels: self.clipped_3 as usize,
             max_lift: self.max_lift,
+            // Pre-demosaic counters. Zero here because this tally never saw a
+            // mosaic; [`fold_raw_counters`] copies them from `reconstruct_cfa`
+            // when a spatial pass ran (including when the floor declined it).
             clipped_cfa_sites: 0,
             reconstructed_cfa_sites: 0,
             affected_output_pixels: 0,
@@ -458,15 +461,30 @@ pub(crate) fn spatial_report_and_uncertainty(
     report.method = raw.method;
     report.reconstructed_pixels = affected;
     report.max_lift = raw.max_lift;
+    report.affected_output_pixels = affected;
+    fold_raw_counters(&mut report, &raw);
+    (report, uncertainty)
+}
+
+/// Copy the pre-demosaic counters onto a post-demosaic report.
+///
+/// `reconstruct_cfa` measures `clipped_cfa_sites` even when the archive-speed
+/// floor declines the solve — that count is the statistic the floor was built
+/// to sweep. The Current estimator's own report hard-codes the mosaic fields
+/// to 0, so a declined frame would otherwise reach the sidecar with no count
+/// and a `--dry-run --summary` could not answer
+/// `question.spatial-highlight-floor-not-swept`. Pixel values are untouched.
+pub(crate) fn fold_raw_counters(
+    report: &mut HighlightReport,
+    raw: &crate::raw_highlight::RawHighlightReport,
+) {
     report.clipped_cfa_sites = raw.clipped_cfa_sites;
     report.reconstructed_cfa_sites = raw.reconstructed_cfa_sites;
-    report.affected_output_pixels = affected;
     report.connected_regions = raw.connected_regions;
     report.knee_corrected_sites = raw.knee_corrected_sites;
     report.mean_fit_quality = raw.mean_fit_quality;
     report.fully_clipped_cores = raw.fully_clipped_cores;
     report.solver_fallbacks = raw.solver_fallbacks;
-    (report, uncertainty)
 }
 
 const SPATIAL_CHROMA_MASK_LOW: f32 = 0.05;
@@ -1547,5 +1565,38 @@ mod tests {
         assert_eq!(report.clipped_pixels, 1);
         assert_eq!(report.near_white_pixels, 1);
         assert_eq!(report.reconstructed_pixels, 0);
+    }
+
+    /// The archive-speed floor counts CFA sites even when it declines the
+    /// solve. Folding those counters onto the Current report is what puts
+    /// `clipped_cfa_sites` in a declined frame's sidecar; without it the
+    /// floor-sweep statistic is silently zero.
+    #[test]
+    fn a_declined_spatial_pass_still_reports_clipped_cfa_sites() {
+        let mut img = image(vec![[0.10, 0.20, 0.30], [0.40, 0.50, 0.60]]);
+        let (mut report, _) =
+            reconstruct_with_confidence_and_uncertainty(&mut img, [1.0, 1.0, 1.0], 1.0, None);
+        assert_eq!(report.clipped_cfa_sites, 0);
+        assert_eq!(report.clipped_pixels, 0);
+
+        super::fold_raw_counters(
+            &mut report,
+            &crate::raw_highlight::RawHighlightReport {
+                method: crate::raw_highlight::HighlightMethod::Current,
+                clipped_cfa_sites: 17,
+                reconstructed_cfa_sites: 0,
+                ..crate::raw_highlight::RawHighlightReport::default()
+            },
+        );
+        assert_eq!(
+            report.method,
+            crate::raw_highlight::HighlightMethod::Current
+        );
+        assert_eq!(report.clipped_cfa_sites, 17);
+        assert_eq!(report.reconstructed_cfa_sites, 0);
+        assert_eq!(
+            report.clipped_pixels, 0,
+            "fold must not rewrite pixel tallies"
+        );
     }
 }

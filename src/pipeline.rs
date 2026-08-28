@@ -124,6 +124,8 @@ fn develop(
                 lens_correction: options.lens_correction,
                 dump_stages: options.dump_stages.clone(),
                 illuminant_proxy: options.illuminant,
+                hue_sat_map: options.hue_sat_map.clone(),
+                hue_sat_map_strength: options.hue_sat_map_strength,
             },
         ),
     }
@@ -1201,6 +1203,7 @@ fn process_job_inner(
                 options.semantic_sky_highlights > 0.0 || options.semantic_sky_chroma > 0.0,
                 options.illuminant,
                 options.scene_classify,
+                options.hue_sat_map.is_some() && options.hue_sat_map_strength > 0.0,
             ),
             application: "raw-autotune".to_string(),
             application_version: env!("CARGO_PKG_VERSION").to_string(),

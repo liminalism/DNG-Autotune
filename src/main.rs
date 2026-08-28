@@ -604,6 +604,7 @@ fn run_pipeline(
                 options.semantic_sky_highlights > 0.0 || options.semantic_sky_chroma > 0.0,
                 options.illuminant,
                 options.scene_classify,
+                options.hue_sat_map.is_some() && options.hue_sat_map_strength > 0.0,
             ),
             application_version: env!("CARGO_PKG_VERSION").to_string(),
             automatic_profile_version: types::RunOptions::AUTO_PROFILE_VERSION.to_string(),

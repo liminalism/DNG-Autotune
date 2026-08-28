@@ -1,0 +1,9 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `release` profile [optimized] target(s) in 0.23s
+     Running `target/release/examples/probe-highlight-gt raw/raw_backlit2/_DSC1345.ARW raw/raw_backlit2/_DSC1346.ARW 3.68`
+develop ON raw/raw_backlit2/_DSC1345.ARW
+develop OFF raw/raw_backlit2/_DSC1345.ARW
+develop dark raw/raw_backlit2/_DSC1346.ARW
+shift (0, 0) reconstructed=27717

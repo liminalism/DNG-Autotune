@@ -25,6 +25,40 @@ record raw-autotune.decision.agpl-boundary-and-dependency-direction/1 : decision
     supported_by [ @raw-autotune.evidence.agpl-license-field-20260827 ]
 }
 
+record raw-autotune.decision.backlit-tone-policy-does-not-ship/1 : decision {
+    title "Backlit tone policy does not ship; the preview oracle already implements silhouette-vs-fill"
+    state active
+    scope [ path "src/analyze.rs", path "src/preview.rs", path "src/scene.rs" ]
+    decision """
+        Do not consume scene_lighting.backlit == Actionable for an exposure or
+        local-tone change. On raw/raw_backlit2 the classifier finds real
+        contre-jour, the geometric centre-vs-surround split never corroborates
+        (off-centre silhouettes go negative; centred fill hands only +0.21 EV
+        against a 1.25 EV margin), and the unattended preview-guided path
+        already matches the camera JPEG's silhouette-vs-fill (median key
+        +0.06 EV). Independent --no-preview fills the dusk silhouettes by
+        +3.5 EV and ruins them. That independent lift is exactly what a
+        "backlit => fill the subject" policy would do.
+
+        Do not lower BACKLIT_EV_SPLIT_MARGIN_EV to manufacture Actionable:
+        it was set above the previous corpus p99 so ordinary frames cannot
+        corroborate by accident, and Actionable would still have no safe
+        policy to consume. Leave the fusion observational. Preview-guided
+        auto remains the unattended path.
+        """
+    context """
+        LIGHTING_DETECTION_PLAN.md phase 4 named backlit first (silhouette vs
+        fill) as the first render policy, gated on classifier and centre-vs-
+        surround EV split. Indoor WB was already rejected. Measured
+        2026-08-28 on the user's new contre-jour set.
+        """
+    consequences """
+        Phase 4 render-policy wiring for backlit does not ship. Macro remains
+        a later, milder plan item. Slice 8 and Candidate D are unchanged.
+        """
+    supported_by [ @raw-autotune.evidence.backlit2-contre-jour-ab-20260828 ]
+}
+
 record raw-autotune.decision.face-detection-is-off-by-default/1 : decision {
     title "Face detection is gated off: zero true positives, and nothing consumed the mask"
     state active
@@ -104,6 +138,41 @@ record raw-autotune.decision.highlight-desaturation-uses-peak-preserving-white-p
         Consequences: the existing global highlight shoulder reduces the adjacency contrast without semantic sky detection, spatial halos, or the darkening caused by contraction around luminance. Recorded colour is reduced rather than erased, and reconstruction remains governed by raw-domain clipping evidence.
         """
     supported_by [ @raw-autotune.evidence.sky-stage-attribution-20260816-r2 ]
+}
+
+record raw-autotune.decision.indoor-actionable-does-not-enable-local-wb/1 : decision {
+    title "Indoor-actionable does not enable --local-white-balance"
+    state active
+    scope [ path "src/pipeline.rs", path "src/scene.rs", path "src/whitebalance.rs" ]
+    decision """
+        Do not consume scene_lighting.indoor == Actionable as a permission bit
+        for --local-white-balance. The fierro2009 mixed-light operator fails the
+        camera-JPEG hue A/B on single-illuminant tungsten interiors: it treats
+        lamp-versus-bounce chromaticity as two lights and over-corrects (batch
+        mean hue 18.3 to 30.9 degrees, _DSC1325 ruined). Local-WB stays opt-in,
+        off by default, and ungated by the indoor fusion.
+
+        A C5-driven global WB replacement is not the indoor look gap either:
+        as-shot and C5 disagree by 1-4 degrees on the tungsten-actionable
+        cluster, while the default render sits 9-25 degrees of hue away from
+        the camera JPEG. That residual is the Candidate D / matrix-colour
+        question, not an illuminant miss.
+
+        Indoor-actionable remains observational until a mixed window+tungsten
+        paired set exists for the operator that is actually for mixed light.
+        """
+    context """
+        LIGHTING_DETECTION_PLAN.md phase 4 said indoor/tungsten policy is a
+        WB-corrector gate consuming the fusion verdict. The only WB corrector
+        in tree is local mixed-light correction. Measured 2026-08-27 on
+        raw/indoor_tungsten.
+        """
+    consequences """
+        Phase 4 indoor render policy does not ship. Backlit tone policy still
+        needs true subject-against-light pairs. --local-white-balance is
+        unchanged.
+        """
+    supported_by [ @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827 ]
 }
 
 record raw-autotune.decision.key-decisions/1 : decision {

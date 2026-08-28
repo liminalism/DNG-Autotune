@@ -215,6 +215,73 @@ raw-autotune raw-folder --dry-run --summary survey.json
 `survey.json` holds per-file analysis and chosen parameters, plus batch tonal
 class counts and an exposure distribution.
 
+Turn on every observational model (scene masks, C5 illuminant, CamSDD
+classifier) without changing pixels:
+
+```bash
+raw-autotune raw-folder --dry-run --summary survey.json --bundle survey
+```
+
+## Feature bundles
+
+`--preset` is the global look (`neutral` / `auto` / `standard` / `vivid`).
+`standard` is the former punchy grade. `vivid` adds the bundled public-domain
+Sony A7C HueSatMap to that same grade. The other presets do not switch
+operators on or off, and `auto` remains the default archive look.
+
+`--bundle` groups the off-by-default pipeline features. `archive` is the
+default and is today's unattended path (`archive-auto-v8`). The others expand
+to flags you could type yourself; they are not promotions into the automatic
+profile.
+
+| `--bundle` | What it turns on | Pixels move? |
+|---|---|---|
+| `archive` | nothing extra | no |
+| `survey` | `--semantic --illuminant --scene-classify` | no |
+| `hdr` | `--hdr 0.5` | yes, experimental |
+| `local-tone` | `--local-tone 0.35` | yes, experimental |
+
+`hdr` and `local-tone` are mutually exclusive. A non-zero `--hdr` /
+`--local-tone` flag overrides the bundle's default strength.
+
+### What stays off unless you ask
+
+Recent work left a lot of operators opt-in. They are **not** in `archive`,
+and they are **not** in a bundle unless listed above.
+
+**Change pixels, off by default**
+
+| Flag | Why it is off |
+|---|---|
+| `--local-white-balance` | Indoor A/B moved hue *away* from the camera JPEG (18° → 31°). |
+| `--local-tone` / `--hdr` | Slice 8: do not promote until highlight colour vs GT is a hue gate, not only chroma. `--bundle local-tone` / `--bundle hdr` are the named opt-in. |
+| `--semantic-sky-highlights` / `--semantic-sky-chroma` | Experimental mask policies; require `--semantic`. |
+| `--hue-sat-map` | Candidate D prototype. Public-domain ART/RT ILCE-7C DCP at `profiles/SONY_ILCE-7C.dcp`; enabled by `--preset vivid`, never by default. |
+| `--highlight-color-ratio-exponent 0.6` | Visual rejection (coloured gradient tendrils). |
+| `--lens-correction profile-exact` | Exact Lensfun remains an experiment; default is embedded DNG opcodes. |
+| `--semantic-faces` | YuNet found zero faces on the corpus; decided off. |
+| `--working-space rec2020` | Intermediate working space; default stays sRGB for the Rawler A/B. |
+| `--no-preview` | Disables the embedded-preview exposure oracle. |
+
+**Observational (no pixel change), off by default**
+
+| Flag | What you get |
+|---|---|
+| `--semantic` | Scene masks / region evidence in the sidecar. |
+| `--illuminant` | C5 CCT / Duv. |
+| `--scene-classify` | CamSDD 30-way + fused `scene_lighting`. |
+| `--sidecar` | Per-file JSON; the batch `--summary` is already on. |
+| `--dump-stages` / `--dump-scene-proxy` | Diagnostics. |
+| `--reference` | Pair against the camera JPEG. |
+| `--emit-baseline` | Extra clipped sRGB control render. |
+
+**On by default, sometimes inert**
+
+Chroma denoise, luma denoise, night tone, sharpen, harmonic highlight
+reconstruction, the DNG matrix path, embedded lens opcodes, hot-pixel
+suppression, and the preview-exposure oracle. Denoisers and night tone no-op
+on clean / daytime frames.
+
 Grade a batch against the camera's own JPEGs (see below):
 
 ```bash
@@ -643,16 +710,23 @@ delivered it. It still estimates exposure.
 
 ### `auto`
 
-Default general-purpose rendering. It retains a larger tonal range than
-`punchy`, applies moderate contrast, and makes a small adaptive colorfulness
+Default archive rendering. It retains a larger tonal range than
+`standard`, applies moderate contrast, and makes a small adaptive colorfulness
 adjustment. Its saturation is set so that the render matches the saturation of
 the camera's own JPEG on the paired test corpus.
 
-### `punchy`
+### `standard`
 
 Tighter endpoints, stronger midtone contrast, and a larger colorfulness boost.
-This is useful for learning whether the default controller is simply too
-restrained, but it is more likely to overprocess difficult files.
+This is the former `punchy` grade. The old name remains accepted as a command-line
+compatibility alias.
+
+### `vivid`
+
+The `standard` tone grade plus the bundled public-domain ART/RawTherapee Sony
+A7C HueSatMap at full strength. It is the opt-in saturated, hue-shaped look;
+selecting `auto` never enables it. `--hue-sat-map-strength` can reduce its LUT
+blend, and an explicit `--hue-sat-map` replaces the bundled table.
 
 `--saturation-scale` multiplies whichever preset is in use. It exists so the
 chroma path can be swept against a corpus of RAW+JPEG pairs, the way

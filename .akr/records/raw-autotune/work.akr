@@ -65,7 +65,32 @@ record raw-autotune.work.archive-speed-highlight-floor-and-encoder-metadata-surf
 
 record raw-autotune.work.calibrated-hue-sat-table-candidate-d/1 : work {
     title "Candidate D: calibrated camera-profile hue/saturation table where matrix colour is insufficient"
-    state proposed
+    state superseded
+    intent """
+        Evaluate and, if justified, implement a DCP-style hue/saturation lookup table applied after the colour matrix, per Candidate D of docs/PURPLE_SKY_PROBLEM_SCOPE.md and its acceptance gates. This is the full closure path for the residual look gap between our faithful matrix rendering of bright blue-violet sky and the camera JPEG, now that decision.faithful-blue-violet-sky-over-camera-white-shoulder keeps the default shoulder unchanged.
+
+        Prerequisite that blocks implementation today: calibrated table data. Either a colour-chart plus sky-bracket capture on the user's Sony body, or a licensing-and-attribution review of an existing profile source (Adobe DCP tables; Darktable/RawTherapee GPL data would need explicit review even under our AGPL-3.0-or-later). No code change is warranted before one of those exists.
+
+        First steps when picked up: settle the data source, then prototype the table as a default-disabled flag with the scope document's gates (held-out Sony set, no neutralisation of legitimate saturated blues or sunsets, determinism across worker counts, memory-planner inclusion).
+        """
+    note """
+        Handoff — blocked on data. Photographer brief and licence table:
+        docs/CAPTURE-AND-LICENCE-NEEDED.md section 3, and
+        @raw-autotune.observation.remaining-work-blocked-on-user-captures.
+
+        Do not implement a hue/sat table without one of: (A) user ColorChecker
+        plus sky-bracket captures on the A7C, or (B) a file-by-file provenance
+        review. Adobe DCP HueSatMap values must not be committed or shipped.
+        Darktable/RawTherapee: GPL-3 code may combine with our AGPL; the
+        *data* may still be Adobe-derived; GPL-2-only is incompatible.
+        Do not reopen the camera white-shoulder decision.
+        Indoor 9-25 deg hue residual vs the camera JPEG is this gap, not C5.
+        """
+}
+
+record raw-autotune.work.calibrated-hue-sat-table-candidate-d/2 : work {
+    title "Candidate D: calibrated camera-profile hue/saturation table where matrix colour is insufficient"
+    state superseded
     scope [ path "src/color.rs" ]
     intent """
         Evaluate and, if justified, implement a DCP-style hue/saturation lookup table applied after the colour matrix, per Candidate D of docs/PURPLE_SKY_PROBLEM_SCOPE.md and its acceptance gates. This is the full closure path for the residual look gap between our faithful matrix rendering of bright blue-violet sky and the camera JPEG, now that decision.faithful-blue-violet-sky-over-camera-white-shoulder keeps the default shoulder unchanged.
@@ -74,7 +99,104 @@ record raw-autotune.work.calibrated-hue-sat-table-candidate-d/1 : work {
 
         First steps when picked up: settle the data source, then prototype the table as a default-disabled flag with the scope document's gates (held-out Sony set, no neutralisation of legitimate saturated blues or sunsets, determinism across worker counts, memory-planner inclusion).
         """
+    note """
+        Handoff — blocked on data. Photographer brief and licence table:
+        docs/CAPTURE-AND-LICENCE-NEEDED.md section 3, and
+        @raw-autotune.observation.remaining-work-blocked-on-user-captures.
+
+        Do not implement a hue/sat table without one of: (A) user ColorChecker
+        plus sky-bracket captures on the A7C, or (B) a file-by-file provenance
+        review. Adobe DCP HueSatMap values must not be committed or shipped.
+        Darktable/RawTherapee: GPL-3 code may combine with our AGPL; the
+        *data* may still be Adobe-derived; GPL-2-only is incompatible.
+        Do not reopen the camera white-shoulder decision.
+        Indoor 9-25 deg hue residual vs the camera JPEG is this gap, not C5.
+        """
     derived_from [ @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage ]
+    supersedes [ @raw-autotune.work.calibrated-hue-sat-table-candidate-d/1 ]
+}
+
+record raw-autotune.work.calibrated-hue-sat-table-candidate-d/3 : work {
+    title "Candidate D: calibrated camera-profile hue/saturation table where matrix colour is insufficient"
+    state superseded
+    scope [ path "src/color.rs" ]
+    intent """
+        Evaluate and, if justified, implement a DCP-style hue/saturation lookup table applied after the colour matrix, per Candidate D of docs/PURPLE_SKY_PROBLEM_SCOPE.md and its acceptance gates. This is the full closure path for the residual look gap between our faithful matrix rendering of bright blue-violet sky and the camera JPEG, now that decision.faithful-blue-violet-sky-over-camera-white-shoulder keeps the default shoulder unchanged.
+
+        Data source is settled: CamSDD has no colour chart; a ColorChecker is not available; the ART/RawTherapee SONY ILCE-7C.dcp is ProfileCopyright=public domain (not Adobe). Prototype ships as --hue-sat-map <dcp>, default off, strength 0 exact no-op, table applied in ProPhoto HSV after the matrix. Bundled file: profiles/SONY_ILCE-7C.dcp with attribution in profiles/README.md.
+
+        Remaining before any unattended enablement: held-out Sony sky set (_DSC1288/1289 class) vs camera JPEG, no neutralization of legitimate saturated blues or sunsets, determinism across worker counts (LUT is per-pixel, no extra frame buffer), and a full-corpus gate. Do not put this in archive-auto-v8.
+        """
+    note """
+        Unblocked 2026-08-28. Photographer could not shoot a ColorChecker; CamSDD is not a characterisation set. Path B (file-by-file RT/ART DCP) is the table. Adobe HueSatMap values still must not be committed.
+
+        Prototype: src/huesatmap.rs, CLI --hue-sat-map / --hue-sat-map-strength, schema 27 when the flag is on. Evidence @raw-autotune.evidence.candidate-d-art-dcp-huesatmap-20260828.
+        """
+    derived_from [ @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage ]
+    supersedes [ @raw-autotune.work.calibrated-hue-sat-table-candidate-d/2 ]
+}
+
+record raw-autotune.work.calibrated-hue-sat-table-candidate-d/4 : work {
+    title "Candidate D: calibrated HueSatMap and opt-in vivid preset"
+    state superseded
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "docs/KNOWN_LIMITATIONS.md",
+        path "profiles/**",
+        path "src/analyze.rs",
+        path "src/cli.rs",
+        path "src/huesatmap.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Evaluate and, if justified, implement a DCP-style hue/saturation lookup table applied after the colour matrix, per Candidate D of docs/PURPLE_SKY_PROBLEM_SCOPE.md. This is the full closure path for the residual look gap between faithful matrix rendering and the desired saturated, hue-shaped look.
+
+        Data source is settled: CamSDD has no colour chart; a ColorChecker is not available; the ART/RawTherapee SONY ILCE-7C.dcp is ProfileCopyright=public domain (not Adobe). The explicit --hue-sat-map <dcp> path stays available, strength 0 is an exact no-op, and the table is applied in ProPhoto HSV after the matrix. Bundled file: profiles/SONY_ILCE-7C.dcp with attribution in profiles/README.md.
+
+        User-facing policy: auto remains the archive default. The former punchy grade is named standard. The opt-in vivid preset uses the same standard tone grade plus the bundled HueSatMap. This is a named creative selection, not unattended enablement and not part of archive-auto-v8. The old punchy spelling remains a compatibility alias.
+
+        Remaining work is to decide when a photographer should choose standard versus vivid, informed by held-out Sony sky/JPEG comparisons and checks that legitimate saturated blues and sunsets are not neutralized.
+        """
+    note """
+        Unblocked 2026-08-28. Photographer could not shoot a ColorChecker; CamSDD is not a characterisation set. Path B (file-by-file RT/ART DCP) is the table. Adobe HueSatMap values still must not be committed.
+
+        Prototype: src/huesatmap.rs, CLI --hue-sat-map / --hue-sat-map-strength, schema 27 when the flag is on. Evidence @raw-autotune.evidence.candidate-d-art-dcp-huesatmap-20260828.
+        """
+    derived_from [ @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage ]
+    supersedes [ @raw-autotune.work.calibrated-hue-sat-table-candidate-d/3 ]
+}
+
+record raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 : work {
+    title "Candidate D: calibrated HueSatMap and opt-in vivid preset"
+    state active
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "docs/KNOWN_LIMITATIONS.md",
+        path "profiles/**",
+        path "src/analyze.rs",
+        path "src/cli.rs",
+        path "src/huesatmap.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Evaluate and, if justified, implement a DCP-style hue/saturation lookup table applied after the colour matrix, per Candidate D of docs/PURPLE_SKY_PROBLEM_SCOPE.md. This is the full closure path for the residual look gap between faithful matrix rendering and the desired saturated, hue-shaped look.
+
+        Data source is settled: CamSDD has no colour chart; a ColorChecker is not available; the ART/RawTherapee SONY ILCE-7C.dcp is ProfileCopyright=public domain (not Adobe). The explicit --hue-sat-map <dcp> path stays available, strength 0 is an exact no-op, and the table is applied in ProPhoto HSV after the matrix. Bundled file: profiles/SONY_ILCE-7C.dcp with attribution in profiles/README.md.
+
+        User-facing policy: auto remains the archive default. The former punchy grade is named standard. The opt-in vivid preset uses the same standard tone grade plus the bundled HueSatMap. This is a named creative selection, not unattended enablement and not part of archive-auto-v8. The old punchy spelling remains a compatibility alias.
+
+        Remaining work is to decide when a photographer should choose standard versus vivid, informed by held-out Sony sky/JPEG comparisons and checks that legitimate saturated blues and sunsets are not neutralized.
+        """
+    note """
+        Unblocked 2026-08-28. Photographer could not shoot a ColorChecker; CamSDD is not a characterisation set. Path B (file-by-file RT/ART DCP) is the table. Adobe HueSatMap values still must not be committed.
+
+        Prototype: src/huesatmap.rs, CLI --hue-sat-map / --hue-sat-map-strength, schema 27 when the flag is on. Evidence @raw-autotune.evidence.candidate-d-art-dcp-huesatmap-20260828.
+        """
+    derived_from [ @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage ]
+    supersedes [ @raw-autotune.work.calibrated-hue-sat-table-candidate-d/4 ]
+    supported_by [ @raw-autotune.evidence.standard-vivid-preset-suite-20260828 ]
 }
 
 record raw-autotune.work.compression-aware-highlight-ratio-promotion/1 : work {
@@ -221,6 +343,19 @@ record raw-autotune.work.encoder-profile-hints-api/1 : work {
     }
     depends_on [ @raw-autotune.work.scene-evidence-corpus-policy/2 ]
     derived_from [ @raw-autotune.assessment.scene-evidence-usefulness/2 ]
+}
+
+record raw-autotune.work.feature-bundles/1 : work {
+    title "Named CLI bundles for off-by-default pipeline features"
+    state completed
+    intent """
+        Group the off-by-default pipeline features into named CLI bundles so an archive batch does not have to pass a handful of flags. --preset stays the tone look (neutral/auto/punchy). --bundle selects a feature grouping: archive (default, today's archive-auto-v8), survey (observational --semantic --illuminant --scene-classify, pixel-identical), hdr (--hdr 0.5), local-tone (--local-tone 0.35).
+
+        Do not put measured-rejected operators in a bundle: local-white-balance, semantic-sky-* policies, highlight-color-ratio-exponent 0.6, hue-sat-map (Candidate D still opt-in by path), semantic-faces, lens profile-exact. Do not advance archive-auto-v8. Explicit flags still win on strength when they are non-zero; --hdr and --local-tone remain mutually exclusive after expansion.
+        """
+    note """
+        Slice 8 left --hdr/--local-tone opt-in; indoor A/B left local-WB opt-in; Candidate D left --hue-sat-map path-gated. Bundles are discoverability, not promotions.
+        """
 }
 
 record raw-autotune.work.goal/1 : work {
@@ -816,7 +951,7 @@ record raw-autotune.work.open-questions/1 : work {
 
 record raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 : work {
     title "Phase 4: in-pipeline scene classifier + SceneLighting fusion, backlit first"
-    state active
+    state superseded
     intent """
         Phase 4 of research/LIGHTING_DETECTION_PLAN.md, backlit first: run the
         trained CamSDD classifier (camsdd_resnet50_192.onnx) inside the render
@@ -850,6 +985,194 @@ record raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 : work {
     ]
     verified_by [
         @raw-autotune.evidence.camsdd-inpipeline-parity-20260827,
+        @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827
+    ]
+}
+
+record raw-autotune.work.phase-4-backlit-scene-lighting-wiring/2 : work {
+    title "Phase 4: in-pipeline scene classifier + SceneLighting fusion, backlit first"
+    state superseded
+    intent """
+        Phase 4 of research/LIGHTING_DETECTION_PLAN.md, backlit first: run the
+        trained CamSDD classifier (camsdd_resnet50_192.onnx) inside the render
+        pipeline behind an opt-in --scene-classify flag, record its 30-class
+        probabilities as observational evidence, and fuse classifier + measured
+        statistics (+C5 CCT when --illuminant is on) into a typed SceneLighting
+        verdict per the plan's corroboration rules. Backlit promotes to
+        actionable only when the classifier's Backlight verdict agrees with the
+        centre-vs-surround EV split (p50_ev vs center_median_ev) beyond a
+        corpus-derived margin. Trust tiers from the 2026-08-26 hand review
+        apply: Tier C classes (Kids, Underwater, Computer_Screens, Snow) are
+        blocklisted from the fusion. The actual render policy is wired only
+        behind its own A/B against the camera JPEG.
+        """
+    note """
+        Observational wiring landed and verified (git c130e01d, evidence
+        @raw-autotune.evidence.camsdd-inpipeline-parity-20260827 and
+        @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827).
+        Margin 1.25 EV (corpus p99 1.11, n=258); indoor CCT threshold 3800 K.
+        The raw_backlit batch is view-through-opening, not contre-jour: the
+        fusion is honestly quiet on backlit there.
+
+        Indoor WB-corrector measured 2026-08-27
+        (@raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827,
+        @raw-autotune.decision.indoor-actionable-does-not-enable-local-wb):
+        --local-white-balance fails the camera-JPEG hue A/B on the 9-pair
+        indoor_tungsten set and must not consume indoor-actionable. C5 vs
+        as-shot (1-4 deg) is not the 9-25 deg JPEG hue residual. Indoor
+        policy stays observational.
+
+        Still open: true subject-against-light pairs and the backlit tone
+        policy A/B. Mixed window+tungsten pairs would be needed before
+        revisiting local-WB as a mixed-light operator.
+        """
+    supersedes [ @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 ]
+    verified_by [
+        @raw-autotune.evidence.camsdd-inpipeline-parity-20260827,
+        @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827,
+        @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827
+    ]
+}
+
+record raw-autotune.work.phase-4-backlit-scene-lighting-wiring/3 : work {
+    title "Phase 4: in-pipeline scene classifier + SceneLighting fusion, backlit first"
+    state superseded
+    intent """
+        Phase 4 of research/LIGHTING_DETECTION_PLAN.md, backlit first: run the
+        trained CamSDD classifier (camsdd_resnet50_192.onnx) inside the render
+        pipeline behind an opt-in --scene-classify flag, record its 30-class
+        probabilities as observational evidence, and fuse classifier + measured
+        statistics (+C5 CCT when --illuminant is on) into a typed SceneLighting
+        verdict per the plan's corroboration rules. Backlit promotes to
+        actionable only when the classifier's Backlight verdict agrees with the
+        centre-vs-surround EV split (p50_ev vs center_median_ev) beyond a
+        corpus-derived margin. Trust tiers from the 2026-08-26 hand review
+        apply: Tier C classes (Kids, Underwater, Computer_Screens, Snow) are
+        blocklisted from the fusion. The actual render policy is wired only
+        behind its own A/B against the camera JPEG.
+        """
+    note """
+        Observational wiring landed and verified (git c130e01d, evidence
+        @raw-autotune.evidence.camsdd-inpipeline-parity-20260827 and
+        @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827).
+        Margin 1.25 EV (corpus p99 1.11, n=258); indoor CCT threshold 3800 K.
+        The raw_backlit batch is view-through-opening, not contre-jour: the
+        fusion is honestly quiet on backlit there.
+
+        Indoor WB-corrector measured 2026-08-27
+        (@raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827,
+        @raw-autotune.decision.indoor-actionable-does-not-enable-local-wb):
+        --local-white-balance fails the camera-JPEG hue A/B on the 9-pair
+        indoor_tungsten set and must not consume indoor-actionable. C5 vs
+        as-shot (1-4 deg) is not the 9-25 deg JPEG hue residual. Indoor
+        policy stays observational.
+
+        Handoff — blocked on the user. Shot list and don'ts:
+        docs/CAPTURE-AND-LICENCE-NEEDED.md section 1, and
+        @raw-autotune.observation.remaining-work-blocked-on-user-captures.
+        Do not retune backlit from raw/raw_backlit. Do not enable
+        --local-white-balance from indoor-actionable. Next code is a
+        silhouette-vs-fill A/B only after true contre-jour RAW+JPEG pairs
+        land (subject against sun or bright window).
+        """
+    supersedes [ @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/2 ]
+}
+
+record raw-autotune.work.phase-4-backlit-scene-lighting-wiring/4 : work {
+    title "Phase 4: in-pipeline scene classifier + SceneLighting fusion, backlit first"
+    state superseded
+    intent """
+        Phase 4 of research/LIGHTING_DETECTION_PLAN.md, backlit first: run the
+        trained CamSDD classifier (camsdd_resnet50_192.onnx) inside the render
+        pipeline behind an opt-in --scene-classify flag, record its 30-class
+        probabilities as observational evidence, and fuse classifier + measured
+        statistics (+C5 CCT when --illuminant is on) into a typed SceneLighting
+        verdict per the plan's corroboration rules. Backlit promotes to
+        actionable only when the classifier's Backlight verdict agrees with the
+        centre-vs-surround EV split (p50_ev vs center_median_ev) beyond a
+        corpus-derived margin. Trust tiers from the 2026-08-26 hand review
+        apply: Tier C classes (Kids, Underwater, Computer_Screens, Snow) are
+        blocklisted from the fusion. The actual render policy is wired only
+        behind its own A/B against the camera JPEG.
+        """
+    note """
+        Observational wiring landed and verified (git c130e01d, evidence
+        @raw-autotune.evidence.camsdd-inpipeline-parity-20260827 and
+        @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827).
+        Margin 1.25 EV (corpus p99 1.11, n=258); indoor CCT threshold 3800 K.
+        The raw_backlit batch is view-through-opening, not contre-jour: the
+        fusion is honestly quiet on backlit there.
+
+        Indoor WB-corrector measured 2026-08-27
+        (@raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827,
+        @raw-autotune.decision.indoor-actionable-does-not-enable-local-wb):
+        --local-white-balance fails the camera-JPEG hue A/B on the 9-pair
+        indoor_tungsten set and must not consume indoor-actionable. C5 vs
+        as-shot (1-4 deg) is not the 9-25 deg JPEG hue residual. Indoor
+        policy stays observational.
+
+        Handoff — blocked on the user. Shot list and don'ts:
+        docs/CAPTURE-AND-LICENCE-NEEDED.md section 1, and
+        @raw-autotune.observation.remaining-work-blocked-on-user-captures.
+        Do not retune backlit from raw/raw_backlit. Do not enable
+        --local-white-balance from indoor-actionable. Next code is a
+        silhouette-vs-fill A/B only after true contre-jour RAW+JPEG pairs
+        land (subject against sun or bright window).
+        """
+    depends_on [
+        @raw-autotune.work.port-c5-illuminant-estimator,
+        @raw-autotune.work.train-camsdd-scene-classifier
+    ]
+    supersedes [ @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/3 ]
+    verified_by [
+        @raw-autotune.evidence.camsdd-inpipeline-parity-20260827,
+        @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827,
+        @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827
+    ]
+}
+
+record raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5 : work {
+    title "Phase 4: in-pipeline scene classifier + SceneLighting fusion, backlit first"
+    state completed
+    intent """
+        Phase 4 of research/LIGHTING_DETECTION_PLAN.md, backlit first: run the
+        trained CamSDD classifier (camsdd_resnet50_192.onnx) inside the render
+        pipeline behind an opt-in --scene-classify flag, record its 30-class
+        probabilities as observational evidence, and fuse classifier + measured
+        statistics (+C5 CCT when --illuminant is on) into a typed SceneLighting
+        verdict per the plan's corroboration rules. Backlit promotes to
+        actionable only when the classifier's Backlight verdict agrees with the
+        centre-vs-surround EV split (p50_ev vs center_median_ev) beyond a
+        corpus-derived margin. Trust tiers from the 2026-08-26 hand review
+        apply: Tier C classes (Kids, Underwater, Computer_Screens, Snow) are
+        blocklisted from the fusion. The actual render policy is wired only
+        behind its own A/B against the camera JPEG.
+        """
+    note """
+        Closed 2026-08-28. Observational wiring shipped (c130e01d). Indoor
+        WB-corrector A/B failed the camera JPEG
+        (@raw-autotune.decision.indoor-actionable-does-not-enable-local-wb).
+        Backlit silhouette-vs-fill A/B on raw/raw_backlit2: classifier sees
+        real contre-jour, fusion stays observed (geometric split never
+        clears 1.25 EV), preview-guided default already matches the camera
+        (median key +0.06 EV), --no-preview ruins dusk silhouettes (+3.5 EV).
+        No backlit fill policy
+        (@raw-autotune.decision.backlit-tone-policy-does-not-ship). Macro
+        remains a later lighting-plan item, not this work.
+
+        Handoff: do not reopen indoor-actionable => local-WB or backlit =>
+        fill. Shot list for remaining heads is
+        docs/CAPTURE-AND-LICENCE-NEEDED.md (sections 2 and 3 only).
+        """
+    depends_on [
+        @raw-autotune.work.port-c5-illuminant-estimator,
+        @raw-autotune.work.train-camsdd-scene-classifier
+    ]
+    supersedes [ @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/4 ]
+    verified_by [
+        @raw-autotune.evidence.backlit2-contre-jour-ab-20260828,
+        @raw-autotune.evidence.camsdd-inpipeline-parity-20260827,
+        @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827,
         @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827
     ]
 }
@@ -2037,7 +2360,7 @@ record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/4 : work {
 
 record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 : work {
     title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
-    state active
+    state superseded
     scope [
         path "src/localtone.rs",
         path "src/pipeline.rs",
@@ -2074,6 +2397,84 @@ record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 : work {
     }
     supersedes [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/4 ]
     author "GitHub Uploader"
+}
+
+record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/6 : work {
+    title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
+    state superseded
+    intent """
+        Attribute the visible sky failure to an exact pipeline boundary before changing the default render. Keep the existing local-tone and HDR evaluations for scene-luminance compression, but do not use either operator to conceal a colour-estimation discontinuity.
+
+        Add renderer-exact, lossless diagnostic checkpoints after the tone curve, chroma scale, highlight white mix, and gamut compression. The normal render and the final diagnostic checkpoint must share one implementation and remain byte-identical. On `_DSC1289.ARW`, compare the default against reconstruction disabled, `--local-tone 0.35`, and `--hdr 0.5`; measure adjacent OKLab chroma steps across raw clip-state boundaries and within the same clip state.
+
+        The current attribution found that reconstruction introduces clip-cohort plateaus and that the max-channel-weighted tone shoulder is the main discontinuity amplifier. Local tone and HDR do not repair the colour estimate, gamut compression is effectively inactive in the measured sky, and the peak-preserving path toward white reduces rather than creates the boundary. Continue evaluating local tone/HDR only after the reconstruction estimator and its end-to-end ground-truth bench can distinguish recovered detail from invented colour.
+        """
+    note """
+        Current-head evidence is lossless and renderer-exact. The shared stage checkpoints remain after tone curve, chroma scale, highlight white mix (gamut-pre), and gamut compression (gamut-post); a new final checkpoint is written from the exact post-sharpen RGB16 buffer, so the true default CLI output and final diagnostic have zero encoded-pixel error. On _DSC1289 the first material increase in adjacent OKLab chroma across raw clip-state boundaries is after the tone curve (p90 0.00390 to 0.00451), while chroma changes it to 0.00441 and white mix/gamut reduce it to 0.00344; within-state p90 is 0.00227, 0.00229, 0.00237, and 0.00185. The current harmonic/raw reconstruction path is unchanged across the pre/post snapshots in this ROI, and reconstruction disabled is worse in the camera-grade comparison. Local tone 0.35 and HDR 0.5 adjust luminance modestly but retain the green deficit. No evidence-backed default tone change is indicated; leave the colour-continuity gate open and keep local-tone/HDR evaluation luminance-only.
+
+        Handoff — blocked on the user. Shot list:
+        docs/CAPTURE-AND-LICENCE-NEEDED.md section 2, and
+        @raw-autotune.observation.remaining-work-blocked-on-user-captures.
+        Need tripod RAW+JPEG brackets: frame A that clips a *coloured*
+        highlight, frame B 1-2 stops darker with that channel recorded.
+        Do not promote --local-tone or --hdr. Do not use them to conceal a
+        colour-estimation discontinuity. Check
+        local-tone-hdr-remain-colour-neutral stays unsatisfied until that
+        bench exists.
+        """
+    supersedes [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 ]
+}
+
+record raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7 : work {
+    title "Slice 8 — Sky stage attribution and local-tone/HDR evaluation"
+    state completed
+    scope [
+        path "src/localtone.rs",
+        path "src/pipeline.rs",
+        path "src/tone.rs",
+        path "tools/**"
+    ]
+    intent """
+        Attribute the visible sky failure to an exact pipeline boundary before changing the default render. Keep the existing local-tone and HDR evaluations for scene-luminance compression, but do not use either operator to conceal a colour-estimation discontinuity.
+
+        Add renderer-exact, lossless diagnostic checkpoints after the tone curve, chroma scale, highlight white mix, and gamut compression. The normal render and the final diagnostic checkpoint must share one implementation and remain byte-identical. On `_DSC1289.ARW`, compare the default against reconstruction disabled, `--local-tone 0.35`, and `--hdr 0.5`; measure adjacent OKLab chroma steps across raw clip-state boundaries and within the same clip state.
+
+        The current attribution found that reconstruction introduces clip-cohort plateaus and that the max-channel-weighted tone shoulder is the main discontinuity amplifier. Local tone and HDR do not repair the colour estimate, gamut compression is effectively inactive in the measured sky, and the peak-preserving path toward white reduces rather than creates the boundary. Continue evaluating local tone/HDR only after the reconstruction estimator and its end-to-end ground-truth bench can distinguish recovered detail from invented colour.
+        """
+    note """
+        Current-head evidence is lossless and renderer-exact. The shared stage checkpoints remain after tone curve, chroma scale, highlight white mix (gamut-pre), and gamut compression (gamut-post); a new final checkpoint is written from the exact post-sharpen RGB16 buffer, so the true default CLI output and final diagnostic have zero encoded-pixel error. On _DSC1289 the first material increase in adjacent OKLab chroma across raw clip-state boundaries is after the tone curve (p90 0.00390 to 0.00451), while chroma changes it to 0.00441 and white mix/gamut reduce it to 0.00344; within-state p90 is 0.00227, 0.00229, 0.00237, and 0.00185. The current harmonic/raw reconstruction path is unchanged across the pre/post snapshots in this ROI, and reconstruction disabled is worse in the camera-grade comparison. Local tone 0.35 and HDR 0.5 adjust luminance modestly but retain the green deficit. No evidence-backed default tone change is indicated; leave the colour-continuity gate open and keep local-tone/HDR evaluation luminance-only.
+
+        Handoff — blocked on the user. Shot list:
+        docs/CAPTURE-AND-LICENCE-NEEDED.md section 2, and
+        @raw-autotune.observation.remaining-work-blocked-on-user-captures.
+        Need tripod RAW+JPEG brackets: frame A that clips a *coloured*
+        highlight, frame B 1-2 stops darker with that channel recorded.
+        Do not promote --local-tone or --hdr. Do not use them to conceal a
+        colour-estimation discontinuity. Check
+        local-tone-hdr-remain-colour-neutral stays unsatisfied until that
+        bench exists.
+        """
+    acceptance {
+        check local-tone-hdr-remain-colour-neutral {
+            statement """
+                Local-tone or HDR promotion is decided on luminance separation and halo behaviour only after highlight colour continuity passes the ground-truth reconstruction gate.
+                """
+            method command
+            verified_by [ @raw-autotune.evidence.slice8-recon-gt-chroma-20260828/1 ]
+        }
+        check renderer-exact-stage-attribution {
+            statement """
+                Lossless checkpoints use production renderer exact arithmetic, leave normal output byte-identical, isolate first stage materially amplifies clip-boundary colour steps.
+                """
+            method command
+            verified_by [
+                @raw-autotune.evidence.sky-final-output-20260816,
+                @raw-autotune.evidence.sky-final-output-20260816/2,
+                @raw-autotune.evidence.sky-stage-attribution-20260816-r2
+            ]
+        }
+    }
+    supersedes [ @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/6 ]
 }
 
 record raw-autotune.work.spatial-semantic-aq-api/1 : work {

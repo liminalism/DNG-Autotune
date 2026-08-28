@@ -604,6 +604,10 @@ pub struct ColorReport {
     /// non-DNG files, files without lens opcodes, and when explicitly disabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lens_correction: Option<crate::lens::LensCorrectionReport>,
+    /// What the optional DCP HueSatMap did. Absent when `--hue-sat-map` is off
+    /// so default sidecars stay byte-identical.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hue_sat_map: Option<crate::huesatmap::HueSatMapReport>,
 }
 
 impl ColorReport {
@@ -660,6 +664,7 @@ impl ColorReport {
             highlight_reconstruction: None,
             dng_color: None,
             lens_correction: None,
+            hue_sat_map: None,
         }
     }
 }
@@ -1186,6 +1191,9 @@ pub struct DevelopOptions {
     /// needs. Observational: `false` costs nothing and changes nothing, and the
     /// proxy is read by [`crate::illuminant`] alone — never by the render.
     pub illuminant_proxy: bool,
+    /// Optional DCP HueSatMap. `None` or strength 0 is an exact no-op.
+    pub hue_sat_map: Option<std::sync::Arc<crate::huesatmap::HueSatMap>>,
+    pub hue_sat_map_strength: f32,
 }
 
 /// What [`develop`] hands back: the scene-linear image, what the colour path
@@ -1278,12 +1286,20 @@ pub fn develop(
         ];
         let (report, uncertainty) = match resolved_highlight_method {
             crate::raw_highlight::HighlightMethod::Current => {
-                crate::highlight::reconstruct_with_confidence_and_uncertainty(
-                    image,
-                    wb,
-                    options.highlight_reconstruction,
-                    demosaiced_confidence.as_deref(),
-                )
+                let (mut report, uncertainty) =
+                    crate::highlight::reconstruct_with_confidence_and_uncertainty(
+                        image,
+                        wb,
+                        options.highlight_reconstruction,
+                        demosaiced_confidence.as_deref(),
+                    );
+                // A spatial pass that the floor declined still counted clipped
+                // CFA sites; fold them on so the sidecar carries the statistic
+                // `reconstruct_cfa` measured. Does not change pixels.
+                if let Some(raw) = raw_highlight_report.as_ref() {
+                    crate::highlight::fold_raw_counters(&mut report, raw);
+                }
+                (report, uncertainty)
             }
             crate::raw_highlight::HighlightMethod::RawPyramid
             | crate::raw_highlight::HighlightMethod::Harmonic => {
@@ -1494,7 +1510,18 @@ pub fn develop(
                     transform.channels
                 );
             }
-            image.map_into(|pixel| transform.convert3(pixel))
+            let cct = dng_color.as_ref().map(|report| report.estimated_cct);
+            match (options.hue_sat_map.as_ref(), options.hue_sat_map_strength) {
+                (Some(table), strength) if strength > 0.0 => image.map_into(|pixel| {
+                    table.apply(
+                        transform.convert3(pixel),
+                        transform.working_space,
+                        strength,
+                        cct,
+                    )
+                }),
+                _ => image.map_into(|pixel| transform.convert3(pixel)),
+            }
         }
         CameraImage::Four {
             width,
@@ -1527,6 +1554,7 @@ pub fn develop(
         .collect();
     illuminants_available.sort();
 
+    let hue_sat_cct = dng_color.as_ref().map(|report| report.estimated_cct);
     let report = ColorReport {
         path: RawColorPath::Owned,
         // From the transform, not the argument, so the report can only ever
@@ -1548,6 +1576,10 @@ pub fn develop(
         highlight_reconstruction,
         dng_color,
         lens_correction: lens_correction.map(crate::lens::LensCorrection::into_report),
+        hue_sat_map: match (options.hue_sat_map.as_ref(), options.hue_sat_map_strength) {
+            (Some(table), strength) if strength > 0.0 => Some(table.report(strength, hue_sat_cct)),
+            _ => None,
+        },
     };
 
     Ok((image, report, highlight_uncertainty, illuminant_proxy))

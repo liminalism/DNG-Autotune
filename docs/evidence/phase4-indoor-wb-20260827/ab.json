@@ -1,0 +1,164 @@
+[
+  {
+    "file": "_DSC1323.ARW",
+    "indoor_state": "observed",
+    "indoor_p": 0.9292522,
+    "cct_k": 5049.153519754231,
+    "as_shot_angular_error_deg": 4.0683274,
+    "top3": [
+      "26_Indoor",
+      "1_Portrait",
+      "3_Kids"
+    ],
+    "default_hue_mean_deg": 29.353281,
+    "lwb_hue_mean_deg": 30.929571,
+    "default_sat_ratio": 2.1750503,
+    "lwb_sat_ratio": 2.1465604,
+    "default_key_ev": 0.014582634,
+    "lwb_key_ev": 0.014583588
+  },
+  {
+    "file": "_DSC1324.ARW",
+    "indoor_state": "quiet",
+    "indoor_p": 0.0047869575,
+    "cct_k": 3122.2739517631458,
+    "as_shot_angular_error_deg": 3.8254614,
+    "top3": [
+      "21_Night_shot",
+      "14_Architecture",
+      "25_Neon_lights"
+    ],
+    "default_hue_mean_deg": 23.761217,
+    "lwb_hue_mean_deg": 42.01988,
+    "default_sat_ratio": 1.7005477,
+    "lwb_sat_ratio": 1.7232006,
+    "default_key_ev": 2.1626027,
+    "lwb_key_ev": 2.1788743
+  },
+  {
+    "file": "_DSC1325.ARW",
+    "indoor_state": "actionable",
+    "indoor_p": 0.8041119,
+    "cct_k": 3100.299057632794,
+    "as_shot_angular_error_deg": 4.107419,
+    "top3": [
+      "26_Indoor",
+      "14_Architecture",
+      "21_Night_shot"
+    ],
+    "default_hue_mean_deg": 16.660372,
+    "lwb_hue_mean_deg": 93.181915,
+    "default_sat_ratio": 1.4114261,
+    "lwb_sat_ratio": 1.1377708,
+    "default_key_ev": -0.123717904,
+    "lwb_key_ev": -0.1237818
+  },
+  {
+    "file": "_DSC1326.ARW",
+    "indoor_state": "actionable",
+    "indoor_p": 0.881076,
+    "cct_k": 2940.596884031705,
+    "as_shot_angular_error_deg": 1.305213,
+    "top3": [
+      "26_Indoor",
+      "1_Portrait",
+      "24_Candle_light"
+    ],
+    "default_hue_mean_deg": 18.253113,
+    "lwb_hue_mean_deg": 31.847038,
+    "default_sat_ratio": 1.3991023,
+    "lwb_sat_ratio": 1.1888953,
+    "default_key_ev": 0.4991274,
+    "lwb_key_ev": 0.49928904
+  },
+  {
+    "file": "_DSC1327.ARW",
+    "indoor_state": "actionable",
+    "indoor_p": 0.9172616,
+    "cct_k": 2979.7529244143943,
+    "as_shot_angular_error_deg": 1.5235419,
+    "top3": [
+      "26_Indoor",
+      "24_Candle_light",
+      "21_Night_shot"
+    ],
+    "default_hue_mean_deg": 25.09979,
+    "lwb_hue_mean_deg": 54.333706,
+    "default_sat_ratio": 1.6927258,
+    "lwb_sat_ratio": 1.5212996,
+    "default_key_ev": 0.34176517,
+    "lwb_key_ev": 0.34227967
+  },
+  {
+    "file": "_DSC1328.ARW",
+    "indoor_state": "actionable",
+    "indoor_p": 0.8953787,
+    "cct_k": 3090.535527713375,
+    "as_shot_angular_error_deg": 1.1538575,
+    "top3": [
+      "26_Indoor",
+      "16_Blue_Sky",
+      "4_Dog"
+    ],
+    "default_hue_mean_deg": 11.26805,
+    "lwb_hue_mean_deg": 23.00423,
+    "default_sat_ratio": 1.1310706,
+    "lwb_sat_ratio": 0.798293,
+    "default_key_ev": 0.079419374,
+    "lwb_key_ev": 0.079429865
+  },
+  {
+    "file": "_DSC1329.ARW",
+    "indoor_state": "observed",
+    "indoor_p": 0.5723366,
+    "cct_k": 5348.0141739473065,
+    "as_shot_angular_error_deg": 11.97421,
+    "top3": [
+      "26_Indoor",
+      "14_Architecture",
+      "10_Waterfall"
+    ],
+    "default_hue_mean_deg": 11.221747,
+    "lwb_hue_mean_deg": 11.221747,
+    "default_sat_ratio": 1.1852778,
+    "lwb_sat_ratio": 1.1852778,
+    "default_key_ev": 0.10784149,
+    "lwb_key_ev": 0.10784149
+  },
+  {
+    "file": "_DSC1330.ARW",
+    "indoor_state": "observed",
+    "indoor_p": 0.7961287,
+    "cct_k": 5078.010840899734,
+    "as_shot_angular_error_deg": 1.9818412,
+    "top3": [
+      "26_Indoor",
+      "3_Kids",
+      "11_Snow"
+    ],
+    "default_hue_mean_deg": 26.011349,
+    "lwb_hue_mean_deg": 26.011349,
+    "default_sat_ratio": 1.8715206,
+    "lwb_sat_ratio": 1.8715206,
+    "default_key_ev": 0.42388177,
+    "lwb_key_ev": 0.42388177
+  },
+  {
+    "file": "_DSC1331.ARW",
+    "indoor_state": "actionable",
+    "indoor_p": 0.7909102,
+    "cct_k": 3208.853949381899,
+    "as_shot_angular_error_deg": 3.6851993,
+    "top3": [
+      "26_Indoor",
+      "30_Computer_Screens",
+      "22_Stage_concert"
+    ],
+    "default_hue_mean_deg": 9.049488,
+    "lwb_hue_mean_deg": 9.049488,
+    "default_sat_ratio": 1.0883381,
+    "lwb_sat_ratio": 1.0883381,
+    "default_key_ev": 0.03660631,
+    "lwb_key_ev": 0.03660631
+  }
+]

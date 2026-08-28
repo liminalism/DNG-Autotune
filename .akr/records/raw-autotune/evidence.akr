@@ -56,6 +56,19 @@ record raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 : evide
     supersedes [ @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/1 ]
 }
 
+record raw-autotune.evidence.backlit2-contre-jour-ab-20260828/1 : evidence {
+    title "14/14 raw_backlit2 pairs. Classifier sees Backlight on the hand series. Geometric EV split never clears 1.25 EV (0/14 actionable). Preview-guided median key +0.06 EV vs camera; fill hands -0.01/+0.01. Independent --no-preview on dusk silhouettes +3.5 EV and fills them. No backlit fill policy."
+    state verified
+    result pass
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command "raw-autotune raw/raw_backlit2 --reference --scene-classify --illuminant --jobs 2; raw-autotune hand-series --no-preview --reference"
+    artifact "docs/evidence/phase4-backlit2-20260828/README.md"
+    summary """
+        14/14 raw_backlit2 pairs. Classifier sees Backlight on the hand series. Geometric EV split never clears 1.25 EV (0/14 actionable). Preview-guided median key +0.06 EV vs camera; fill hands -0.01/+0.01. Independent --no-preview on dusk silhouettes +3.5 EV and fills them. No backlit fill policy.
+        """
+}
+
 record raw-autotune.evidence.blown-sky-renders-white-again/1 : evidence {
     title "Blown skies render white and the clip-count contours are gone"
     state verified
@@ -228,6 +241,19 @@ record raw-autotune.evidence.camsdd-inpipeline-parity-20260827/1 : evidence {
         Flag-off summaries byte-identical to the pre-change HEAD binary over
         an 18-frame mixed sample; repeated --jobs 8 flag-on runs identical;
         366 lib + integration tests pass; clippy clean.
+        """
+}
+
+record raw-autotune.evidence.candidate-d-art-dcp-huesatmap-20260828/1 : evidence {
+    title "CamSDD has no colour chart (30 scene-JPEG classes). ART/RawTherapee SONY ILCE-7C.dcp ProfileCopyright=public domain, HueSatMap 90x30x1 dual-illuminant StdA/D65, identity tone curve. HueSatMap::load reads it; strength 0 is bit-identical; identity table round-trips; 375 lib tests pass; clippy -D warnings clean. --hue-sat-map is default-off and not in archive-auto-v8."
+    state verified
+    result pass
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command "cargo test --release --lib huesatmap; cargo clippy --lib --bins --release -- -D warnings"
+    artifact "profiles/SONY_ILCE-7C.dcp"
+    summary """
+        CamSDD has no colour chart (30 scene-JPEG classes). ART/RawTherapee SONY ILCE-7C.dcp ProfileCopyright=public domain, HueSatMap 90x30x1 dual-illuminant StdA/D65, identity tone curve. HueSatMap::load reads it; strength 0 is bit-identical; identity table round-trips; 375 lib tests pass; clippy -D warnings clean. --hue-sat-map is default-off and not in archive-auto-v8.
         """
 }
 
@@ -427,6 +453,23 @@ record raw-autotune.evidence.compression-ratio-batch-gate/2 : evidence {
     supersedes [ @raw-autotune.evidence.compression-ratio-batch-gate/1 ]
 }
 
+record raw-autotune.evidence.declined-floor-reports-clipped-cfa-sites-20260827/1 : evidence {
+    title "Declined spatial frames fold clipped_cfa_sites onto the Current sidecar"
+    state verified
+    result pass
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command "cargo test --release --lib a_declined_spatial_pass_still_reports_clipped_cfa_sites"
+    artifact "src/highlight.rs"
+    summary """
+        HighlightReport::into_report hard-codes mosaic counters to 0. fold_raw_counters
+        copies reconstruct_cfa's counts onto the Current report when a spatial
+        pass ran, including a floor decline. Unit test pins a 17-site declined
+        pass. _DSC0883 in the census now reports 6 sites (matching the
+        always-solve column of the 29-frame sample) instead of 0. Pixels untouched.
+        """
+}
+
 record raw-autotune.evidence.default-gpu-regression-suite-20260813/1 : evidence {
     title "The release suite passed 324 library tests and all integration/doc tests; clippy accepted all raw-autotune targets with warnings denied."
     state verified
@@ -545,6 +588,19 @@ record raw-autotune.evidence.exact-lens-profile-gate/2 : evidence {
         RGB plus clip-confidence planes receive identical resampling.
         """
     supersedes [ @raw-autotune.evidence.exact-lens-profile-gate/1 ]
+}
+
+record raw-autotune.evidence.feature-bundles-cli-20260828/1 : evidence {
+    title "bundle archive is the default and leaves observational models and local-tone/hdr off. survey enables semantic+illuminant+scene-classify. hdr sets 0.5, local-tone sets 0.35; explicit non-zero hdr wins; hdr bundle plus local-tone 0.2 is rejected. 15 cli tests pass; clippy -D warnings clean. archive-auto-v8 is unchanged."
+    state verified
+    result pass
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command "cargo test --release --lib cli::; cargo clippy --lib --bins --release -- -D warnings"
+    artifact "src/cli.rs"
+    summary """
+        bundle archive is the default and leaves observational models and local-tone/hdr off. survey enables semantic+illuminant+scene-classify. hdr sets 0.5, local-tone sets 0.35; explicit non-zero hdr wins; hdr bundle plus local-tone 0.2 is rejected. 15 cli tests pass; clippy -D warnings clean. archive-auto-v8 is unchanged.
+        """
 }
 
 record raw-autotune.evidence.first-principles-highlight-suite-20260809/1 : evidence {
@@ -994,6 +1050,28 @@ record raw-autotune.evidence.in-memory-metadata-matches-the-file-writers-2026082
         """
 }
 
+record raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827/1 : evidence {
+    title "Indoor tungsten A/B: --local-white-balance moves hue away from the camera JPEG"
+    state verified
+    result fail
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command """
+        raw-autotune raw/indoor_tungsten --reference --scene-classify --illuminant --jobs 2
+        raw-autotune raw/indoor_tungsten --local-white-balance 1 --reference --scene-classify --illuminant --jobs 2
+        """
+    artifact "docs/evidence/phase4-indoor-wb-20260827/README.md"
+    summary """
+        9/9 indoor_tungsten pairs rendered. Fusion correctly marks five tungsten
+        frames indoor-actionable (CCT 2941-3209 K). --local-white-balance 1
+        applied on six frames (two-light trigger) and raised mean hue error vs
+        the camera JPEG 18.25 -> 30.93 degrees; _DSC1325 16.7 -> 93.2. C5 vs
+        as-shot on the actionable cluster is only 1.15-4.11 degrees against a
+        9-25 degree default residual, so a global C5 von Kries is not that gap.
+        Indoor-actionable must not enable the fierro2009 operator.
+        """
+}
+
 record raw-autotune.evidence.lavender-cast-is-faithful-rendering-20260827/1 : evidence {
     title "The broad faint lavender on _DSC1288/1289 is faithful rendering of unclipped blue-violet sky, not a solver defect"
     state verified
@@ -1015,6 +1093,26 @@ record raw-autotune.evidence.lege-gpu-adapter-skip-tests/1 : evidence {
     summary """
         lege-gpu adapter unit tests passed: default order still prefers discrete; WGPU_ADAPTER_SKIP matches 4060 name fragments. Scene OnnxSession does not open wgpu.
         """
+}
+
+record raw-autotune.evidence.linear-raw-planner-reserve-20260827/1 : evidence {
+    title "Planner budgets LinearRaw as Current; mixed batch takes max per-file cost"
+    state verified
+    result pass
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command "cargo test --release --lib memory::"
+    artifact "src/memory.rs"
+    summary """
+        15 memory tests pass, including linear_raw_does_not_reserve_harmonic_bytes
+        and mixed_batch_ceiling_is_the_max_per_file_cost_not_max_pixels_times_harmonic.
+        Ten 50 MP LinearRaw files budget 2.667 GiB instead of 5.644 GiB. A mixed
+        batch is sized on 24 MP Bayer Harmonic (2.782 GiB), so --jobs auto stays 3
+        and those files can join. Option A (grow the pool) rejected as breaking
+        the plan-cannot-be-exceeded guarantee; Option B (decode-to-plan) costs
+        a 3:25 pre-pass on this corpus. Option C kept for Bayer frames.
+        """
+    resolves [ @raw-autotune.question.memory-planner-cannot-use-the-spatial-floor ]
 }
 
 record raw-autotune.evidence.midtone-toe-corpus-20260827/1 : evidence {
@@ -2270,6 +2368,19 @@ record raw-autotune.evidence.slice5-question-status-20260823/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.slice8-recon-gt-chroma-20260828/1 : evidence {
+    title "Scene-linear GT: reconstruction chroma RMSE 0.032/0.039 vs disabled 0.119/0.177 on hand-sky and window pairs. Hue not usable (handheld). local-tone and HDR stay opt-in."
+    state verified
+    result pass
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command "cargo run --release --example probe-highlight-gt -- raw/raw_backlit2/_DSC1345.ARW raw/raw_backlit2/_DSC1346.ARW 3.68; cargo run --release --example probe-highlight-gt -- raw/raw_backlit2/_DSC1349.ARW raw/raw_backlit2/_DSC1348.ARW 3.35"
+    artifact "docs/evidence/slice8-recon-20260828/"
+    summary """
+        Scene-linear GT: reconstruction chroma RMSE 0.032/0.039 vs disabled 0.119/0.177 on hand-sky and window pairs. Hue not usable (handheld). local-tone and HDR stay opt-in.
+        """
+}
+
 record raw-autotune.evidence.spatial-aq-contract-audit/1 : evidence {
     title "SpatialAqMap contains normalized per-class confidence and encoder-neutral uses; no HEVC QP, JPEG XL HfMul, lambda, or quantizer-step values cross the API boundary."
     state verified
@@ -2321,6 +2432,29 @@ record raw-autotune.evidence.spatial-aq-live-4060/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.spatial-floor-census-20260827/1 : evidence {
+    title "CFA-site floor census on 381 files: no empty band, keep 1e-5"
+    state verified
+    result pass
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command """
+        raw-autotune <381 CFA files> --dry-run --summary cfa-corpus.json --spatial-highlight-floor 1 --jobs 8 --chroma-denoise 0 --luma-denoise 0 --night-tone 0 --sharpen 0
+        """
+    artifact "docs/evidence/spatial-floor-sweep-20260827/README.md"
+    summary """
+        381/381 CFA files completed. clipped_cfa_sites distribution: 99 at
+        zero, 71 in (0, 1e-5) with 1-224 sites, 211 at or above the shipped
+        1e-5 floor. The 29-frame empty band (0 to 7.3e-6) was a reporting
+        artifact — declined frames used to sidecar clipped_cfa_sites as 0.
+        CFA-site fraction exceeds two-plus demosaiced-pixel fraction on
+        254/285 frames with any clip. 1e-5 kept as the few-hundred-isolated-sites
+        cutoff; a quality A/B of the 71 was not run. 98 zero-authority frames
+        still report the requested method; that early return was left alone.
+        """
+    resolves [ @raw-autotune.question.spatial-highlight-floor-not-swept ]
+}
+
 record raw-autotune.evidence.spatial-floor-cost-on-29-arw-20260826/1 : evidence {
     title "The spatial floor saves 8.9% of CPU on a 29-frame Sony sample, and the saving is bounded"
     state verified
@@ -2365,6 +2499,19 @@ record raw-autotune.evidence.spatial-floor-declines-to-the-current-path-20260826
         _DSC1126 carries 1552 clipped CFA sites (6.377e-5, above the 1e-5 floor) and renders byte-identically to --spatial-highlight-floor 0 while differing from --highlight-method current. So the floor does not touch a frame that clears it.
 
         Amplitude of the change on a declined frame, _DSC0883 16-bit PNG, floored against floor-0: 153 of 30,984,192 samples differ (0.0005%), mean absolute delta 598 and maximum 18529 of 65535. Small in extent, not negligible per affected sample.
+        """
+}
+
+record raw-autotune.evidence.standard-vivid-preset-suite-20260828/1 : evidence {
+    title "All 398 tests passed (383 library, 15 integration/golden); preset regressions confirm auto stays default, standard has no HueSatMap, vivid loads the embedded public-domain A7C HueSatMap, and punchy aliases standard."
+    state verified
+    result pass
+    method command
+    observed_at git:00c933876fdd4fb9b7bec041cb78dc5474a02c18
+    command "cargo fmt --all && cargo test --all-targets"
+    artifact "src/cli.rs"
+    summary """
+        All 398 tests passed (383 library, 15 integration/golden); preset regressions confirm auto stays default, standard has no HueSatMap, vivid loads the embedded public-domain A7C HueSatMap, and punchy aliases standard.
         """
 }
 

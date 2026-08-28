@@ -2,6 +2,111 @@
 
 ## Unreleased — a standalone front-end
 
+### `--bundle` groups off-by-default features; `--preset` stays the tone look
+
+`--preset` is now `neutral` / `auto` / `standard` / `vivid`. `standard` renames
+the former `punchy` grade (the old spelling remains a compatibility alias), and
+`vivid` applies the bundled public-domain Sony A7C HueSatMap on that same grade.
+Both are opt-in; `auto` remains the archive default.
+`--bundle` is a new, orthogonal grouping of operators that were left off the
+automatic archive path:
+
+| Bundle | Expands to | Pixels |
+|---|---|---|
+| `archive` (default) | nothing extra | archive-auto-v8 |
+| `survey` | `--semantic --illuminant --scene-classify` | identical |
+| `hdr` | `--hdr 0.5` | experimental |
+| `local-tone` | `--local-tone 0.35` | experimental |
+
+Measured-rejected or ungated operators are not in a bundle: local-WB, sky
+semantic policies, compression-ratio 0.6, `--hue-sat-map`, `--semantic-faces`,
+Lensfun `profile-exact`. Explicit non-zero `--hdr` / `--local-tone` still wins
+over the bundle default; the two operators stay mutually exclusive.
+
+### Slice 8 reconstruction ground-truth on the backlit2 exposure pairs
+
+The photographer's less- vs more-exposed hand-to-sky pair (`_DSC1345` 1/250
+f/10 ISO 100 vs `_DSC1346` 1/3200 f/10 ISO 100, −3.68 EV) and the window pair
+(`_DSC1349` vs `_DSC1348`, +3.35 EV) are the reconstruction bench. Stage dumps
+cannot score it: `render_baseline` display-clips at 1.0, so scaling the dark
+frame by 12× compared reconstructed luma to a clipped white. `examples/probe-highlight-gt.rs`
+compares scene-linear OKLab chroma of reconstructed pixels to the EXIF-scaled
+dark frame. Local-tone and HDR stay opt-in: colour continuity vs this GT is
+the gate, not luminance compression. Evidence in
+`docs/evidence/slice8-recon-20260828/`.
+
+### Candidate D: public-domain ART/RawTherapee ILCE-7C HueSatMap, default off
+
+CamSDD has no colour chart (it is a 30-class scene-JPEG dataset). A ColorChecker
+is not available. The ART/RawTherapee `SONY ILCE-7C.dcp` (`ProfileCopyright` =
+`public domain`, HueSatMap 90×30×1 dual-illuminant StdA/D65, identity tone
+curve) is the table. `--hue-sat-map profiles/SONY_ILCE-7C.dcp` applies it after
+the colour matrix in ProPhoto HSV; omitted, or `--hue-sat-map-strength 0`, is
+byte-identical to the matrix path. Adobe DCP contents are still not shippable.
+Not in the automatic profile. Attribution in `profiles/README.md`.
+
+### Backlit tone policy A/B on `raw/raw_backlit2`: no fill ships
+
+Fourteen new RAW+JPEG contre-jour pairs (hand against sun/sky, plus
+architecture and window). The classifier sees Backlight on the hand
+series; geometric centre-vs-surround never clears the 1.25 EV
+corroboration margin (off-centre silhouettes go *negative*; centred fill
+hands only +0.21 EV), so fusion stays `observed`. Default
+preview-guided exposure already matches the camera’s silhouette-vs-fill
+(median key +0.06 EV; fill hands −0.01/+0.01 EV). `--no-preview` on the
+dusk silhouettes is +3.5 EV and ruins them. A “backlit ⇒ fill” policy
+would be that independent path. Do not consume `backlit == Actionable`
+for a tone change. Evidence in
+`docs/evidence/phase4-backlit2-20260828/`. No pixel moves.
+
+### Indoor WB-corrector A/B: local mixed-light correction fails the camera JPEG gate
+
+Phase 4's remaining indoor policy ("WB-corrector gate consuming
+indoor-actionable") was measured on the 9-pair `raw/indoor_tungsten` set.
+`--local-white-balance 1` moved every frame it touched *away* from the
+camera JPEG (batch mean hue 18.3° → 30.9°, `_DSC1325` 16.7° → 93.2°).
+The operator found two "lights" 0.04–0.12 apart inside single-illuminant
+tungsten rooms and neutralized them. Indoor-actionable therefore must not
+enable that operator. C5 vs as-shot on the tungsten-actionable cluster is
+only 1.2–4.1°, against a 9–25° default hue residual vs the camera JPEG, so
+a global C5 von Kries swap is not that gap either. Fusion itself is fine
+(five genuine tungsten frames actionable, daylight-contaminated ones
+observed). No pixel moves. Evidence in
+`docs/evidence/phase4-indoor-wb-20260827/`.
+
+### Spatial-floor census and LinearRaw memory reserve — no default pixels move
+
+The two leftover archive-speed questions are closed by a measurement and a
+header-only planner fix. Evidence in
+`docs/evidence/spatial-floor-sweep-20260827/`.
+
+**Floor sweep (n=381 CFA files).** `DEFAULT_SPATIAL_CLIPPED_FLOOR` (1e-5)
+had never been swept; the 29-frame sample looked like a wide empty band
+between 0 and 7.3e-6, so the constant might not matter. That band was a
+reporting artifact: a declined frame's Current-path sidecar hard-coded
+`clipped_cfa_sites` to 0 even though `reconstruct_cfa` had counted them.
+Folding those counters onto the report (pixels untouched) and re-running
+`--dry-run --summary` over every CFA file in `raw/` gives: 99 frames at
+zero sites, **71 in (0, 1e-5) with 1–224 sites**, 211 at or above the
+floor. There is no empty band. 1e-5 still matches the original "few
+hundred isolated sites" cost rationale; the HDR-evaluation defect frames
+sit at ≥1%, three orders above. Keep the constant. The floor continues
+to gate on CFA sites at `VALID_CONFIDENCE_MAX`, not on two-or-more-channel
+demosaiced pixels (254/285 frames with any clip have a larger CFA-site
+fraction, as expected). 98 frames with no reconstruction authority still
+report the requested method; that early return is left alone.
+
+**Memory planner.** The planner still cannot see the floor without a
+decode (Option C: keep the worst-case CFA reserve). It *can* see
+photometric interpretation, which it already reads for dimensions.
+LinearRaw Expert RAW never runs `reconstruct_cfa`, so ten 50 MP files
+(the "200 MP" DNGs — 8160×6120 from the 200 MP sensor) no longer reserve
+the harmonic 64 B/px they cannot spend. They budget as Current (2.667 GiB
+instead of 5.644 GiB) and a mixed batch takes the max per-file cost: 24
+MP Bayer Harmonic (2.782 GiB) binds, `--jobs auto` stays 3, and those
+files can join a batch that used to refuse them. No rendered pixel
+moves.
+
 ### Midtone/shadow contrast measured against 111 camera pairs — no change ships
 
 The standing "our curve sits ~2× above reference renderers below the

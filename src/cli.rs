@@ -5,7 +5,10 @@ use crate::memory::JobCount;
 use crate::raw_highlight::HighlightMethod;
 use crate::reference::ReferenceSource;
 use crate::rescale::SubBlack;
-use crate::types::{JpegSettings, JpegSubsampling, OutputFormat, Preset, RunOptions};
+use crate::types::{
+    BUNDLE_HDR_STRENGTH, BUNDLE_LOCAL_TONE_STRENGTH, FeatureBundle, JpegSettings, JpegSubsampling,
+    OutputFormat, Preset, RunOptions,
+};
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
 use std::path::PathBuf;
@@ -30,9 +33,17 @@ pub struct Cli {
     #[arg(long, value_enum, default_value = "jpeg")]
     pub format: OutputFormat,
 
-    /// Automatic rendering style.
+    /// Tone look: contrast, saturation, vibrance, highlight shoulder.
+    /// This does not turn operators on or off; see `--bundle`.
     #[arg(long, value_enum, default_value = "auto")]
     pub preset: Preset,
+
+    /// Feature grouping. Orthogonal to `--preset`. `archive` is the unattended
+    /// default (no extra operators). `survey` turns on observational models
+    /// without changing pixels. `hdr` and `local-tone` are the experimental
+    /// range compressors Slice 8 left opt-in; they are mutually exclusive.
+    #[arg(long, value_enum, default_value = "archive")]
+    pub bundle: FeatureBundle,
 
     /// Manual EV offset added after automatic exposure estimation.
     #[arg(long, default_value_t = 0.0, allow_hyphen_values = true)]
@@ -391,6 +402,20 @@ pub struct Cli {
     #[arg(long, conflicts_with = "dng_color")]
     pub no_dng_color: bool,
 
+    /// Apply a DCP HueSatMap after the colour matrix. Off by default. The
+    /// table is a creative LUT, not extra sensor calibration, and is not
+    /// part of the automatic profile. Strength 0 is an exact no-op even
+    /// when a path is given. Adobe DCP contents must not be passed here;
+    /// a public-domain ART/RawTherapee ILCE-7C profile lives at
+    /// `profiles/SONY_ILCE-7C.dcp`.
+    #[arg(long, value_name = "DCP")]
+    pub hue_sat_map: Option<PathBuf>,
+
+    /// Blend of `--hue-sat-map`, 0 to 1. Ignored when no DCP is given.
+    /// Default 1 when a path is given.
+    #[arg(long, value_name = "STRENGTH", default_value_t = 1.0)]
+    pub hue_sat_map_strength: f32,
+
     /// Post-demosaic lens correction. `embedded` preserves the unattended
     /// DNG-only policy; `profile-exact` opts into the pinned Lensfun database
     /// when no embedded warp exists; `off` disables correction.
@@ -442,8 +467,16 @@ impl Cli {
             self.hdr.is_finite() && (0.0..=1.0).contains(&self.hdr),
             "--hdr must be between 0 and 1"
         );
+        let (semantic, illuminant, scene_classify, hdr, local_tone) = expand_bundle(
+            self.bundle,
+            self.semantic,
+            self.illuminant,
+            self.scene_classify,
+            self.hdr,
+            self.local_tone,
+        );
         ensure!(
-            !(self.hdr > 0.0 && self.local_tone > 0.0),
+            !(hdr > 0.0 && local_tone > 0.0),
             "--hdr and --local-tone are two local-tone operators; pass only one"
         );
         ensure!(
@@ -452,7 +485,7 @@ impl Cli {
             "--semantic-sky-highlights must be between 0 and 1"
         );
         ensure!(
-            self.semantic_sky_highlights == 0.0 || self.semantic,
+            self.semantic_sky_highlights == 0.0 || semantic,
             "--semantic-sky-highlights requires --semantic"
         );
         ensure!(
@@ -460,14 +493,11 @@ impl Cli {
             "--semantic-sky-chroma must be between 0 and 1"
         );
         ensure!(
-            self.semantic_sky_chroma == 0.0 || self.semantic,
+            self.semantic_sky_chroma == 0.0 || semantic,
             "--semantic-sky-chroma requires --semantic"
         );
         ensure!(
-            self.semantic_model_dir.is_none()
-                || self.semantic
-                || self.illuminant
-                || self.scene_classify,
+            self.semantic_model_dir.is_none() || semantic || illuminant || scene_classify,
             "--semantic-model-dir requires --semantic, --illuminant or --scene-classify"
         );
         ensure!(
@@ -597,8 +627,8 @@ impl Cli {
         options.recursive = !self.no_recursive;
         options.dry_run = self.dry_run;
         options.local_white_balance = self.local_white_balance;
-        options.local_tone = self.local_tone;
-        options.hdr = self.hdr;
+        options.local_tone = local_tone;
+        options.hdr = hdr;
         // `--no-preview` is the same decision as `--preview-exposure 0`;
         // clap rejects passing both, so this cannot silently override a
         // strength the user asked for.
@@ -612,15 +642,15 @@ impl Cli {
         options.sub_black = self.sub_black;
         options.dump_stages = self.dump_stages;
         options.dump_scene_proxy = self.dump_scene_proxy;
-        options.semantic = self.semantic;
+        options.semantic = semantic;
         options.semantic_sky_highlights = self.semantic_sky_highlights;
         options.semantic_sky_chroma = self.semantic_sky_chroma;
         options.semantic_faces = self.semantic_faces;
         if let Some(directory) = self.semantic_model_dir {
             options.semantic_model_dir = directory;
         }
-        options.illuminant = self.illuminant;
-        options.scene_classify = self.scene_classify;
+        options.illuminant = illuminant;
+        options.scene_classify = scene_classify;
         options.write_metadata = !self.no_metadata;
         options.noise_scan = self.noise_scan;
         options.noise_profile = self.noise_profile;
@@ -640,6 +670,32 @@ impl Cli {
         options.highlight_method = self.highlight_method;
         options.spatial_highlight_floor = self.spatial_highlight_floor;
         options.full_dng_color = !self.no_dng_color;
+        ensure!(
+            self.hue_sat_map_strength.is_finite()
+                && (0.0..=1.0).contains(&self.hue_sat_map_strength),
+            "--hue-sat-map-strength must be between 0 and 1"
+        );
+        options.hue_sat_map = match self.hue_sat_map {
+            Some(path) => {
+                ensure!(
+                    path.is_file(),
+                    "--hue-sat-map is not a file: {}",
+                    path.display()
+                );
+                Some(std::sync::Arc::new(crate::huesatmap::HueSatMap::load(
+                    &path,
+                )?))
+            }
+            None if self.preset.wants_vivid_table() => Some(std::sync::Arc::new(
+                crate::huesatmap::HueSatMap::bundled_sony_a7c()?,
+            )),
+            None => None,
+        };
+        options.hue_sat_map_strength = if options.hue_sat_map.is_some() {
+            self.hue_sat_map_strength
+        } else {
+            0.0
+        };
         options.lens_correction = if self.no_lens_correction {
             LensCorrectionMode::Off
         } else {
@@ -647,6 +703,40 @@ impl Cli {
         };
 
         Ok((inputs, options, self.highlight_method))
+    }
+}
+
+/// Expand `--bundle` onto the flag values. Non-zero explicit strengths win;
+/// observational flags are OR-ed on.
+fn expand_bundle(
+    bundle: FeatureBundle,
+    semantic: bool,
+    illuminant: bool,
+    scene_classify: bool,
+    hdr: f32,
+    local_tone: f32,
+) -> (bool, bool, bool, f32, f32) {
+    match bundle {
+        FeatureBundle::Archive => (semantic, illuminant, scene_classify, hdr, local_tone),
+        FeatureBundle::Survey => (true, true, true, hdr, local_tone),
+        FeatureBundle::Hdr => (
+            semantic,
+            illuminant,
+            scene_classify,
+            if hdr > 0.0 { hdr } else { BUNDLE_HDR_STRENGTH },
+            local_tone,
+        ),
+        FeatureBundle::LocalTone => (
+            semantic,
+            illuminant,
+            scene_classify,
+            hdr,
+            if local_tone > 0.0 {
+                local_tone
+            } else {
+                BUNDLE_LOCAL_TONE_STRENGTH
+            },
+        ),
     }
 }
 
@@ -806,7 +896,118 @@ mod tests {
         assert_eq!(options.semantic_sky_chroma, 0.0);
         assert_eq!(options.full_dng_color, expected.full_dng_color);
         assert_eq!(options.lens_correction, expected.lens_correction);
+        assert!(options.hue_sat_map.is_none());
+        assert_eq!(options.hue_sat_map_strength, 0.0);
         assert_eq!(options.summary_path, expected.summary_path);
+        assert!(!options.semantic);
+        assert!(!options.illuminant);
+        assert!(!options.scene_classify);
+        assert_eq!(options.hdr, 0.0);
+        assert_eq!(options.local_tone, 0.0);
+    }
+
+    #[test]
+    fn survey_bundle_enables_observational_models_and_moves_no_tone_flags() {
+        let options = Cli::try_parse_from(["raw-autotune", ".", "--bundle", "survey"])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        assert!(options.semantic);
+        assert!(options.illuminant);
+        assert!(options.scene_classify);
+        assert_eq!(options.hdr, 0.0);
+        assert_eq!(options.local_tone, 0.0);
+        assert_eq!(options.preset, Preset::Auto);
+    }
+
+    #[test]
+    fn standard_uses_the_stronger_tone_without_a_hue_sat_map() {
+        let options = Cli::try_parse_from(["raw-autotune", ".", "--preset", "standard"])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        assert_eq!(options.preset, Preset::Standard);
+        assert!(options.hue_sat_map.is_none());
+        assert_eq!(options.hue_sat_map_strength, 0.0);
+    }
+
+    #[test]
+    fn vivid_uses_the_standard_tone_and_bundled_sony_hue_sat_map() {
+        let options = Cli::try_parse_from(["raw-autotune", ".", "--preset", "vivid"])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        assert_eq!(options.preset, Preset::Vivid);
+        assert!(options.preset.uses_standard_tone());
+        let map = options
+            .hue_sat_map
+            .expect("vivid must load its bundled map");
+        assert_eq!(map.source, PathBuf::from("profiles/SONY_ILCE-7C.dcp"));
+        assert_eq!(options.hue_sat_map_strength, 1.0);
+    }
+
+    #[test]
+    fn punchy_remains_a_compatibility_alias_for_standard() {
+        let options = Cli::try_parse_from(["raw-autotune", ".", "--preset", "punchy"])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        assert_eq!(options.preset, Preset::Standard);
+        assert!(options.hue_sat_map.is_none());
+    }
+
+    #[test]
+    fn hdr_bundle_sets_slice8_strength_and_keeps_local_tone_off() {
+        let options = Cli::try_parse_from(["raw-autotune", ".", "--bundle", "hdr"])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        assert_eq!(options.hdr, BUNDLE_HDR_STRENGTH);
+        assert_eq!(options.local_tone, 0.0);
+        assert!(!options.semantic);
+    }
+
+    #[test]
+    fn local_tone_bundle_sets_slice8_strength() {
+        let options = Cli::try_parse_from(["raw-autotune", ".", "--bundle", "local-tone"])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        assert_eq!(options.local_tone, BUNDLE_LOCAL_TONE_STRENGTH);
+        assert_eq!(options.hdr, 0.0);
+    }
+
+    #[test]
+    fn explicit_hdr_strength_wins_over_the_bundle_default() {
+        let options = Cli::try_parse_from(["raw-autotune", ".", "--bundle", "hdr", "--hdr", "0.7"])
+            .unwrap()
+            .into_options()
+            .unwrap()
+            .1;
+        assert_eq!(options.hdr, 0.7);
+    }
+
+    #[test]
+    fn hdr_bundle_rejects_an_explicit_local_tone() {
+        assert!(
+            Cli::try_parse_from([
+                "raw-autotune",
+                ".",
+                "--bundle",
+                "hdr",
+                "--local-tone",
+                "0.2"
+            ])
+            .unwrap()
+            .into_options()
+            .is_err()
+        );
     }
 
     #[test]

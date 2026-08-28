@@ -18,22 +18,21 @@ destructive clipping. It handles one, two or three calibrations, three or four
 camera channels, `ForwardMatrix`, signature-gated `CameraCalibration`,
 `AnalogBalance`, custom xy/SPD `IlluminantData`, `ReductionMatrix`, and Bradford
 adaptation. Incomplete or unsupported profiles fall back to the decoder camera
-matrix. It does not implement the creative/profile-rendering layers:
+matrix. It does not implement the remaining creative/profile-rendering layers:
 
-- DCP hue/saturation maps;
 - vendor picture styles;
 - a trained camera-look transform.
 
-These are not missing sensor calibration. A DCP hue/saturation map or look
-table is an optional creative LUT applied after the camera has already been
-converted colorimetrically: it can make skin warmer, foliage greener, skies
-deeper, or emulate a vendor picture style. (The visible consequence on bright
-blue-violet sky — we render it faithfully where the camera JPEG drives it to
-white — is a recorded decision, AKR
-`decision.faithful-blue-violet-sky-over-camera-white-shoulder`; a calibrated
-table is tracked as `work.calibrated-hue-sat-table-candidate-d`.) The matrix
-path answers what colour
-was measured; these tables choose how that colour should look.
+A DCP hue/saturation map is available opt-in as `--hue-sat-map <file.dcp>`
+(strength 0 is an exact no-op). It is a creative LUT after the matrix, not
+extra sensor calibration, and it is not in the automatic profile. The
+public-domain ART/RawTherapee ILCE-7C table lives at
+`profiles/SONY_ILCE-7C.dcp`; Adobe DCP contents are not shippable. (The
+visible consequence on bright blue-violet sky — we render it faithfully
+where the camera JPEG drives it to white — is a recorded decision, AKR
+`decision.faithful-blue-violet-sky-over-camera-white-shoulder`; Candidate D
+is `work.calibrated-hue-sat-table-candidate-d`.) The matrix path answers
+what colour was measured; the table chooses how that colour should look.
 
 Mixed-light correction exists separately under `--local-white-balance`; it is
 off by default. JPEG, TIFF, and PNG outputs carry an sRGB ICC profile.
@@ -63,7 +62,10 @@ by default precisely because of the paragraph above: run unguarded it renders a
 campfire green. It acts only on frames with two or more chromatically distinct
 illuminants, and refuses lights more than 0.22 from neutral in chromaticity on
 the grounds that they are the subject, not a cast. It has been validated on 7
-phone DNGs only.
+phone DNGs only. A 2026-08-27 A/B on the 9-pair indoor-tungsten set showed it
+also fails that job: mean hue vs the camera JPEG 18.3° → 30.9°, with
+`_DSC1325` 16.7° → 93.2°. Indoor-actionable from `--scene-classify` is
+therefore not a permission bit for this operator.
 
 ## Highlights
 
@@ -78,24 +80,30 @@ post-demosaic `current` estimator instead — byte-identically to an explicit
 
 This is a cost decision, not a quality one, and its limits should be stated:
 
-- **The floor has not been swept.** It is set conservatively, from
-  `docs/HDR_EVALUATION.md`'s clipped-channel census rather than from a sweep of
-  this constant. `clipped_cfa_sites` is in every sidecar so a sweep is possible.
+- **The floor has been censused, not quality-A/B'd.** A 381-file CFA
+  `--dry-run --summary` (`docs/evidence/spatial-floor-sweep-20260827/`)
+  puts 99 frames at zero clipped CFA sites, 71 in (0, 1e-5) with 1–224
+  sites, and 211 at or above the floor. The 29-frame "empty band" was a
+  reporting artifact (declined frames used to sidecar `clipped_cfa_sites`
+  as 0). 1e-5 is kept as the "few hundred isolated sites" cutoff; raising
+  or lowering it would move those 71 and needs a paired-camera A/B first.
 - **It changes default output on declined frames.** Measured on `_DSC0883.ARW`
-  (zero clipped CFA sites): 153 of 30,984,192 16-bit samples move, 0.0005%,
-  with a maximum single-sample delta of 18529/65535. Small in extent, not
-  nothing in amplitude.
+  (six clipped CFA sites, below the floor): 153 of 30,984,192 16-bit samples
+  move, 0.0005%, with a maximum single-sample delta of 18529/65535. Small in
+  extent, not nothing in amplitude.
 - **The saving is bounded, because the cost is not uniform.** On a 29-frame
   Sony sample the floor declined 6 frames and saved 8.9% of total CPU time
   (67 s against 87 s of wall clock at `--jobs 4`). The frames that dominate the
   cost are the heavily clipped ones — `_DSC1135.ARW`, 9.5% clipped, takes 45.8 s
   — and those correctly still solve. Do not expect this to make a clipped batch
   cheap; it makes a *clean* batch cheap.
-- **The memory planner cannot use the gate.** `memory.rs` reserves 64 bytes per
-  pixel for the harmonic method when it sizes `--jobs`, and it does that before
-  any file is decoded, so it cannot know which frames will decline. The reserve
-  therefore stays at worst case. Peak RSS falls in practice on a clean batch;
-  the *planned* worker count does not change.
+- **The memory planner cannot use the gate, and should not try.** `--jobs`
+  is sized before any decode, so it cannot know which Bayer frames will
+  decline; it keeps the worst-case Harmonic reserve on CFA files. It *does*
+  read photometric interpretation from the same TIFF directory: LinearRaw
+  Expert RAW never runs the mosaic solver and is budgeted as Current, so a
+  50 MP LinearRaw file no longer forces the batch to `--jobs 1` or a
+  memory-safety refusal.
 
 ### What reconstruction can and cannot do
 
@@ -109,7 +117,7 @@ The tone curve's highlight segment is driven by a blend of luminance and the
 brightest channel (`highlight_norm`), because a luminance-only curve clips
 saturated highlights in a single channel before luminance reaches white. Above
 half the highlight range a pixel at `highlight_norm == 1.0` cannot clip at all.
-The `neutral` and `auto` presets use 1.0; `punchy` remains below it and permits
+The `neutral` and `auto` presets use 1.0; `standard` and `vivid` remain below it and permit
 some clipping in exchange for contrast.
 
 One interaction remains: pulling a scene highlight down into the midtone range

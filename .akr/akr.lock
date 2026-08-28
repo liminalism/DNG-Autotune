@@ -2,10 +2,10 @@ akr-lock 0.1
 project raw-autotune
 
 build {
-    tool "akr 0.3.3"
+    tool "akr 0.4.0"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:e1eba1a54214815ea388f2ef966ddc84e5f465f2f5590d25f5ce6ed571d9f10d"
+    source_graph "sha256:aa23b9cf3a8d0718ecb83a3337409c1e0ade57fed8e6cd7ae8c43e61e66d266f"
 }
 
 source ".akr/project.akr" {
@@ -19,23 +19,23 @@ source ".akr/records/raw-autotune/assessments.akr" {
 }
 
 source ".akr/records/raw-autotune/decisions.akr" {
-    hash "sha256:e6210808acac157f77a526aac4b2c49db760cf7f44304bf3e71a964b85061a4d"
-    records 12
+    hash "sha256:785318980b358308da6119824b1bce4b2434835e266b9c0f27d0f9745dc2ced5"
+    records 14
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:8dcf25d18fa5e8c96c156a727bdd074fd706d4a48b2ce8dd32185cd532b99558"
-    records 177
+    hash "sha256:d6ea7eda1e139b2abe00027d2ae02429fe3d170dbee4abdb00956f6b962ce06d"
+    records 186
 }
 
 source ".akr/records/raw-autotune/observations.akr" {
-    hash "sha256:18a7aa51220670dff4c29bff5e9d755df96e9ff0d726385b08a68b51acbf69f1"
-    records 6
+    hash "sha256:eb831cca1656def8d06258380263eb1017e03fd28851d48fafd3bfe3784ed06d"
+    records 11
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
-    hash "sha256:dcb2b9f3f090aa74ebc7fddcbbe60829f8270500fe3e018394042f552bd3c2b8"
-    records 56
+    hash "sha256:0ee10dfe8040a5c7228462c18f1ef8114fa7b7789b3d16814d35021d7f32032f"
+    records 65
 }
 
 source ".akr/records/raw-autotune/policies.akr" {
@@ -44,8 +44,8 @@ source ".akr/records/raw-autotune/policies.akr" {
 }
 
 source ".akr/records/raw-autotune/questions.akr" {
-    hash "sha256:9926f15259949f1066147ec0021992c6fd153c0482925890eb9e6b33c69c6a59"
-    records 18
+    hash "sha256:07d4cfe55c10feaf4e032b694a454efea5bcfda43785403e447477443885aaf8"
+    records 20
 }
 
 source ".akr/records/raw-autotune/requirements.akr" {
@@ -54,8 +54,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:f61ddff1f990bfa870b184423db739ab3cd179a0d7471e5af1d8b746d87d63c9"
-    records 60
+    hash "sha256:9dad7f141dbfaef9bc9022fa261ebdeadcc48eb93e83f5d86a56cb3f00e9f64c"
+    records 71
 }
 
 resolution @raw-autotune.assessment.scene-evidence-usefulness/3 {
@@ -80,6 +80,12 @@ resolution @raw-autotune.decision.agpl-boundary-and-dependency-direction/1 {
     slot supported_by
     to @raw-autotune.evidence.agpl-license-field-20260827/1
     hash "sha256:bece06dc16768c19459a26806302b2f9a5788d74afe110b2b5dc32ff159396f2"
+}
+
+resolution @raw-autotune.decision.backlit-tone-policy-does-not-ship/1 {
+    slot supported_by
+    to @raw-autotune.evidence.backlit2-contre-jour-ab-20260828/1
+    hash "sha256:915905960ed40673d6964b8a9af85af22ec6659ea397c1dd8083c827dd63253f"
 }
 
 resolution @raw-autotune.decision.face-detection-is-off-by-default/1 {
@@ -116,6 +122,12 @@ resolution @raw-autotune.decision.highlight-desaturation-uses-peak-preserving-wh
     slot supported_by
     to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/2
     hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
+}
+
+resolution @raw-autotune.decision.indoor-actionable-does-not-enable-local-wb/1 {
+    slot supported_by
+    to @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827/1
+    hash "sha256:ad8a1a435d31aae34236de06d3dd459dcac1a2e0048caf9d6495e054918dadd7"
 }
 
 resolution @raw-autotune.decision.midtone-and-shadow-placement-stays/1 {
@@ -220,6 +232,60 @@ resolution @raw-autotune.evidence.harmonic-neutral-fallback-20260827/2 {
     hash "sha256:8e1e27bebafb139a982391dd53736153fecf5b09d3cf6f7de4f5147e435eb2a7"
 }
 
+resolution @raw-autotune.evidence.linear-raw-planner-reserve-20260827/1 {
+    slot resolves
+    to @raw-autotune.question.memory-planner-cannot-use-the-spatial-floor/2
+    hash "sha256:545fa50db0818735e42f189905bb2120f27f63a07bdd079832707183b4e64d1c"
+}
+
+resolution @raw-autotune.evidence.spatial-floor-census-20260827/1 {
+    slot resolves
+    to @raw-autotune.question.spatial-highlight-floor-not-swept/2
+    hash "sha256:896b27135c3a8069e662dcb3b611f66f9f511646ff9aa94b27b7fdc408242226"
+}
+
+resolution @raw-autotune.observation.remaining-work-blocked-on-user-captures/1 {
+    slot blocks
+    to @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5
+    hash "sha256:8690241d94d494d3525f547cd4876d8e81cf244ec92cbdf6a7fb7206bf4e70c2"
+}
+
+resolution @raw-autotune.observation.remaining-work-blocked-on-user-captures/1 {
+    slot blocks
+    to @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5
+    hash "sha256:85403ea58235ad5e1ce5851bdfddb025f73ea9692c075f9672ea6633b3ce843b"
+}
+
+resolution @raw-autotune.observation.remaining-work-blocked-on-user-captures/1 {
+    slot blocks
+    to @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7
+    hash "sha256:b48c5ab69873d91f501b94c2716224ee36ac38a745f94409b7c0d159402805f9"
+}
+
+resolution @raw-autotune.observation.remaining-work-blocked-on-user-captures/2 {
+    slot blocks
+    to @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5
+    hash "sha256:8690241d94d494d3525f547cd4876d8e81cf244ec92cbdf6a7fb7206bf4e70c2"
+}
+
+resolution @raw-autotune.observation.remaining-work-blocked-on-user-captures/2 {
+    slot blocks
+    to @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7
+    hash "sha256:b48c5ab69873d91f501b94c2716224ee36ac38a745f94409b7c0d159402805f9"
+}
+
+resolution @raw-autotune.observation.remaining-work-blocked-on-user-captures/3 {
+    slot blocks
+    to @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5
+    hash "sha256:8690241d94d494d3525f547cd4876d8e81cf244ec92cbdf6a7fb7206bf4e70c2"
+}
+
+resolution @raw-autotune.observation.remaining-work-blocked-on-user-captures/3 {
+    slot blocks
+    to @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7
+    hash "sha256:b48c5ab69873d91f501b94c2716224ee36ac38a745f94409b7c0d159402805f9"
+}
+
 resolution @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/2 {
     slot verified_by
     to @raw-autotune.evidence.harmonic-neutral-fallback-20260827/2
@@ -316,10 +382,34 @@ resolution @raw-autotune.question.unfitted-partial-cell-floor/2 {
     hash "sha256:5b5bac9cdc35ce670466f0ccc3072cd2b554f6dbf4118f34de1aeaf490468cd4"
 }
 
-resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/1 {
+resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/2 {
     slot derived_from
     to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
     hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+}
+
+resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/3 {
+    slot derived_from
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
+    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+}
+
+resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/4 {
+    slot derived_from
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
+    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+}
+
+resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 {
+    slot derived_from
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/3
+    hash "sha256:2437c022a477f69f4c871bccd38e6e6ff2a51ad36946516e8618c2011b168b84"
+}
+
+resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 {
+    slot supported_by
+    to @raw-autotune.evidence.standard-vivid-preset-suite-20260828/1
+    hash "sha256:8e9d3e409052a88b2518e607b1c1627c7efe0781d4629c3f3fcbfa77f4e908af"
 }
 
 resolution @raw-autotune.work.lege-gpu-onnx-session/1 {
@@ -353,6 +443,90 @@ resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
 }
 
 resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
+    slot verified_by
+    to @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827/1
+    hash "sha256:9beeb50f10f1f2c2e6c2b6d137f5bcc1c21fb81ed9b7368925ddbf64d75538f1"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/2 {
+    slot verified_by
+    to @raw-autotune.evidence.camsdd-inpipeline-parity-20260827/1
+    hash "sha256:a8a8acbb01da32aeffd401bf9ef0ad7db4cce6e0325d88eaafadf749d94dbec8"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/2 {
+    slot verified_by
+    to @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827/1
+    hash "sha256:ad8a1a435d31aae34236de06d3dd459dcac1a2e0048caf9d6495e054918dadd7"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/2 {
+    slot verified_by
+    to @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827/1
+    hash "sha256:9beeb50f10f1f2c2e6c2b6d137f5bcc1c21fb81ed9b7368925ddbf64d75538f1"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/4 {
+    slot depends_on
+    to @raw-autotune.work.port-c5-illuminant-estimator/1
+    hash "sha256:a74e90486961c74791853c7fcad251d455e6228896f8b06bf14aab708db4ab38"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/4 {
+    slot depends_on
+    to @raw-autotune.work.train-camsdd-scene-classifier/4
+    hash "sha256:6620bf5ab672c28f351a9e7745786804f50a3070a362e181f5663972626438fc"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/4 {
+    slot verified_by
+    to @raw-autotune.evidence.camsdd-inpipeline-parity-20260827/1
+    hash "sha256:a8a8acbb01da32aeffd401bf9ef0ad7db4cce6e0325d88eaafadf749d94dbec8"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/4 {
+    slot verified_by
+    to @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827/1
+    hash "sha256:ad8a1a435d31aae34236de06d3dd459dcac1a2e0048caf9d6495e054918dadd7"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/4 {
+    slot verified_by
+    to @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827/1
+    hash "sha256:9beeb50f10f1f2c2e6c2b6d137f5bcc1c21fb81ed9b7368925ddbf64d75538f1"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5 {
+    slot depends_on
+    to @raw-autotune.work.port-c5-illuminant-estimator/1
+    hash "sha256:a74e90486961c74791853c7fcad251d455e6228896f8b06bf14aab708db4ab38"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5 {
+    slot depends_on
+    to @raw-autotune.work.train-camsdd-scene-classifier/4
+    hash "sha256:6620bf5ab672c28f351a9e7745786804f50a3070a362e181f5663972626438fc"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5 {
+    slot verified_by
+    to @raw-autotune.evidence.backlit2-contre-jour-ab-20260828/1
+    hash "sha256:915905960ed40673d6964b8a9af85af22ec6659ea397c1dd8083c827dd63253f"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5 {
+    slot verified_by
+    to @raw-autotune.evidence.camsdd-inpipeline-parity-20260827/1
+    hash "sha256:a8a8acbb01da32aeffd401bf9ef0ad7db4cce6e0325d88eaafadf749d94dbec8"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5 {
+    slot verified_by
+    to @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827/1
+    hash "sha256:ad8a1a435d31aae34236de06d3dd459dcac1a2e0048caf9d6495e054918dadd7"
+}
+
+resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5 {
     slot verified_by
     to @raw-autotune.evidence.scene-lighting-corpus-fusion-20260827/1
     hash "sha256:9beeb50f10f1f2c2e6c2b6d137f5bcc1c21fb81ed9b7368925ddbf64d75538f1"
@@ -478,6 +652,18 @@ resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 {
     hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
 }
 
+resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7 {
+    slot verified_by
+    to @raw-autotune.evidence.sky-final-output-20260816/2
+    hash "sha256:6f37a3d9ae37ad53ba21b1cf90a65ae585b5cfa91108c91c70f6a31541ae37f8"
+}
+
+resolution @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7 {
+    slot verified_by
+    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/2
+    hash "sha256:c5c20877a50efeb34bbe51b01d4b59ceec828956d77fc1f72ea8d35f7dedc01b"
+}
+
 resolution @raw-autotune.work.train-camsdd-scene-classifier/1 {
     slot implements
     to @raw-autotune.decision.scene-classifier-training-stack/1
@@ -527,6 +713,11 @@ seal @raw-autotune.decision.agpl-boundary-and-dependency-direction/1 {
     hash "sha256:f57104f171105cd309ea47d9c1e241da5ab8303fabaa8508c99c485621dc5cbe"
 }
 
+seal @raw-autotune.decision.backlit-tone-policy-does-not-ship/1 {
+    state active
+    hash "sha256:4929fffd19b019eb7e4395bbf59f6889e251c2d0122d2a8e43154730d6e06786"
+}
+
 seal @raw-autotune.decision.face-detection-is-off-by-default/1 {
     state active
     hash "sha256:645078b1aba3a7cdd64799b07e891084aeb56ebfc4742ffd428444d7f111bdc6"
@@ -545,6 +736,11 @@ seal @raw-autotune.decision.harmonic-highlight-is-automatic/1 {
 seal @raw-autotune.decision.highlight-desaturation-uses-peak-preserving-white-path/1 {
     state active
     hash "sha256:886cf8bae8cd33c209b1851e7497b8e7f4f438d7f2b59c60f121e5d254d2417b"
+}
+
+seal @raw-autotune.decision.indoor-actionable-does-not-enable-local-wb/1 {
+    state active
+    hash "sha256:060969393b6283fecc7e588eecca105c619419d8584b543392ce4e15933cee82"
 }
 
 seal @raw-autotune.decision.key-decisions/1 {
@@ -600,6 +796,11 @@ seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/1 {
 seal @raw-autotune.evidence.backlit-foliage-glow-is-exposure-20260810/2 {
     state verified
     hash "sha256:15600de1a45586995ef7498d1a8afd6aed0661f4499589d411755c60c8f3e914"
+}
+
+seal @raw-autotune.evidence.backlit2-contre-jour-ab-20260828/1 {
+    state verified
+    hash "sha256:915905960ed40673d6964b8a9af85af22ec6659ea397c1dd8083c827dd63253f"
 }
 
 seal @raw-autotune.evidence.blown-sky-renders-white-again/1 {
@@ -665,6 +866,11 @@ seal @raw-autotune.evidence.camsdd-gate-4-adapt-20260826/1 {
 seal @raw-autotune.evidence.camsdd-inpipeline-parity-20260827/1 {
     state verified
     hash "sha256:a8a8acbb01da32aeffd401bf9ef0ad7db4cce6e0325d88eaafadf749d94dbec8"
+}
+
+seal @raw-autotune.evidence.candidate-d-art-dcp-huesatmap-20260828/1 {
+    state verified
+    hash "sha256:4b26f764eebee7b1af82d40ebd7edbb5665749dd2c5c194f11773c08ba82b920"
 }
 
 seal @raw-autotune.evidence.cityscapes-lraspp-lege-gpu-cpu-probe/1 {
@@ -737,6 +943,11 @@ seal @raw-autotune.evidence.compression-ratio-batch-gate/2 {
     hash "sha256:479bd5544d0ba3821521ae928f3f15e136a9334228c55570f10d20eec3cde550"
 }
 
+seal @raw-autotune.evidence.declined-floor-reports-clipped-cfa-sites-20260827/1 {
+    state verified
+    hash "sha256:d4793b1980e0ac4b013aa215a3e53238c2be2e9ffdc42953c49b16d91b33b1af"
+}
+
 seal @raw-autotune.evidence.default-gpu-regression-suite-20260813/1 {
     state verified
     hash "sha256:bbf9b91ce8551a8f430f331ec057702ba412b847eaf1e2eea3784ea6f7e2df76"
@@ -780,6 +991,11 @@ seal @raw-autotune.evidence.exact-lens-profile-gate/1 {
 seal @raw-autotune.evidence.exact-lens-profile-gate/2 {
     state verified
     hash "sha256:0734ab30359fa7af4b359c843abf8c30db5bdd06098b5acb02353b1c51116ae0"
+}
+
+seal @raw-autotune.evidence.feature-bundles-cli-20260828/1 {
+    state verified
+    hash "sha256:f406bad716369a7e465bed68c240410d3ab4ce60abe4d7d8ae72d86afed5ae8c"
 }
 
 seal @raw-autotune.evidence.first-principles-highlight-suite-20260809/1 {
@@ -937,6 +1153,11 @@ seal @raw-autotune.evidence.in-memory-metadata-matches-the-file-writers-20260826
     hash "sha256:2f2c6055f2d450f08142cb9fe237c963eb45219d15dfdf0a55c0c542d5b80135"
 }
 
+seal @raw-autotune.evidence.indoor-local-wb-fails-camera-jpeg-20260827/1 {
+    state verified
+    hash "sha256:ad8a1a435d31aae34236de06d3dd459dcac1a2e0048caf9d6495e054918dadd7"
+}
+
 seal @raw-autotune.evidence.lavender-cast-is-faithful-rendering-20260827/1 {
     state verified
     hash "sha256:f2c7db3a7034aee1a76b81e797114cb408deda7a1c2694ae4986732d6608e779"
@@ -945,6 +1166,11 @@ seal @raw-autotune.evidence.lavender-cast-is-faithful-rendering-20260827/1 {
 seal @raw-autotune.evidence.lege-gpu-adapter-skip-tests/1 {
     state verified
     hash "sha256:13d7d3986009cdcec595fb3ee4c5190e53e190bb8aec719a1c5f6f6f356c1744"
+}
+
+seal @raw-autotune.evidence.linear-raw-planner-reserve-20260827/1 {
+    state verified
+    hash "sha256:34c25982032c79d8848320455f85bf5f58d4924d95d4e1e1d358035e06a090f6"
 }
 
 seal @raw-autotune.evidence.midtone-toe-corpus-20260827/1 {
@@ -1422,6 +1648,11 @@ seal @raw-autotune.evidence.slice5-question-status-20260823/1 {
     hash "sha256:15f5cb6587ee3ca37bf08374eb23455303299b03832501b25339acacb4f60f96"
 }
 
+seal @raw-autotune.evidence.slice8-recon-gt-chroma-20260828/1 {
+    state verified
+    hash "sha256:ea707607bf90f214141a68243255556ecea74fcdf19897780e3d07c16d6c5d55"
+}
+
 seal @raw-autotune.evidence.spatial-aq-contract-audit/1 {
     state verified
     hash "sha256:56d33ebd508fe086e7f39788f49e3c1cb3378209b007ce472a71c7aef4ccc1bb"
@@ -1442,6 +1673,11 @@ seal @raw-autotune.evidence.spatial-aq-live-4060/1 {
     hash "sha256:115740ade400e6d0afeb9d885005357d5a42d35919e1e48dc2caf29e96b49698"
 }
 
+seal @raw-autotune.evidence.spatial-floor-census-20260827/1 {
+    state verified
+    hash "sha256:f823ee0e14ad26a2b74b6f4185bad6b33969321d0751544c8c9f4815393421f8"
+}
+
 seal @raw-autotune.evidence.spatial-floor-cost-on-29-arw-20260826/1 {
     state verified
     hash "sha256:b3b76a7adc51d28ffbcc24fabd74dbcfb160974f46f309ca2cb5b929d2a43b07"
@@ -1450,6 +1686,11 @@ seal @raw-autotune.evidence.spatial-floor-cost-on-29-arw-20260826/1 {
 seal @raw-autotune.evidence.spatial-floor-declines-to-the-current-path-20260826/1 {
     state verified
     hash "sha256:3bc3f2989c33d9a5238b9a84afe4bdb601c639beabac610aae6232193b6e3240"
+}
+
+seal @raw-autotune.evidence.standard-vivid-preset-suite-20260828/1 {
+    state verified
+    hash "sha256:8e9d3e409052a88b2518e607b1c1627c7efe0781d4629c3f3fcbfa77f4e908af"
 }
 
 seal @raw-autotune.evidence.transport-area-ramp-20260809/1 {
@@ -1482,6 +1723,31 @@ seal @raw-autotune.observation.night-invisible-in-fixed-tone-proxy/1 {
     hash "sha256:bafd4bee22b8b66b4793a3dd1e8141e26db27bf01e39007f259005aa30cca63d"
 }
 
+seal @raw-autotune.observation.remaining-work-blocked-on-user-captures/1 {
+    state superseded
+    hash "sha256:34a60856708554165a98f97a0800921fea02d3f2276534911173ff39d8ddfab6"
+}
+
+seal @raw-autotune.observation.remaining-work-blocked-on-user-captures/2 {
+    state superseded
+    hash "sha256:bb0b9b921f64a7ae1ae4bb9d33b27573eb42157ac4b19698ccadd9cce9aa0ddf"
+}
+
+seal @raw-autotune.observation.remaining-work-blocked-on-user-captures/3 {
+    state superseded
+    hash "sha256:e42185ab957f620db0fd4e151159ea4145d5f3b454a5f0659c538a14ab345fa8"
+}
+
+seal @raw-autotune.observation.slice8-and-candidate-d-unblocked-20260828/1 {
+    state superseded
+    hash "sha256:21be80558c6cebf26659973d5cf344c398a769ef7a611e1d66cafb79982f9a8a"
+}
+
+seal @raw-autotune.observation.slice8-and-candidate-d-unblocked-20260828/2 {
+    state verified
+    hash "sha256:667dcafa4eb0cd54ec9f4785cbd8d3e310a175da1344b74e1e293a160e5c4ce1"
+}
+
 seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/1 {
     state superseded
     hash "sha256:62bd8eff1cc910e80749ababdecb28610b3b34bf9257e76c3f2ff39b9ff1b6d0"
@@ -1505,6 +1771,11 @@ seal @raw-autotune.papercut.a-chained-focused-test-build-command-exceeded/1 {
 seal @raw-autotune.papercut.a-combined-read-only-akr-get-for-three-known/1 {
     state verified
     hash "sha256:30ebf0ba55a5f732d08675e2c14b7dff638d9b55c8bec8b39fa330fee9242c7f"
+}
+
+seal @raw-autotune.papercut.a-focused-verification-command-passed-three/1 {
+    state verified
+    hash "sha256:a7fec4fd822077636024fa564538e6913d920b654af56236abac38830daa4a28"
 }
 
 seal @raw-autotune.papercut.a-fresh-evidence-add-used-an-inferred-expansion/1 {
@@ -1537,6 +1808,16 @@ seal @raw-autotune.papercut.akr-check-passed-with-commit-none-before-commit/1 {
     hash "sha256:29de8487a4c83ddcf5f272bef083624c334053db1e33e046286faf568575a09a"
 }
 
+seal @raw-autotune.papercut.akr-evidence-add-summary-that-starts-with/1 {
+    state verified
+    hash "sha256:ab58c286a64294a48ee1c1def287cf3d5676acdd9909b0ae274cbcffb68cdc07"
+}
+
+seal @raw-autotune.papercut.akr-evidence-add-then-complete-in-the-same/1 {
+    state verified
+    hash "sha256:060f2ad68093e063f3fb86cf8db42424d715fd3b62eeae14c7f0d24f7411818b"
+}
+
 seal @raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 {
     state verified
     hash "sha256:4e7b3c9fc456edf86912d5dc7e99258b4ca4dd040206197656234f322503633e"
@@ -1545,6 +1826,11 @@ seal @raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but/1 {
 seal @raw-autotune.papercut.akr-get-shows-a-record-key-and-revision-but-not/1 {
     state verified
     hash "sha256:72563e459ac79372f973d673c037de5a316dd1bf82fe0da9893bfbbfa2e9c416"
+}
+
+seal @raw-autotune.papercut.akr-mcp-server-failed-to-connect-at-session/1 {
+    state verified
+    hash "sha256:4dc82eed18286995418c732bd9b82c4486e2b22faa456e474fbe97400ed6f32e"
 }
 
 seal @raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does/1 {
@@ -1557,6 +1843,16 @@ seal @raw-autotune.papercut.akr-revise-from-help-describes-a-replacement/1 {
     hash "sha256:b8911d8494a64de4310433da59ca3ca2ee1d48f4e07db4481ac36f66cc8fa76c"
 }
 
+seal @raw-autotune.papercut.akr-revise-from-on-an-active-work-head-without/1 {
+    state verified
+    hash "sha256:e67b19b832cd04afd95ddafaf5b5b844bd7dba71024fdfb4d952d76ebd614545"
+}
+
+seal @raw-autotune.papercut.akr-revise-from-with-a-partial-fragment-dropped/1 {
+    state verified
+    hash "sha256:df2b43217c709a660fa51e57f788918949d4102f898f32b6927259bcbad4c077"
+}
+
 seal @raw-autotune.papercut.akr-search-prints-record-identifiers-with/1 {
     state verified
     hash "sha256:950b80fbce59197c4859f83b1b1569ec4ec2e9b5ba00c3fe26c0f951afd928c4"
@@ -1565,6 +1861,11 @@ seal @raw-autotune.papercut.akr-search-prints-record-identifiers-with/1 {
 seal @raw-autotune.papercut.akr-supersede-documented-with-a-replacement-key/1 {
     state verified
     hash "sha256:303af0949b12e2a27f47ae0a3aeb7d76f52d943f1952aaef74a90d07e83f14f4"
+}
+
+seal @raw-autotune.papercut.camsdd-is-a-30-class-scene-jpeg-dataset-and-has/1 {
+    state verified
+    hash "sha256:fdf99beef0e55b9d3e0aa6ccec5d11bc8ed69addc153dd1e82a0d2d3235d2f74"
 }
 
 seal @raw-autotune.papercut.cargo-test-accepts-one-positional-testname/1 {
@@ -1665,6 +1966,16 @@ seal @raw-autotune.papercut.rtx-4060-wgpu-on-linux-is-currently-unusable/1 {
 seal @raw-autotune.papercut.running-several-read-only-akr-search-commands/1 {
     state verified
     hash "sha256:a554ba4c4ff38e4492bbb814d6c657a48139ccd54832dfd52d840e87fad2e129"
+}
+
+seal @raw-autotune.papercut.staging-the-spatial-floor-csv-warned-that-crlf/1 {
+    state verified
+    hash "sha256:2b16f7100bdfa417bcf7294278dea339237816e03f9ccfb965477fd26ac5e511"
+}
+
+seal @raw-autotune.papercut.started-a-381-file-dry-run-spatial-highlight/1 {
+    state verified
+    hash "sha256:b8094dea0197a7194648ab3637f989b05e8c64ee46fb8ab3958896959dbb1ee3"
 }
 
 seal @raw-autotune.papercut.state-only-revise-on-sealed-work-head-l002/1 {
@@ -1818,8 +2129,13 @@ seal @raw-autotune.question.grid-valid-mean-confidence/2 {
 }
 
 seal @raw-autotune.question.memory-planner-cannot-use-the-spatial-floor/1 {
-    state open
-    hash "sha256:fb259b9638b3c38c64866cf9df22f3f80ee75f0880e449b0db3d64c631a44138"
+    state superseded
+    hash "sha256:a5b4c29d2c536bcae1b7abe24ec7fdc640bee23436550621a87b47909d928b76"
+}
+
+seal @raw-autotune.question.memory-planner-cannot-use-the-spatial-floor/2 {
+    state resolved
+    hash "sha256:545fa50db0818735e42f189905bb2120f27f63a07bdd079832707183b4e64d1c"
 }
 
 seal @raw-autotune.question.prediction-band-below-clip-ramp/1 {
@@ -1843,8 +2159,13 @@ seal @raw-autotune.question.purple-sky-standing-after-slice-5/2 {
 }
 
 seal @raw-autotune.question.spatial-highlight-floor-not-swept/1 {
-    state open
-    hash "sha256:5983cb09f8ea4c4ca0d15c8bb7f8a2d317a8c3cbeeec003cf92ebcfb8277c32c"
+    state superseded
+    hash "sha256:656edbecf0c8b7ddc9ab9f9afdabf0576f4a6735042eb288be016228aeba2f68"
+}
+
+seal @raw-autotune.question.spatial-highlight-floor-not-swept/2 {
+    state resolved
+    hash "sha256:896b27135c3a8069e662dcb3b611f66f9f511646ff9aa94b27b7fdc408242226"
 }
 
 seal @raw-autotune.question.status-doc-standing-verification/1 {
@@ -1897,6 +2218,31 @@ seal @raw-autotune.work.archive-speed-highlight-floor-and-encoder-metadata-surfa
     hash "sha256:b3b53cfb0adcbf4126198633b50d768a1c32448cb65bb424da978c4ed1333bd6"
 }
 
+seal @raw-autotune.work.calibrated-hue-sat-table-candidate-d/1 {
+    state superseded
+    hash "sha256:b4f58fb635b0c2780d7d5b83920e8634a5abb3c2dddbc8b0b4cf0e8bcbb36857"
+}
+
+seal @raw-autotune.work.calibrated-hue-sat-table-candidate-d/2 {
+    state superseded
+    hash "sha256:de074306469711ca3f5c019af228f50744e7f514856871e1be70b3fb9bcacc87"
+}
+
+seal @raw-autotune.work.calibrated-hue-sat-table-candidate-d/3 {
+    state superseded
+    hash "sha256:bc6b0dd3099fcb9904d4820e3dcba9a35c0e323a6fe2bc7f6e34cd06f7ef78d4"
+}
+
+seal @raw-autotune.work.calibrated-hue-sat-table-candidate-d/4 {
+    state superseded
+    hash "sha256:f674413b316a6c0ab05e746be10b4e378adb0e2b11834809871017d50b94c442"
+}
+
+seal @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 {
+    state active
+    hash "sha256:8690241d94d494d3525f547cd4876d8e81cf244ec92cbdf6a7fb7206bf4e70c2"
+}
+
 seal @raw-autotune.work.compression-aware-highlight-ratio-promotion/1 {
     state superseded
     hash "sha256:4686a6951be3dae5f730cc9a3d7e5b2ec45b3d3fa466908854e3b5ea6b70dce1"
@@ -1910,6 +2256,11 @@ seal @raw-autotune.work.compression-aware-highlight-ratio-promotion/2 {
 seal @raw-autotune.work.encoder-profile-hints-api/1 {
     state completed
     hash "sha256:3d4bd74154f2b7149d23e2c9221223d32e641dbe7a8c60259ee66b60739f8d4a"
+}
+
+seal @raw-autotune.work.feature-bundles/1 {
+    state completed
+    hash "sha256:7e161751dc22ec91e2a4e208a25e685517fa4aeb53a065e2ae22f835edef1f36"
 }
 
 seal @raw-autotune.work.goal/1 {
@@ -1983,8 +2334,28 @@ seal @raw-autotune.work.open-questions/1 {
 }
 
 seal @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
-    state active
-    hash "sha256:68d2b2d0564a4208dbe309f757b7205a5f10aa54bc4a0af03c91e8b3ee455520"
+    state superseded
+    hash "sha256:d2aef646fe78ab2e40bd6d1640ba44edff279166929ffc7b8371514e0ec54f75"
+}
+
+seal @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/2 {
+    state superseded
+    hash "sha256:85c976088ca2c5c574bc9dd6c21acdd343bd06fce7181284c65e0ca9d80380fe"
+}
+
+seal @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/3 {
+    state superseded
+    hash "sha256:5d77d166fc8ef994fa1f2ad50f4d05711835dd24e0216b5b499dcebec30597c2"
+}
+
+seal @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/4 {
+    state superseded
+    hash "sha256:cc9f442850b6008a3c1ddbd38e2a854040cc305da111b3829f19ef5800168514"
+}
+
+seal @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/5 {
+    state completed
+    hash "sha256:85403ea58235ad5e1ce5851bdfddb025f73ea9692c075f9672ea6633b3ce843b"
 }
 
 seal @raw-autotune.work.port-c5-illuminant-estimator/1 {
@@ -2138,8 +2509,18 @@ seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/4 {
 }
 
 seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/5 {
-    state active
-    hash "sha256:cd05c7ec313780ffe1bc8e30e841dc62843127e236e1e0b9c434f101b674292c"
+    state superseded
+    hash "sha256:81dca783fc61e3a5f2b879783d8414bcc61e80e9bab29fdcc66f2dcd5e0837e6"
+}
+
+seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/6 {
+    state superseded
+    hash "sha256:48f0a0e6adec64d36bc14b202a864722179e9612044b1a8adda60aa875447128"
+}
+
+seal @raw-autotune.work.slice-8-local-tone-sky-ground-hdr-evaluation/7 {
+    state completed
+    hash "sha256:b48c5ab69873d91f501b94c2716224ee36ac38a745f94409b7c0d159402805f9"
 }
 
 seal @raw-autotune.work.spatial-semantic-aq-api/1 {

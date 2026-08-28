@@ -65,12 +65,18 @@ pub const ILLUMINANT_REPORT_SCHEMA_VERSION: u32 = 25;
 /// Like 25, it is independent of the other optional blocks: the version is the
 /// highest applicable one, and absent fields are omitted rather than nulled.
 pub const SCENE_CLASSIFY_REPORT_SCHEMA_VERSION: u32 = 26;
+/// Schema 27 carries the optional `color.hue_sat_map` block from
+/// `--hue-sat-map`. Like 25/26 it is independent of the other optional
+/// blocks: the field is omitted when the flag is off, so a default run
+/// stays on schema 22.
+pub const HUE_SAT_MAP_REPORT_SCHEMA_VERSION: u32 = 27;
 
 pub const fn report_schema_version(
     semantic: bool,
     semantic_policy: bool,
     illuminant: bool,
     scene_classify: bool,
+    hue_sat_map: bool,
 ) -> u32 {
     let mut version = if semantic_policy {
         SEMANTIC_POLICY_REPORT_SCHEMA_VERSION
@@ -84,6 +90,9 @@ pub const fn report_schema_version(
     }
     if scene_classify && SCENE_CLASSIFY_REPORT_SCHEMA_VERSION > version {
         version = SCENE_CLASSIFY_REPORT_SCHEMA_VERSION;
+    }
+    if hue_sat_map && HUE_SAT_MAP_REPORT_SCHEMA_VERSION > version {
+        version = HUE_SAT_MAP_REPORT_SCHEMA_VERSION;
     }
     version
 }
@@ -136,7 +145,11 @@ impl GuidanceMode {
 pub enum Preset {
     Neutral,
     Auto,
-    Punchy,
+    /// Stronger midtone contrast and chroma. Formerly `--preset punchy`.
+    #[value(alias = "punchy")]
+    Standard,
+    /// `standard` tone plus the bundled public-domain Sony A7C HueSatMap.
+    Vivid,
 }
 
 impl Preset {
@@ -144,10 +157,62 @@ impl Preset {
         match self {
             Self::Neutral => "neutral",
             Self::Auto => "auto",
-            Self::Punchy => "punchy",
+            Self::Standard => "standard",
+            Self::Vivid => "vivid",
         }
     }
+
+    /// `standard` and `vivid` share the punchy-era tone curve.
+    pub const fn uses_standard_tone(self) -> bool {
+        matches!(self, Self::Standard | Self::Vivid)
+    }
+
+    /// Load a bundled DCP HueSatMap unless `--hue-sat-map` already set one.
+    pub const fn wants_vivid_table(self) -> bool {
+        matches!(self, Self::Vivid)
+    }
 }
+
+/// CLI grouping of off-by-default pipeline features. Orthogonal to
+/// [`Preset`], which is the global tone look.
+///
+/// `archive` is today's unattended path and must not move pixels. The other
+/// variants expand to explicit flags; they are not promotions into
+/// `archive-auto-v8`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FeatureBundle {
+    /// Current archive-auto-v8 defaults. No extra operators.
+    #[default]
+    Archive,
+    /// Observational models: `--semantic --illuminant --scene-classify`.
+    /// Pixel-identical to archive; sidecars and the batch summary grow.
+    Survey,
+    /// Experimental single-frame HDR local tone at [`BUNDLE_HDR_STRENGTH`].
+    Hdr,
+    /// Experimental Gaussian-surround local tone at [`BUNDLE_LOCAL_TONE_STRENGTH`].
+    LocalTone,
+}
+
+impl FeatureBundle {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Archive => "archive",
+            Self::Survey => "survey",
+            Self::Hdr => "hdr",
+            Self::LocalTone => "local-tone",
+        }
+    }
+
+    pub const fn is_archive(self) -> bool {
+        matches!(self, Self::Archive)
+    }
+}
+
+/// `--bundle hdr` strength. Same value Slice 8 evaluated (`--hdr 0.5`).
+pub const BUNDLE_HDR_STRENGTH: f32 = 0.5;
+/// `--bundle local-tone` strength. Same value Slice 8 evaluated (`--local-tone 0.35`).
+pub const BUNDLE_LOCAL_TONE_STRENGTH: f32 = 0.35;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -371,6 +436,12 @@ pub struct RunOptions {
     /// Select the post-demosaic lens-correction source. The unattended default
     /// remains embedded DNG metadata; exact database profiles are opt-in.
     pub lens_correction: crate::lens::LensCorrectionMode,
+    /// Optional DCP HueSatMap applied after the colour matrix. `None` is the
+    /// unattended default and is byte-identical to omitting `--hue-sat-map`.
+    pub hue_sat_map: Option<std::sync::Arc<crate::huesatmap::HueSatMap>>,
+    /// Blend of the HueSatMap, 0 to 1. Ignored when `hue_sat_map` is `None`.
+    /// Zero is an exact no-op even when a table is loaded.
+    pub hue_sat_map_strength: f32,
 }
 
 impl RunOptions {
@@ -435,6 +506,8 @@ impl RunOptions {
             spatial_highlight_floor: crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR,
             full_dng_color: true,
             lens_correction: crate::lens::LensCorrectionMode::Embedded,
+            hue_sat_map: None,
+            hue_sat_map_strength: 0.0,
         }
     }
 }
@@ -718,15 +791,15 @@ mod tests {
     #[test]
     fn encoder_profile_report_schema_is_explicit() {
         assert_eq!(
-            report_schema_version(false, false, false, false),
+            report_schema_version(false, false, false, false, false),
             REPORT_SCHEMA_VERSION
         );
         assert_eq!(
-            report_schema_version(true, false, false, false),
+            report_schema_version(true, false, false, false, false),
             SEMANTIC_REPORT_SCHEMA_VERSION
         );
         assert_eq!(
-            report_schema_version(true, true, false, false),
+            report_schema_version(true, true, false, false, false),
             SEMANTIC_POLICY_REPORT_SCHEMA_VERSION
         );
     }
@@ -734,12 +807,12 @@ mod tests {
     #[test]
     fn illuminant_evidence_takes_the_highest_applicable_schema() {
         assert_eq!(
-            report_schema_version(false, false, true, false),
+            report_schema_version(false, false, true, false, false),
             ILLUMINANT_REPORT_SCHEMA_VERSION
         );
         // Independent features, so asking for both cannot land below either.
         assert_eq!(
-            report_schema_version(true, true, true, false),
+            report_schema_version(true, true, true, false, false),
             ILLUMINANT_REPORT_SCHEMA_VERSION
         );
     }
@@ -747,13 +820,21 @@ mod tests {
     #[test]
     fn scene_classify_takes_the_highest_applicable_schema() {
         assert_eq!(
-            report_schema_version(false, false, false, true),
+            report_schema_version(false, false, false, true, false),
             SCENE_CLASSIFY_REPORT_SCHEMA_VERSION
         );
         // Independent features, so asking for everything cannot land below any.
         assert_eq!(
-            report_schema_version(true, true, true, true),
+            report_schema_version(true, true, true, true, false),
             SCENE_CLASSIFY_REPORT_SCHEMA_VERSION
+        );
+        assert_eq!(
+            report_schema_version(false, false, false, false, true),
+            HUE_SAT_MAP_REPORT_SCHEMA_VERSION
+        );
+        assert_eq!(
+            report_schema_version(true, true, true, true, true),
+            HUE_SAT_MAP_REPORT_SCHEMA_VERSION
         );
     }
 
