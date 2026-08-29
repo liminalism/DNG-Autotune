@@ -229,6 +229,52 @@ raw-autotune raw-folder --dry-run --summary survey.json --bundle survey
 Sony A7C HueSatMap to that same grade. The other presets do not switch
 operators on or off, and `auto` remains the default archive look.
 
+### Choosing between `standard` and `vivid`
+
+Measured over 102 RAW+JPEG pairs (86 Sony, 16 Samsung), medians against the
+camera's own JPEG — full method and per-frame data in
+`docs/evidence/preset-standard-vivid-20260829/`:
+
+| preset | chroma, whole frame | chroma on the camera's boldest pixels | hue error |
+|---|---|---|---|
+| `auto` | 1.12× the camera | 0.65× | 15.4° |
+| `standard` | 1.17× | 0.70× | 15.5° |
+| `vivid` | 1.71× | 0.96× | 16.8° |
+
+**`vivid` never flattens saturated colour.** The share of `standard`'s
+`C* > 40` pixels that `vivid` drops more than a quarter below is 0.00% median
+and 0.9% on the worst of 86 frames. Blue, warm and green all come out more
+saturated, not less. If you were worried about losing a good sky or a sunset,
+that is measured and it does not happen.
+
+**What it does instead is lift everything by about half and rotate hue.**
+Chroma ×1.46 median over `standard`, blue hue **+15°** toward violet, warm hue
+**+10°** toward yellow. It is the only preset that reaches the camera's own
+chroma where the camera is boldest — `auto` and `standard` sit 30–35% under
+it — but it gets there by pushing the whole frame past the camera, and its hue
+error against the camera goes up, not down.
+
+Reach for **`vivid`** on saturated daylight Sony landscapes, where the
+camera-JPEG boldness is the point and a deeper, more violet sky is wanted.
+
+Stay on **`standard`** whenever hue placement matters more than punch:
+
+- **Any camera that is not the Sony A7C.** The bundled table is calibrated for
+  one sensor and nothing checks: on the Samsung DNGs it drives warm chroma to
+  1.66× the camera and warm hue 24° off.
+- **Indoor and mixed light.** The profile's Std A table only interpolates when
+  a CCT is available, and that comes from the DNG colour path, which an ARW
+  does not have — so every Sony frame uses the D65 table alone. On
+  `raw/indoor_tungsten` blue hue error goes 11.4° → 24.5°.
+- **Foliage-heavy frames**, which take the +10° warm rotation as a yellow-green
+  cast.
+- **Anything meant as a faithful record** rather than a look. Even on the A7C,
+  `vivid` applies the profile's HueSatMap without the profile's own forward
+  matrix, so it is a grade, not a calibration.
+
+`--preset vivid --hue-sat-map-strength 0.5` is the half-measure; strength 0 is
+byte-identical to `standard`.
+
 `--bundle` groups the off-by-default pipeline features. `archive` is the
 default and is today's unattended path (`archive-auto-v8`). The others expand
 to flags you could type yourself; they are not promotions into the automatic

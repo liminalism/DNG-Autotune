@@ -104,7 +104,7 @@ impl HueSatMap {
     }
 
     fn from_tiff(tiff: &GenericTiffReader, source: PathBuf) -> Result<Self> {
-        let dims_entry = find_entry(&tiff, TAG_HUE_SAT_MAP_DIMS)
+        let dims_entry = find_entry(tiff, TAG_HUE_SAT_MAP_DIMS)
             .ok_or_else(|| anyhow::anyhow!("{} has no ProfileHueSatMapDims", source.display()))?;
         ensure!(
             dims_entry.value.count() == 3,
@@ -122,23 +122,23 @@ impl HueSatMap {
             .and_then(|n| n.checked_mul(val_div))
             .context("HueSatMap dims overflow")?;
 
-        let table1 = read_table(&tiff, TAG_HUE_SAT_MAP_DATA_1, cells)?;
-        let table2 = match find_entry(&tiff, TAG_HUE_SAT_MAP_DATA_2) {
-            Some(_) => Some(read_table(&tiff, TAG_HUE_SAT_MAP_DATA_2, cells)?),
+        let table1 = read_table(tiff, TAG_HUE_SAT_MAP_DATA_1, cells)?;
+        let table2 = match find_entry(tiff, TAG_HUE_SAT_MAP_DATA_2) {
+            Some(_) => Some(read_table(tiff, TAG_HUE_SAT_MAP_DATA_2, cells)?),
             None => None,
         };
 
-        let illuminant1 = find_entry(&tiff, TAG_CALIBRATION_ILLUMINANT_1)
+        let illuminant1 = find_entry(tiff, TAG_CALIBRATION_ILLUMINANT_1)
             .map(|entry| entry.value.force_u16(0))
             .unwrap_or(21);
         let illuminant2 =
-            find_entry(&tiff, TAG_CALIBRATION_ILLUMINANT_2).map(|entry| entry.value.force_u16(0));
+            find_entry(tiff, TAG_CALIBRATION_ILLUMINANT_2).map(|entry| entry.value.force_u16(0));
 
         Ok(Self {
             source,
-            unique_camera_model: read_ascii(&tiff, TAG_UNIQUE_CAMERA_MODEL).unwrap_or_default(),
-            profile_name: read_ascii(&tiff, TAG_PROFILE_NAME).unwrap_or_default(),
-            copyright: read_ascii(&tiff, TAG_PROFILE_COPYRIGHT).unwrap_or_default(),
+            unique_camera_model: read_ascii(tiff, TAG_UNIQUE_CAMERA_MODEL).unwrap_or_default(),
+            profile_name: read_ascii(tiff, TAG_PROFILE_NAME).unwrap_or_default(),
+            copyright: read_ascii(tiff, TAG_PROFILE_COPYRIGHT).unwrap_or_default(),
             hue_div,
             sat_div,
             val_div,

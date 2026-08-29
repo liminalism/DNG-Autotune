@@ -2,6 +2,39 @@
 
 ## Unreleased — a standalone front-end
 
+### `standard` vs `vivid`: measured guidance, and three caveats on the table
+
+102 RAW+JPEG pairs (86 Sony, 16 Samsung), three arms of the same binary,
+graded in CIELAB against the camera's own JPEG by the new
+`tools/compare_presets.py`. Evidence in
+`docs/evidence/preset-standard-vivid-20260829/`.
+
+The check the work item asked for passes outright: **`vivid` never neutralises
+saturated colour.** The share of `standard`'s `C* > 40` pixels that `vivid`
+drops more than a quarter below is 0.00% median, 0.9% on the worst frame.
+
+What it does is lift chroma ×1.46 and rotate hue: blue +15° toward violet,
+warm +10° toward yellow. It is the only preset that reaches the camera's own
+chroma where the camera is boldest (`C sat` 0.70 → 0.96; `auto` is 0.65), and
+it does so by pushing the whole frame from 1.17× to 1.71× the camera's mean
+chroma. Its hue error against the camera goes *up* on four of the five Sony
+sets. `README.md` now says when to reach for each.
+
+Three properties of the bundled table came out of the sidecars and are
+recorded, not changed:
+
+- The profile's Std A table never runs on the camera it was made for. The
+  HueSatMap interpolates its two calibration illuminants only when a CCT is
+  available, and that CCT comes from the full DNG colour path, which needs a
+  DNG `ColorMatrix1` tag an ARW does not carry. 86/86 Sony frames used the D65
+  table alone; 16/16 Samsung DNGs interpolated. `raw/indoor_tungsten` is the
+  worst Sony set as a result (blue hue error 11.4° → 24.5°).
+- Nothing compares the DCP's `UniqueCameraModel` to the file being developed.
+  `--preset vivid` on a Samsung DNG silently applies the A7C table: warm
+  chroma 1.66× the camera, warm hue 24° off.
+- The table is applied without the DCP's own `ForwardMatrix`, so it is a look
+  rather than a calibration even on the A7C.
+
 ### `--bundle` groups off-by-default features; `--preset` stays the tone look
 
 `--preset` is now `neutral` / `auto` / `standard` / `vivid`. `standard` renames

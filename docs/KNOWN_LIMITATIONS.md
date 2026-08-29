@@ -34,6 +34,29 @@ where the camera JPEG drives it to white — is a recorded decision, AKR
 is `work.calibrated-hue-sat-table-candidate-d`.) The matrix path answers
 what colour was measured; the table chooses how that colour should look.
 
+Three limits of that table, all measured on 2026-08-29 over 102 RAW+JPEG pairs
+(`docs/evidence/preset-standard-vivid-20260829/`), none of them fixed:
+
+- **It only ever uses its D65 half on the camera it was calibrated for.** The
+  HueSatMap interpolates `CalibrationIlluminant1` (Std A) and
+  `CalibrationIlluminant2` (D65) only when a CCT is available, and that CCT
+  comes from the full DNG colour report, which `dngcolor::camera_to_working_any`
+  produces only for files carrying a DNG `ColorMatrix1` tag. An ARW does not.
+  So all 86 Sony frames used the D65 table alone while all 16 Samsung DNGs
+  interpolated. `raw/indoor_tungsten` pays for it: blue hue error against the
+  camera JPEG goes 11.4° → 24.5° under `--preset vivid`.
+- **Nothing checks the profile against the file.** The DCP's
+  `UniqueCameraModel` is parsed and written to the sidecar, but no code
+  compares it to the RAW being developed and no warning is printed. `--preset
+  vivid` on a Samsung DNG applies the Sony A7C table silently, at 1.66× the
+  camera's warm chroma and 24° of warm hue error.
+- **The table is applied without its own forward matrix.** The DCP carries
+  `ColorMatrix1/2` and `ForwardMatrix1/2` and we use none of them. A HueSatMap
+  encodes the residual of the profile's *own* matrix, so on top of a different
+  one it is a look and not a calibration — which is why `--preset vivid` is a
+  named creative choice rather than a camera match. (`ProfileHueSatMapEncoding`
+  is absent, so the linear application space itself is correct.)
+
 Mixed-light correction exists separately under `--local-white-balance`; it is
 off by default. JPEG, TIFF, and PNG outputs carry an sRGB ICC profile.
 
