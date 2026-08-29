@@ -264,6 +264,11 @@ fn run_pipeline(
     // the raw at all, whatever the render does afterwards.
     let mut highlight_near_white = Vec::new();
     let mut dng_color_frames = 0_usize;
+    // Two tallies rather than one, because a batch can legitimately hold files
+    // the bundled profile does not cover, and the person running it needs to
+    // know that the flag they passed did not reach all of them.
+    let mut hue_sat_applied = 0_usize;
+    let mut hue_sat_skipped = 0_usize;
     let mut nondeterministic_illuminant_files = 0_usize;
 
     for (job, result) in jobs.iter().zip(results) {
@@ -400,6 +405,13 @@ fn run_pipeline(
                     }
                     if color.dng_color.is_some() {
                         dng_color_frames += 1;
+                    }
+                    if let Some(map) = &color.hue_sat_map {
+                        if map.skipped.is_some() {
+                            hue_sat_skipped += 1;
+                        } else {
+                            hue_sat_applied += 1;
+                        }
                     }
                 }
                 entries.push(types::SummaryEntry {
@@ -586,6 +598,13 @@ fn run_pipeline(
     if dng_color_frames > 0 {
         println!(
             "full DNG colour: composed the ForwardMatrix transform for {dng_color_frames} file(s)"
+        );
+    }
+
+    if hue_sat_applied > 0 || hue_sat_skipped > 0 {
+        println!(
+            "calibrated hue/sat profile: applied to {hue_sat_applied} file(s), \
+             declined on {hue_sat_skipped} the profile is not calibrated for"
         );
     }
 

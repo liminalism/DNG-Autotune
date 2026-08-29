@@ -34,28 +34,31 @@ where the camera JPEG drives it to white — is a recorded decision, AKR
 is `work.calibrated-hue-sat-table-candidate-d`.) The matrix path answers
 what colour was measured; the table chooses how that colour should look.
 
-Three limits of that table, all measured on 2026-08-29 over 102 RAW+JPEG pairs
-(`docs/evidence/preset-standard-vivid-20260829/`), none of them fixed:
+Those three limits were measured on 2026-08-29 and closed the same day
+(`docs/evidence/huesatmap-calibration-20260829/`). The table now travels with
+its own profile: `dngcolor::camera_to_working_from_profile` composes the DNG 1.7
+model from the DCP's `ColorMatrix1/2` and `ForwardMatrix1/2` while the scene
+white still comes from the RAW, the CCT that solve returns interpolates the
+profile's Std A and D65 tables (which no ARW could reach before, for want of a
+DNG `ColorMatrix1` tag), and a profile whose `UniqueCameraModel` is not the file's
+camera is declined with a warning, leaving the frame byte-identical to
+`standard`. Blue rotation against `standard` fell from +15.2° to +3.4° and warm
+from +9.6° to +0.6°.
 
-- **It only ever uses its D65 half on the camera it was calibrated for.** The
-  HueSatMap interpolates `CalibrationIlluminant1` (Std A) and
-  `CalibrationIlluminant2` (D65) only when a CCT is available, and that CCT
-  comes from the full DNG colour report, which `dngcolor::camera_to_working_any`
-  produces only for files carrying a DNG `ColorMatrix1` tag. An ARW does not.
-  So all 86 Sony frames used the D65 table alone while all 16 Samsung DNGs
-  interpolated. `raw/indoor_tungsten` pays for it: blue hue error against the
-  camera JPEG goes 11.4° → 24.5° under `--preset vivid`.
-- **Nothing checks the profile against the file.** The DCP's
-  `UniqueCameraModel` is parsed and written to the sidecar, but no code
-  compares it to the RAW being developed and no warning is printed. `--preset
-  vivid` on a Samsung DNG applies the Sony A7C table silently, at 1.66× the
-  camera's warm chroma and 24° of warm hue error.
-- **The table is applied without its own forward matrix.** The DCP carries
-  `ColorMatrix1/2` and `ForwardMatrix1/2` and we use none of them. A HueSatMap
-  encodes the residual of the profile's *own* matrix, so on top of a different
-  one it is a look and not a calibration — which is why `--preset vivid` is a
-  named creative choice rather than a camera match. (`ProfileHueSatMapEncoding`
-  is absent, so the linear application space itself is correct.)
+What remains true of it:
+
+- **It is still a rendering choice, not a measurement.** The profile's authors
+  decided how this sensor should render foliage and sky. Its chroma-weighted
+  absolute hue error against the camera JPEG stays slightly above `standard`'s
+  on all five Sony sets, because it is not aimed at the camera's look.
+- **It covers one body.** `profiles/SONY_ILCE-7C.dcp` is the only bundled
+  profile, so on every other camera `--preset vivid` is `standard` plus a
+  warning. Adobe DCP contents remain unshippable.
+- **A calibration corrects downward too.** Unlike the unpaired table, which only
+  ever lifted, `vivid` can now reduce chroma: 4 of 86 frames have more than 1%
+  of `standard`'s `C* > 40` pixels losing more than a quarter of theirs.
+- **`ProfileLookTable*` and the profile tone curve are still not read.** Only
+  the matrices and the HueSatMap are.
 
 Mixed-light correction exists separately under `--local-white-balance`; it is
 off by default. JPEG, TIFF, and PNG outputs carry an sRGB ICC profile.

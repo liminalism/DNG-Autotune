@@ -453,6 +453,41 @@ impl ColorTransform {
         Some((transform, report))
     }
 
+    /// The same DNG 1.7 conversion, but calibrated from a standalone DCP.
+    ///
+    /// Used only when that profile's hue/saturation table is about to be
+    /// applied, and only when the profile is for this camera. The table encodes
+    /// the residual of the profile's own `ForwardMatrix`, so this is what makes
+    /// the pair a calibration; it also produces the scene CCT the table's two
+    /// calibration illuminants are interpolated at, which no other route
+    /// supplies for a file that is not a DNG.
+    pub fn derive_profile(
+        raw: &RawImage,
+        path: &std::path::Path,
+        table: &crate::huesatmap::HueSatMap,
+        working_space: WorkingSpace,
+    ) -> Option<(Self, crate::dngcolor::DngColorReport)> {
+        let (matrix, mut report) = crate::dngcolor::camera_to_working_from_profile(
+            raw,
+            path,
+            &table.bytes,
+            working_space,
+        )?;
+        report.profile_source = Some(table.source.display().to_string());
+        let mut cam_to_working = [[0.0_f32; 4]; 3];
+        for (row, coefficients) in matrix.iter().enumerate() {
+            cam_to_working[row][..3].copy_from_slice(coefficients);
+        }
+        let transform = Self {
+            cam_to_working,
+            white_balance: [1.0; 4],
+            channels: 3,
+            illuminant: Illuminant::Unknown,
+            working_space,
+        };
+        Some((transform, report))
+    }
+
     /// Convert one three-channel camera pixel. Nothing is clipped.
     #[inline]
     pub fn convert3(&self, pixel: [f32; 3]) -> [f32; 3] {
@@ -1207,25 +1242,121 @@ pub type Developed = (
     Option<crate::illuminant::CameraProxy>,
 );
 
+/// Whether the calibrated hue/saturation table ran on this frame, and if not,
+/// why not. Carried into the sidecar so a batch that rendered two ways is
+/// legible afterwards rather than only in the log.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum HueSatStatus {
+    /// No table, or strength 0.
+    Off,
+    /// Applied, with the scene CCT its illuminants were interpolated at.
+    Applied {
+        cct: f32,
+    },
+    Skipped(HueSatSkip),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HueSatSkip {
+    /// The profile is calibrated for a different body.
+    CameraMismatch,
+    /// The profile's own matrices are missing or do not compose.
+    ProfileMatrixUnusable,
+}
+
+impl HueSatSkip {
+    fn explain(self) -> &'static str {
+        match self {
+            Self::CameraMismatch => "table skipped, rendering as standard",
+            Self::ProfileMatrixUnusable => {
+                "profile carries no usable matrix, table skipped, rendering as standard"
+            }
+        }
+    }
+}
+
+/// One line per frame, in the same shape as the other per-file stage logs. The
+/// success line carries the CCT because that is the number that says whether the
+/// profile's two calibration illuminants were interpolated or one was picked.
+fn report_hue_sat_status(
+    path: &std::path::Path,
+    table: &crate::huesatmap::HueSatMap,
+    status: &HueSatStatus,
+    raw: &RawImage,
+) {
+    match status {
+        HueSatStatus::Off => {}
+        HueSatStatus::Applied { cct } => eprintln!(
+            "HUESAT {}: {} matches, {} K, {} table",
+            path.display(),
+            table.unique_camera_model,
+            cct.round() as i32,
+            table.table_label_for(Some(*cct)),
+        ),
+        HueSatStatus::Skipped(reason) => eprintln!(
+            "HUESAT {}: profile is for {:?}, file is {:?} — {}",
+            path.display(),
+            table.unique_camera_model,
+            format!("{} {}", raw.camera.make, raw.camera.model)
+                .trim()
+                .to_string(),
+            reason.explain(),
+        ),
+    }
+}
+
 /// Develop to scene-linear working-space RGB through the owned colour path.
 pub fn develop(
     raw: &RawImage,
     path: &std::path::Path,
     options: DevelopOptions,
 ) -> Result<Developed> {
-    // The DNG matrix transform is tried first when asked for. Incomplete or
-    // unsupported profiles fall back to the decoder camera matrix.
+    // A calibrated hue/saturation table is the residual of its own profile's
+    // ForwardMatrix, so when one is in play the matrix has to come from that
+    // same profile or the table is correcting a conversion it never saw. This
+    // is the only route that yields a CCT for a file that is not a DNG, and the
+    // table's two calibration illuminants cannot be interpolated without one.
     let mut dng_color = None;
-    let transform = if options.full_dng_color {
-        match ColorTransform::derive_dng(raw, path, options.working_space) {
-            Some((transform, report)) => {
-                dng_color = Some(report);
-                transform
+    let mut transform = None;
+    let mut hue_sat = HueSatStatus::Off;
+    if let Some(table) = options
+        .hue_sat_map
+        .as_ref()
+        .filter(|_| options.hue_sat_map_strength > 0.0)
+    {
+        hue_sat = if table.matches_camera(&raw.camera.make, &raw.camera.model) {
+            match ColorTransform::derive_profile(raw, path, table, options.working_space) {
+                Some((profile_transform, report)) => {
+                    let cct = report.estimated_cct;
+                    dng_color = Some(report);
+                    transform = Some(profile_transform);
+                    HueSatStatus::Applied { cct }
+                }
+                // The profile parsed well enough to yield a table but not a
+                // usable matrix. Half a calibration is not one.
+                None => HueSatStatus::Skipped(HueSatSkip::ProfileMatrixUnusable),
             }
-            None => ColorTransform::derive(raw, options.working_space)?,
+        } else {
+            HueSatStatus::Skipped(HueSatSkip::CameraMismatch)
+        };
+        report_hue_sat_status(path, table, &hue_sat, raw);
+    }
+
+    // Otherwise the DNG matrix transform is tried first when asked for.
+    // Incomplete or unsupported profiles fall back to the decoder camera matrix.
+    let transform = match transform {
+        Some(transform) => transform,
+        None if options.full_dng_color => {
+            match ColorTransform::derive_dng(raw, path, options.working_space) {
+                Some((transform, report)) => {
+                    dng_color = Some(report);
+                    transform
+                }
+                None => ColorTransform::derive(raw, options.working_space)?,
+            }
         }
-    } else {
-        ColorTransform::derive(raw, options.working_space)?
+        None => ColorTransform::derive(raw, options.working_space)?,
     };
     let mut lens_correction = crate::lens::LensCorrection::resolve(path, options.lens_correction);
     let raw_method = if options.highlight_reconstruction > 0.0 {
@@ -1510,14 +1641,16 @@ pub fn develop(
                     transform.channels
                 );
             }
-            let cct = dng_color.as_ref().map(|report| report.estimated_cct);
-            match (options.hue_sat_map.as_ref(), options.hue_sat_map_strength) {
-                (Some(table), strength) if strength > 0.0 => image.map_into(|pixel| {
+            // Applied only where the matrix above came from the same profile:
+            // `hue_sat` is `Applied` on exactly that path, so a skipped frame
+            // takes the plain conversion and lands byte-identical to `standard`.
+            match (options.hue_sat_map.as_ref(), hue_sat) {
+                (Some(table), HueSatStatus::Applied { cct }) => image.map_into(|pixel| {
                     table.apply(
                         transform.convert3(pixel),
                         transform.working_space,
-                        strength,
-                        cct,
+                        options.hue_sat_map_strength,
+                        Some(cct),
                     )
                 }),
                 _ => image.map_into(|pixel| transform.convert3(pixel)),
@@ -1554,7 +1687,6 @@ pub fn develop(
         .collect();
     illuminants_available.sort();
 
-    let hue_sat_cct = dng_color.as_ref().map(|report| report.estimated_cct);
     let report = ColorReport {
         path: RawColorPath::Owned,
         // From the transform, not the argument, so the report can only ever
@@ -1576,8 +1708,16 @@ pub fn develop(
         highlight_reconstruction,
         dng_color,
         lens_correction: lens_correction.map(crate::lens::LensCorrection::into_report),
-        hue_sat_map: match (options.hue_sat_map.as_ref(), options.hue_sat_map_strength) {
-            (Some(table), strength) if strength > 0.0 => Some(table.report(strength, hue_sat_cct)),
+        hue_sat_map: match (options.hue_sat_map.as_ref(), hue_sat) {
+            (Some(table), HueSatStatus::Applied { cct }) => {
+                Some(table.report(options.hue_sat_map_strength, Some(cct), None))
+            }
+            // A skipped table still gets a sidecar block. Silence would make a
+            // frame that declined the calibration indistinguishable from one
+            // that was never asked to apply it.
+            (Some(table), HueSatStatus::Skipped(reason)) => {
+                Some(table.report(0.0, None, Some(reason)))
+            }
             _ => None,
         },
     };

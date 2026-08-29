@@ -2,6 +2,52 @@
 
 ## Unreleased — a standalone front-end
 
+### `--preset vivid` is now the profile's calibration, not a table laid over ours
+
+A DCP's `ProfileHueSatMapData` encodes the residual left by *that profile's*
+`ForwardMatrix`. We were applying the bundled ART/RawTherapee ILCE-7C table on
+top of the transform derived from the RAW's own calibration, which made it a hue
+rotation with no basis: measured at +15° on blue and +10° on warm, visible as
+lavender skies and yellow-green foliage. Three changes, all confined to paths
+that load a profile; `auto` and `standard` are byte-identical.
+
+**The matrix comes from the same profile.** `dngcolor::gather` is split into
+`gather_profile` (the calibration half) and `attach_neutral` (the scene white),
+because the two halves need not come from the same file — a DNG carries both, a
+standalone DCP only the first. `camera_to_working_from_profile` composes the
+DNG 1.7 model from the DCP's `ColorMatrix1/2` and `ForwardMatrix1/2` with the
+neutral still taken from the RAW.
+
+**The illuminants interpolate.** `solve_white` returns the scene CCT from that
+same solve, so the profile's `CalibrationIlluminant1` (Std A) and
+`CalibrationIlluminant2` (D65) finally blend on an ARW. Before this no Sony file
+could produce a CCT at all, and all 86 used the D65 table alone.
+
+**A mismatched profile is declined.** `UniqueCameraModel` is compared to the
+file's make and model; on a mismatch neither half applies, a warning names both,
+the sidecar records `hue_sat_map.skipped`, and the batch prints how many files
+it reached. Measured over the same 102 pairs: all 16 Samsung frames are now
+byte-identical to `standard` and all 86 Sony frames differ.
+
+Against `standard` on the same pixels, vivid goes from chroma ×1.46 / blue
++15.2° / warm +9.6° to **×1.11 / +3.4° / +0.6°**, and overshoot on the camera's
+own `C* > 40` pixels falls from 25.5% to 4.7%. `raw/indoor_tungsten`, the set
+the missing interpolation hurt most, flips from 10.9° worse than `standard` on
+blue to 5.2° better.
+
+A third arm tested whether `standard`'s global `saturation` 1.27 was now
+double-counting the calibration. It is not: returning that scalar to 1.00 drops
+chroma on the camera's boldest pixels to 0.585 — below `standard`'s own 0.698 —
+and desaturates 10.5% of them. Once paired with its matrix the table is nearly
+chroma-neutral (×1.11), a correction rather than a boost, so the grade's scalar
+stays where the midtone work placed it and **`standard` is unchanged**.
+
+Sidecar schema for the `color.hue_sat_map` block goes 27 → 28: the block now
+also appears on declined frames, carrying `skipped` and `strength: 0`, and the
+`dng_color` beside it carries `profile_source` when a standalone DCP drove the
+conversion. Evidence in `docs/evidence/huesatmap-calibration-20260829/`;
+`tests/profile_calibration.rs` pins the four rules on the corpus.
+
 ### `standard` vs `vivid`: measured guidance, and three caveats on the table
 
 102 RAW+JPEG pairs (86 Sony, 16 Samsung), three arms of the same binary,

@@ -19,8 +19,6 @@ use anyhow::{Context, Result, ensure};
 use rawler::formats::tiff::reader::TiffReader;
 use rawler::formats::tiff::{Entry, GenericTiffReader, Value};
 use serde::Serialize;
-use std::fs::File;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 const TAG_UNIQUE_CAMERA_MODEL: u16 = 50708;
@@ -50,6 +48,12 @@ const PROPHOTO_TO_XYZ_D50: Matrix3 = [
 #[derive(Debug, Clone)]
 pub struct HueSatMap {
     pub source: PathBuf,
+    /// The whole DCP, kept so the profile's own matrices can be read back when
+    /// the table is applied. A HueSatMap is the residual of the profile's
+    /// `ForwardMatrix`, so the two halves have to travel together; see
+    /// [`crate::dngcolor::camera_to_working_from_profile`]. Shared rather than
+    /// cloned because every job in a batch holds the same profile.
+    pub bytes: std::sync::Arc<[u8]>,
     pub unique_camera_model: String,
     pub profile_name: String,
     pub copyright: String,
@@ -75,6 +79,10 @@ pub struct HueSatMapReport {
     pub table: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cct: Option<f32>,
+    /// Present only when the table was declined, saying why. Its absence is
+    /// what says the calibration ran.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skipped: Option<crate::color::HueSatSkip>,
 }
 
 impl HueSatMap {
@@ -90,20 +98,29 @@ impl HueSatMap {
             None,
         )
         .with_context(|| format!("parse bundled DCP TIFF {SOURCE}"))?;
-        Self::from_tiff(&tiff, PathBuf::from(SOURCE))
+        Self::from_tiff(
+            &tiff,
+            PathBuf::from(SOURCE),
+            include_bytes!("../profiles/SONY_ILCE-7C.dcp")
+                .as_slice()
+                .into(),
+        )
     }
 
     /// Parse a `.dcp` (or DNG) that carries `ProfileHueSatMapDims` and Data1.
     pub fn load(path: &Path) -> Result<Self> {
-        let file = File::open(path).with_context(|| format!("open DCP {}", path.display()))?;
-        let mut reader = BufReader::new(file);
-        let tiff = GenericTiffReader::new(&mut reader, 0, 0, None, &[])
+        let bytes = std::fs::read(path).with_context(|| format!("open DCP {}", path.display()))?;
+        let tiff = GenericTiffReader::new_with_buffer(&bytes, 0, 0, None)
             .with_context(|| format!("parse DCP TIFF {}", path.display()))?;
 
-        Self::from_tiff(&tiff, path.to_path_buf())
+        Self::from_tiff(&tiff, path.to_path_buf(), bytes.into())
     }
 
-    fn from_tiff(tiff: &GenericTiffReader, source: PathBuf) -> Result<Self> {
+    fn from_tiff(
+        tiff: &GenericTiffReader,
+        source: PathBuf,
+        bytes: std::sync::Arc<[u8]>,
+    ) -> Result<Self> {
         let dims_entry = find_entry(tiff, TAG_HUE_SAT_MAP_DIMS)
             .ok_or_else(|| anyhow::anyhow!("{} has no ProfileHueSatMapDims", source.display()))?;
         ensure!(
@@ -136,6 +153,7 @@ impl HueSatMap {
 
         Ok(Self {
             source,
+            bytes,
             unique_camera_model: read_ascii(tiff, TAG_UNIQUE_CAMERA_MODEL).unwrap_or_default(),
             profile_name: read_ascii(tiff, TAG_PROFILE_NAME).unwrap_or_default(),
             copyright: read_ascii(tiff, TAG_PROFILE_COPYRIGHT).unwrap_or_default(),
@@ -149,8 +167,40 @@ impl HueSatMap {
         })
     }
 
-    pub fn report(&self, strength: f32, cct: Option<f32>) -> HueSatMapReport {
+    /// Whether this profile was calibrated for the camera that took the file.
+    ///
+    /// A HueSatMap is a per-sensor correction, so applying one across bodies is
+    /// not a milder version of the right thing -- it is a hue rotation with no
+    /// basis. Measured on the corpus, the A7C table on Samsung DNGs drives warm
+    /// chroma to 1.66x the camera's and warm hue 24 degrees off.
+    ///
+    /// `UniqueCameraModel` is conventionally "MAKE MODEL" (the bundled profile
+    /// says `SONY ILCE-7C`), but some writers store the model alone, so both
+    /// spellings count. Comparison is case- and whitespace-insensitive because
+    /// the same body is variously "SONY", "Sony" and "sony" across decoders.
+    pub fn matches_camera(&self, make: &str, model: &str) -> bool {
+        let profile = normalize_identity(&self.unique_camera_model);
+        if profile.is_empty() {
+            // A profile that does not say what it is for cannot be checked, and
+            // an unverifiable calibration is not one. Refuse rather than assume.
+            return false;
+        }
+        let make = normalize_identity(make);
+        let model = normalize_identity(model);
+        if model.is_empty() {
+            return false;
+        }
+        profile == model || profile == format!("{make} {model}").trim()
+    }
+
+    pub fn report(
+        &self,
+        strength: f32,
+        cct: Option<f32>,
+        skipped: Option<crate::color::HueSatSkip>,
+    ) -> HueSatMapReport {
         HueSatMapReport {
+            skipped,
             source: self.source.display().to_string(),
             unique_camera_model: self.unique_camera_model.clone(),
             profile_name: self.profile_name.clone(),
@@ -164,6 +214,11 @@ impl HueSatMap {
             table: self.table_label(cct),
             cct,
         }
+    }
+
+    /// Which of the profile's calibration tables the given CCT selects.
+    pub fn table_label_for(&self, cct: Option<f32>) -> &'static str {
+        self.table_label(cct)
     }
 
     fn table_label(&self, cct: Option<f32>) -> &'static str {
@@ -381,6 +436,16 @@ fn apply_hsd(map: &HueSatMap, table: &[[f32; 3]], h: &mut f32, s: &mut f32, v: &
     *v *= val_scale;
 }
 
+/// Upper-case, trimmed, single-spaced: the form two camera identity strings
+/// have to agree in before they can be called the same body.
+fn normalize_identity(value: &str) -> String {
+    value
+        .split_whitespace()
+        .map(|word| word.to_ascii_uppercase())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn find_entry(tiff: &GenericTiffReader, tag: u16) -> Option<&Entry> {
     if let Some(entry) = tiff.get_entry(tag) {
         return Some(entry);
@@ -437,6 +502,8 @@ mod tests {
     fn identity_map() -> HueSatMap {
         HueSatMap {
             source: PathBuf::from("test"),
+            // No matrix is read back in these tests; they exercise the LUT.
+            bytes: std::sync::Arc::from(&[][..]),
             unique_camera_model: "TEST".into(),
             profile_name: "identity".into(),
             copyright: "public domain".into(),
@@ -503,5 +570,43 @@ mod tests {
         assert!(blue.iter().all(|c| c.is_finite()));
         let unchanged = map.apply([0.12, 0.22, 0.72], WorkingSpace::Srgb, 0.0, Some(6500.0));
         assert_eq!(unchanged, [0.12, 0.22, 0.72]);
+    }
+
+    #[test]
+    fn the_bundled_profile_carries_the_bytes_its_matrices_live_in() {
+        // The table alone is not a calibration: `derive_profile` reads the
+        // ForwardMatrix back out of these bytes. An embedded profile that
+        // forgot to keep them would silently fall back to the file's matrix.
+        let map = HueSatMap::bundled_sony_a7c().expect("bundled profile");
+        assert!(map.bytes.len() > 8, "bundled DCP bytes were not retained");
+        let round_trip = GenericTiffReader::new_with_buffer(&map.bytes, 0, 0, None)
+            .expect("the retained bytes must still parse as the DCP TIFF");
+        assert!(find_entry(&round_trip, TAG_HUE_SAT_MAP_DIMS).is_some());
+    }
+
+    #[test]
+    fn a_profile_matches_only_the_body_it_names() {
+        let map = HueSatMap::bundled_sony_a7c().expect("bundled profile");
+        // Rawler reports make "SONY" and model "ILCE-7C" for an A7C ARW.
+        assert!(map.matches_camera("SONY", "ILCE-7C"));
+        // Case and spacing vary by decoder; the body does not.
+        assert!(map.matches_camera("Sony", "  ilce-7c "));
+        // The model alone is the other conventional spelling.
+        assert!(map.matches_camera("", "SONY ILCE-7C"));
+        // The Samsung DNGs in the corpus, which measured 1.66x warm chroma
+        // and 24 degrees of warm hue error under this table.
+        assert!(!map.matches_camera("samsung", "SM-S926U1"));
+        // A near miss is still a miss: a different body in the same family.
+        assert!(!map.matches_camera("SONY", "ILCE-7CM2"));
+        assert!(!map.matches_camera("SONY", ""));
+    }
+
+    #[test]
+    fn an_anonymous_profile_never_matches() {
+        // A profile that does not say what it is for cannot be checked, and an
+        // unverifiable calibration is not one.
+        let mut map = identity_map();
+        map.unique_camera_model = String::new();
+        assert!(!map.matches_camera("SONY", "ILCE-7C"));
     }
 }

@@ -225,55 +225,67 @@ raw-autotune raw-folder --dry-run --summary survey.json --bundle survey
 ## Feature bundles
 
 `--preset` is the global look (`neutral` / `auto` / `standard` / `vivid`).
-`standard` is the former punchy grade. `vivid` adds the bundled public-domain
-Sony A7C HueSatMap to that same grade. The other presets do not switch
-operators on or off, and `auto` remains the default archive look.
+`standard` is the former punchy grade. `vivid` is that same grade developed
+through the bundled public-domain Sony A7C profile — its matrices and its
+HueSatMap together — and declines to anything but that body. The other presets
+do not switch operators on or off, and `auto` remains the default archive
+look.
 
 ### Choosing between `standard` and `vivid`
 
-Measured over 102 RAW+JPEG pairs (86 Sony, 16 Samsung), medians against the
-camera's own JPEG — full method and per-frame data in
-`docs/evidence/preset-standard-vivid-20260829/`:
+`vivid` develops through the bundled profile's *own* calibration: its
+`ColorMatrix`/`ForwardMatrix` build the conversion and its HueSatMap corrects
+the residual, with the scene colour temperature interpolating the profile's two
+calibration illuminants. It is a calibration, not a grade laid over one.
 
-| preset | chroma, whole frame | chroma on the camera's boldest pixels | hue error |
+That has a hard consequence: **it applies only to the camera it was made for.**
+A profile whose `UniqueCameraModel` is not this body is declined, a warning
+names both, and the frame renders byte-identically to `standard`. A batch says
+so when it finishes:
+
+```
+calibrated hue/sat profile: applied to 86 file(s), declined on 16 the profile is not calibrated for
+```
+
+Measured over 102 RAW+JPEG pairs (86 Sony A7C, 16 Samsung), medians against the
+camera's own JPEG — method and per-frame data in
+`docs/evidence/huesatmap-calibration-20260829/`:
+
+| preset | chroma, whole frame | chroma on the camera's boldest pixels | blue hue vs camera |
 |---|---|---|---|
-| `auto` | 1.12× the camera | 0.65× | 15.4° |
-| `standard` | 1.17× | 0.70× | 15.5° |
-| `vivid` | 1.71× | 0.96× | 16.8° |
+| `auto` | 1.12× the camera | 0.65× | −7.2° |
+| `standard` | 1.17× | 0.70× | −6.8° |
+| `vivid` | 1.27× | 0.75× | −4.5° |
 
-**`vivid` never flattens saturated colour.** The share of `standard`'s
-`C* > 40` pixels that `vivid` drops more than a quarter below is 0.00% median
-and 0.9% on the worst of 86 frames. Blue, warm and green all come out more
-saturated, not less. If you were worried about losing a good sky or a sunset,
-that is measured and it does not happen.
+Against `standard` on the same pixels, `vivid` is chroma ×1.11 with blue hue
++3.4° and warm hue +0.6°. It closes part of the gap between a colorimetric
+render and the camera's own boldness, and places blue and warm closer to the
+camera than `standard` does — warm chroma lands at 1.04 of the camera's where
+`standard` sits at 0.95.
 
-**What it does instead is lift everything by about half and rotate hue.**
-Chroma ×1.46 median over `standard`, blue hue **+15°** toward violet, warm hue
-**+10°** toward yellow. It is the only preset that reaches the camera's own
-chroma where the camera is boldest — `auto` and `standard` sit 30–35% under
-it — but it gets there by pushing the whole frame past the camera, and its hue
-error against the camera goes up, not down.
+Choose **`vivid`** on the Sony A7C when you want the profile's rendering: a
+little more chroma than `standard` and hues placed by a calibration rather than
+by the matrix alone. It gains most in tungsten and mixed light, where the
+profile's Std A table now interpolates — blue hue error there goes from 5.2°
+worse than `standard` to 5.2° better.
 
-Reach for **`vivid`** on saturated daylight Sony landscapes, where the
-camera-JPEG boldness is the point and a deeper, more violet sky is wanted.
+Stay on **`standard`** when:
 
-Stay on **`standard`** whenever hue placement matters more than punch:
+- **The camera is not an A7C.** `vivid` will decline anyway; `standard` is what
+  you will get, so ask for it directly.
+- **You want the matrix answer and nothing else.** `vivid` is still a rendering
+  choice — the profile's authors decided how this sensor should render foliage
+  and sky, and that is a judgement, not a measurement.
+- **Byte-stability across a heterogeneous batch matters.** `standard` renders
+  every camera the same way; `vivid` renders two ways and tells you which.
 
-- **Any camera that is not the Sony A7C.** The bundled table is calibrated for
-  one sensor and nothing checks: on the Samsung DNGs it drives warm chroma to
-  1.66× the camera and warm hue 24° off.
-- **Indoor and mixed light.** The profile's Std A table only interpolates when
-  a CCT is available, and that comes from the DNG colour path, which an ARW
-  does not have — so every Sony frame uses the D65 table alone. On
-  `raw/indoor_tungsten` blue hue error goes 11.4° → 24.5°.
-- **Foliage-heavy frames**, which take the +10° warm rotation as a yellow-green
-  cast.
-- **Anything meant as a faithful record** rather than a look. Even on the A7C,
-  `vivid` applies the profile's HueSatMap without the profile's own forward
-  matrix, so it is a grade, not a calibration.
+Unlike the earlier unpaired table, a calibration corrects in both directions,
+so `vivid` can now *reduce* chroma as well as raise it. Over 86 frames, 4 have
+more than 1% of `standard`'s strongly saturated pixels losing more than a
+quarter of their chroma; the median frame loses none.
 
 `--preset vivid --hue-sat-map-strength 0.5` is the half-measure; strength 0 is
-byte-identical to `standard`.
+byte-identical to `standard` and declines the profile before it is consulted.
 
 `--bundle` groups the off-by-default pipeline features. `archive` is the
 default and is today's unattended path (`archive-auto-v8`). The others expand
@@ -302,7 +314,7 @@ and they are **not** in a bundle unless listed above.
 | `--local-white-balance` | Indoor A/B moved hue *away* from the camera JPEG (18° → 31°). |
 | `--local-tone` / `--hdr` | Slice 8: do not promote until highlight colour vs GT is a hue gate, not only chroma. `--bundle local-tone` / `--bundle hdr` are the named opt-in. |
 | `--semantic-sky-highlights` / `--semantic-sky-chroma` | Experimental mask policies; require `--semantic`. |
-| `--hue-sat-map` | Candidate D prototype. Public-domain ART/RT ILCE-7C DCP at `profiles/SONY_ILCE-7C.dcp`; enabled by `--preset vivid`, never by default. |
+| `--hue-sat-map` | Develops through a DCP's own calibration (matrices *and* table). Public-domain ART/RT ILCE-7C DCP at `profiles/SONY_ILCE-7C.dcp`; enabled by `--preset vivid`, never by default, and declined on any other body. |
 | `--highlight-color-ratio-exponent 0.6` | Visual rejection (coloured gradient tendrils). |
 | `--lens-correction profile-exact` | Exact Lensfun remains an experiment; default is embedded DNG opcodes. |
 | `--semantic-faces` | YuNet found zero faces on the corpus; decided off. |
@@ -706,9 +718,18 @@ also contain hue/saturation/value lookup tables (`ProfileHueSatMap*` and
 `ProfileLookTable*`) and a profile tone curve. Those answer an aesthetic
 question: “how should this camera render foliage, skin, sky, and contrast?”
 They are closer to a camera picture style or film look than to basic RAW
-compatibility. raw-autotune currently performs the calibrated matrix conversion
-and its own tone rendering, but does not reproduce those optional creative
-tables.
+compatibility. raw-autotune performs the calibrated matrix conversion and its
+own tone rendering, and does not reproduce `ProfileLookTable*` or a profile
+tone curve at all.
+
+`ProfileHueSatMap*` is the exception, under `--hue-sat-map` / `--preset vivid`,
+and it is taken as calibration rather than as a look: the profile's own
+`ColorMatrix`/`ForwardMatrix` build the conversion the table then corrects, and
+the scene CCT interpolates the profile's two calibration illuminants. That
+pairing is not optional. A HueSatMap encodes the residual of the matrix it was
+fitted against, so laid over a different one it is a hue rotation of unknown
+provenance — measured at +15° on blue and +10° on warm before the profile's own
+matrix was used (`docs/evidence/huesatmap-calibration-20260829/`).
 
 On the owned path each sidecar's `color` block reports what the clipping would
 have cost: the fraction of pixels Rawler's operator would have moved, split by
@@ -769,10 +790,18 @@ compatibility alias.
 
 ### `vivid`
 
-The `standard` tone grade plus the bundled public-domain ART/RawTherapee Sony
-A7C HueSatMap at full strength. It is the opt-in saturated, hue-shaped look;
-selecting `auto` never enables it. `--hue-sat-map-strength` can reduce its LUT
-blend, and an explicit `--hue-sat-map` replaces the bundled table.
+The `standard` tone grade, developed through the bundled public-domain
+ART/RawTherapee Sony A7C profile at full strength: that profile's
+`ColorMatrix`/`ForwardMatrix` in place of the transform derived from the RAW's
+own calibration, its HueSatMap correcting the residual, and the scene CCT
+interpolating its Std A and D65 tables. Selecting `auto` never enables it.
+
+Because it is a calibration it applies only to the body it names. On anything
+else both halves are declined, a warning names the profile and the camera, the
+sidecar records `hue_sat_map.skipped`, and the frame is byte-identical to
+`standard`. `--hue-sat-map-strength` reduces the LUT blend (0 declines the
+profile outright), and an explicit `--hue-sat-map` replaces the bundled
+profile — under the same camera rule.
 
 `--saturation-scale` multiplies whichever preset is in use. It exists so the
 chroma path can be swept against a corpus of RAW+JPEG pairs, the way

@@ -402,12 +402,16 @@ pub struct Cli {
     #[arg(long, conflicts_with = "dng_color")]
     pub no_dng_color: bool,
 
-    /// Apply a DCP HueSatMap after the colour matrix. Off by default. The
-    /// table is a creative LUT, not extra sensor calibration, and is not
-    /// part of the automatic profile. Strength 0 is an exact no-op even
-    /// when a path is given. Adobe DCP contents must not be passed here;
-    /// a public-domain ART/RawTherapee ILCE-7C profile lives at
-    /// `profiles/SONY_ILCE-7C.dcp`.
+    /// Develop through a DCP's own calibration: its ColorMatrix/ForwardMatrix
+    /// build the conversion and its HueSatMap corrects the residual, with the
+    /// scene CCT interpolating the profile's two calibration illuminants. Off
+    /// by default and not part of the automatic profile. A profile whose
+    /// `UniqueCameraModel` is not this camera is declined with a warning and
+    /// the frame renders as if the flag were absent, because a calibration for
+    /// one sensor is not a milder version of the right thing on another.
+    /// Strength 0 is an exact no-op even when a path is given. Adobe DCP
+    /// contents must not be passed here; a public-domain ART/RawTherapee
+    /// ILCE-7C profile lives at `profiles/SONY_ILCE-7C.dcp`.
     #[arg(long, value_name = "DCP")]
     pub hue_sat_map: Option<PathBuf>,
 

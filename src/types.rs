@@ -65,11 +65,18 @@ pub const ILLUMINANT_REPORT_SCHEMA_VERSION: u32 = 25;
 /// Like 25, it is independent of the other optional blocks: the version is the
 /// highest applicable one, and absent fields are omitted rather than nulled.
 pub const SCENE_CLASSIFY_REPORT_SCHEMA_VERSION: u32 = 26;
-/// Schema 27 carries the optional `color.hue_sat_map` block from
+/// Schema 28 carries the optional `color.hue_sat_map` block from
 /// `--hue-sat-map`. Like 25/26 it is independent of the other optional
 /// blocks: the field is omitted when the flag is off, so a default run
 /// stays on schema 22.
-pub const HUE_SAT_MAP_REPORT_SCHEMA_VERSION: u32 = 27;
+///
+/// It was 27 when the block first shipped, and 28 since the table became a
+/// calibration rather than a look. The block now also appears on frames the
+/// table *declined* — carrying `skipped` and `strength: 0` — and the
+/// `dng_color` beside it carries `profile_source` when the conversion came from
+/// a standalone DCP. A reader on 27 would take a declined frame for a rendered
+/// one, which is a change of meaning and so a version rather than an addition.
+pub const HUE_SAT_MAP_REPORT_SCHEMA_VERSION: u32 = 28;
 
 pub const fn report_schema_version(
     semantic: bool,
@@ -148,7 +155,9 @@ pub enum Preset {
     /// Stronger midtone contrast and chroma. Formerly `--preset punchy`.
     #[value(alias = "punchy")]
     Standard,
-    /// `standard` tone plus the bundled public-domain Sony A7C HueSatMap.
+    /// `standard` tone, developed through the bundled public-domain Sony A7C
+    /// profile: its own matrices plus its HueSatMap. Declined with a warning on
+    /// any other camera, where the frame then renders exactly as `standard`.
     Vivid,
 }
 

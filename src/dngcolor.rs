@@ -459,6 +459,11 @@ struct DngData {
 /// What the full DNG path did, recorded in the colour report.
 #[derive(Debug, Clone, Serialize)]
 pub struct DngColorReport {
+    /// Set when the calibration came from a standalone DCP rather than from the
+    /// picture's own tags, naming that profile. `None` is the ordinary case: a
+    /// DNG describing itself.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_source: Option<String>,
     /// The illuminants the calibration sets were fitted at.
     pub illuminant1: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -783,6 +788,15 @@ fn read_signature(tiff: &GenericTiffReader, tag: u16) -> Option<Vec<u8>> {
 /// malformed. ForwardMatrix is optional in the DNG model; the no-forward path
 /// is composed from ColorMatrix plus Bradford adaptation.
 fn gather(raw: &RawImage, tiff: &GenericTiffReader) -> Option<DngData> {
+    let mut data = gather_profile(tiff)?;
+    attach_neutral(&mut data, raw, Some(tiff))?;
+    Some(data)
+}
+
+/// Read the calibration half of a DNG profile: the matrices, the illuminants
+/// they were fitted at, and the per-unit calibration the signature rule allows.
+/// The scene white is not part of it -- see `attach_neutral`.
+fn gather_profile(tiff: &GenericTiffReader) -> Option<DngData> {
     let cm1 = read_matrix(tiff, TAG_COLOR_MATRIX_1)?;
     let tagged_fm1 = read_matrix(tiff, TAG_FORWARD_MATRIX_1).and_then(normalize_forward_matrix);
     let tagged_fm2 = read_matrix(tiff, TAG_FORWARD_MATRIX_2).and_then(normalize_forward_matrix);
@@ -893,7 +907,7 @@ fn gather(raw: &RawImage, tiff: &GenericTiffReader) -> Option<DngData> {
         return None;
     }
 
-    let mut data = DngData {
+    Some(DngData {
         cm1,
         cm2,
         cm3,
@@ -904,20 +918,39 @@ fn gather(raw: &RawImage, tiff: &GenericTiffReader) -> Option<DngData> {
         fm2,
         fm3,
         analog_balance,
-        camera_neutral: [1.0; 3], // replaced immediately below
+        // A placeholder until `attach_neutral` supplies the scene white. No
+        // caller may read it before then: every routine that consumes
+        // `camera_neutral` is reached through `attach_neutral`'s callers.
+        camera_neutral: [1.0; 3],
         white_balance_source: "as_shot_neutral",
         used_camera_calibration,
         illuminants,
-    };
+    })
+}
 
+/// Fill in the scene white from the file the picture came out of.
+///
+/// Split from `gather_profile` because the two halves need not come from the
+/// same file. A DNG carries its calibration and its scene white together, but a
+/// standalone DCP is only the calibration half: there is no picture in it and so
+/// no white to read, and the neutral has to come from the RAW being developed.
+fn attach_neutral(
+    data: &mut DngData,
+    raw: &RawImage,
+    tiff: Option<&GenericTiffReader>,
+) -> Option<()> {
     // AsShotNeutral and AsShotWhiteXY are mutually exclusive in DNG. The
-    // decoder-derived reciprocal is a last-resort compatibility fallback.
-    if let Some(neutral) = read_vec3(tiff, TAG_AS_SHOT_NEUTRAL).and_then(normalize_neutral) {
+    // decoder-derived reciprocal is a last-resort compatibility fallback, and
+    // the only route available when the profile came from a separate file.
+    if let Some(neutral) = tiff
+        .and_then(|tiff| read_vec3(tiff, TAG_AS_SHOT_NEUTRAL))
+        .and_then(normalize_neutral)
+    {
         data.camera_neutral = neutral;
-    } else if let Some(xy) = read_xy(tiff, TAG_AS_SHOT_WHITE_XY) {
-        let weights = weights_for_xy(&data, xy);
+    } else if let Some(xy) = tiff.and_then(|tiff| read_xy(tiff, TAG_AS_SHOT_WHITE_XY)) {
+        let weights = weights_for_xy(data, xy);
         data.camera_neutral = normalize_neutral(mat_vec(
-            &xyz_to_camera(&data, weights),
+            &xyz_to_camera(data, weights),
             &xy_to_xyz(xy.0, xy.1),
         ))?;
         data.white_balance_source = "as_shot_white_xy";
@@ -933,8 +966,7 @@ fn gather(raw: &RawImage, tiff: &GenericTiffReader) -> Option<DngData> {
         };
         data.white_balance_source = "decoder_white_balance";
     }
-
-    Some(data)
+    Some(())
 }
 
 fn weights_for_xy(data: &DngData, xy: (f64, f64)) -> [f64; 3] {
@@ -1058,6 +1090,47 @@ pub fn camera_to_working(
     let mut reader = BufReader::new(file);
     let tiff = GenericTiffReader::new(&mut reader, 0, 0, None, &[]).ok()?;
     let data = gather(raw, &tiff)?;
+    compose(data, working_space)
+}
+
+/// The same composition, but with the calibration read from a standalone DCP
+/// rather than from the picture's own tags.
+///
+/// This is what makes a bundled profile a *calibration* instead of a look. A
+/// DCP's `ProfileHueSatMapData` encodes the residual left by that profile's own
+/// `ForwardMatrix`; applied after some other matrix it is a hue rotation of
+/// unknown provenance. Reading both halves from the same DCP puts the table back
+/// with the matrix it was fitted against, and the CCT that
+/// [`solve_white`] returns on the way is the one the table's two calibration
+/// illuminants must be interpolated at -- which is otherwise unavailable for any
+/// file that is not itself a DNG.
+///
+/// The scene white still comes from the RAW: a profile has no picture in it.
+pub fn camera_to_working_from_profile(
+    raw: &RawImage,
+    raw_path: &Path,
+    profile_bytes: &[u8],
+    working_space: WorkingSpace,
+) -> Option<([[f32; 3]; 3], DngColorReport)> {
+    // Bytes rather than a path: the bundled profile is `include_bytes!`d into
+    // the binary, so `--preset vivid` must not need the source tree at runtime.
+    let profile_tiff = GenericTiffReader::new_with_buffer(profile_bytes, 0, 0, None).ok()?;
+    let mut data = gather_profile(&profile_tiff)?;
+
+    // A DNG still knows its own scene white better than the decoder's
+    // reciprocal does, so prefer the picture's tags when it has them; an ARW
+    // has none and falls through to `wb_coeffs`.
+    let raw_file = File::open(raw_path).ok();
+    let mut raw_reader = raw_file.map(BufReader::new);
+    let raw_tiff = raw_reader
+        .as_mut()
+        .and_then(|reader| GenericTiffReader::new(reader, 0, 0, None, &[]).ok());
+    attach_neutral(&mut data, raw, raw_tiff.as_ref())?;
+    compose(data, working_space)
+}
+
+/// Solve the scene white and compose camera → working RGB from gathered data.
+fn compose(data: DngData, working_space: WorkingSpace) -> Option<([[f32; 3]; 3], DngColorReport)> {
     let (white_xy, weights, cct) = solve_white(&data)?;
     let cam_to_xyz_d50 = camera_to_xyz_d50(&data, weights, white_xy)?;
 
@@ -1085,6 +1158,9 @@ pub fn camera_to_working(
     }
 
     let report = DngColorReport {
+        // Overwritten by the caller on the profile route; the file route leaves
+        // it unset, which is what says the calibration is the file's own.
+        profile_source: None,
         illuminant1: data.illuminants[0].label.clone(),
         illuminant2: data.illuminants.get(1).map(|value| value.label.clone()),
         illuminant3: data.illuminants.get(2).map(|value| value.label.clone()),
@@ -1583,6 +1659,9 @@ fn camera_to_working4(
         &camera_to_xyz,
     );
     let report = DngColorReport {
+        // A four-channel profile is always the file's own; the DCP route is
+        // three-channel by construction.
+        profile_source: None,
         illuminant1: data.illuminants[0].label.clone(),
         illuminant2: data.illuminants.get(1).map(|value| value.label.clone()),
         illuminant3: data.illuminants.get(2).map(|value| value.label.clone()),
@@ -1971,5 +2050,69 @@ mod tests {
         assert!(approx(working[0], 1.0, 5e-4), "{working:?}");
         assert!(approx(working[1], 1.0, 5e-4), "{working:?}");
         assert!(approx(working[2], 1.0, 5e-4), "{working:?}");
+    }
+
+    /// The DCP route on an ARW, which is the case the whole change exists for:
+    /// a Sony file carries no DNG calibration tag at all, so before this the
+    /// profile's second illuminant could never be reached.
+    #[test]
+    fn a_standalone_profile_calibrates_a_file_that_has_no_dng_tags_of_its_own() {
+        let path = Path::new("raw/arw_better/_DSC1236.ARW");
+        let profile = Path::new("profiles/SONY_ILCE-7C.dcp");
+        if !path.exists() || !profile.exists() {
+            eprintln!("skipping a_standalone_profile_calibrates_a_file_that_has_no_dng_tags");
+            return;
+        }
+        let raw = rawler::decode_file(path).expect("A7C ARW decodes");
+        let bytes = std::fs::read(profile).expect("profile reads");
+
+        // The file route finds nothing: an ARW has no DNG ColorMatrix1.
+        assert!(
+            camera_to_working_any(&raw, path, WorkingSpace::Srgb).is_none(),
+            "an ARW must not resolve a DNG profile of its own"
+        );
+
+        let (matrix, report) =
+            camera_to_working_from_profile(&raw, path, &bytes, WorkingSpace::Srgb)
+                .expect("the standalone profile composes");
+
+        // Both of the profile's calibrations are in play, at a weight strictly
+        // between them. That interpolation is the thing an ARW never had.
+        assert_eq!(report.illuminant1, "A");
+        assert_eq!(report.illuminant2.as_deref(), Some("D65"));
+        assert!(
+            report.weight_illuminant1 > 0.0 && report.weight_illuminant1 < 1.0,
+            "weights {:?} are not an interpolation",
+            report.interpolation_weights
+        );
+        assert!(
+            report.used_forward_matrix,
+            "the profile has a ForwardMatrix"
+        );
+        // A profile has no picture in it, so the white comes from the RAW.
+        assert_eq!(report.white_balance_source, "decoder_white_balance");
+        assert!(
+            (2000.0..=20000.0).contains(&report.estimated_cct),
+            "CCT {} is not a daylight-ish scene",
+            report.estimated_cct
+        );
+
+        // The scene neutral must land equal-channel in the working space, the
+        // same invariant the file route is held to above.
+        let neutral = normalize_neutral([
+            1.0 / raw.wb_coeffs[0] as f64,
+            1.0 / raw.wb_coeffs[1] as f64,
+            1.0 / raw.wb_coeffs[2] as f64,
+        ])
+        .unwrap();
+        let working: Vec<f64> = (0..3)
+            .map(|row| {
+                (0..3)
+                    .map(|column| matrix[row][column] as f64 * neutral[column])
+                    .sum()
+            })
+            .collect();
+        assert!(approx(working[0], working[1], 5e-4), "{working:?}");
+        assert!(approx(working[1], working[2], 5e-4), "{working:?}");
     }
 }

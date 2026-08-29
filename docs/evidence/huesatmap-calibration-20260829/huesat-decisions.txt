@@ -1,0 +1,102 @@
+raw/arw_better/_DSC1238.ARW: SONY ILCE-7C matches, 5053 K, interpolated table
+raw/arw_better/_DSC1237.ARW: SONY ILCE-7C matches, 5885 K, interpolated table
+raw/arw_better/_DSC1236.ARW: SONY ILCE-7C matches, 5293 K, interpolated table
+raw/arw_better/_DSC1239.ARW: SONY ILCE-7C matches, 5020 K, interpolated table
+raw/arw_better/_DSC1240.ARW: SONY ILCE-7C matches, 5053 K, interpolated table
+raw/arw_better/_DSC1241.ARW: SONY ILCE-7C matches, 5004 K, interpolated table
+raw/arw_better/_DSC1242.ARW: SONY ILCE-7C matches, 4857 K, interpolated table
+raw/arw_better/_DSC1243.ARW: SONY ILCE-7C matches, 5202 K, interpolated table
+raw/arw_better/_DSC1244.ARW: SONY ILCE-7C matches, 5418 K, interpolated table
+raw/arw_better/_DSC1245.ARW: SONY ILCE-7C matches, 5053 K, interpolated table
+raw/arw_better/_DSC1246.ARW: SONY ILCE-7C matches, 5101 K, interpolated table
+raw/arw_better/_DSC1247.ARW: SONY ILCE-7C matches, 5118 K, interpolated table
+raw/arw_better/_DSC1248.ARW: SONY ILCE-7C matches, 5168 K, interpolated table
+raw/indoor_tungsten/_DSC1323.ARW: SONY ILCE-7C matches, 4790 K, interpolated table
+raw/indoor_tungsten/_DSC1324.ARW: SONY ILCE-7C matches, 3622 K, interpolated table
+raw/indoor_tungsten/_DSC1325.ARW: SONY ILCE-7C matches, 3642 K, interpolated table
+raw/indoor_tungsten/_DSC1326.ARW: SONY ILCE-7C matches, 3101 K, interpolated table
+raw/indoor_tungsten/_DSC1327.ARW: SONY ILCE-7C matches, 3168 K, interpolated table
+raw/indoor_tungsten/_DSC1328.ARW: SONY ILCE-7C matches, 3090 K, interpolated table
+raw/indoor_tungsten/_DSC1329.ARW: SONY ILCE-7C matches, 3728 K, interpolated table
+raw/indoor_tungsten/_DSC1330.ARW: SONY ILCE-7C matches, 5011 K, interpolated table
+raw/indoor_tungsten/_DSC1331.ARW: SONY ILCE-7C matches, 3099 K, interpolated table
+raw/raw_3rd_batch/20260729_114901.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_115256.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_115658.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_115936.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_120739.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_120741.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_120744.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_121459.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_121501.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_141225.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_144236.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_144425.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_144601.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_144859.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_155636.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/20260729_163916.dng: profile is for "SONY ILCE-7C", file is "samsung SM-S926U1" — table skipped, rendering as standard
+raw/raw_3rd_batch/_DSC1249.ARW: SONY ILCE-7C matches, 6285 K, interpolated table
+raw/raw_3rd_batch/_DSC1250.ARW: SONY ILCE-7C matches, 6633 K, interpolated table
+raw/raw_3rd_batch/_DSC1251.ARW: SONY ILCE-7C matches, 5931 K, interpolated table
+raw/raw_3rd_batch/_DSC1252.ARW: SONY ILCE-7C matches, 6644 K, interpolated table
+raw/raw_3rd_batch/_DSC1253.ARW: SONY ILCE-7C matches, 5245 K, interpolated table
+raw/raw_3rd_batch/_DSC1254.ARW: SONY ILCE-7C matches, 4598 K, interpolated table
+raw/raw_3rd_batch/_DSC1255.ARW: SONY ILCE-7C matches, 4578 K, interpolated table
+raw/raw_3rd_batch/_DSC1256.ARW: SONY ILCE-7C matches, 5033 K, interpolated table
+raw/raw_3rd_batch/_DSC1257.ARW: SONY ILCE-7C matches, 4488 K, interpolated table
+raw/raw_3rd_batch/_DSC1258.ARW: SONY ILCE-7C matches, 5019 K, interpolated table
+raw/raw_3rd_batch/_DSC1259.ARW: SONY ILCE-7C matches, 3809 K, interpolated table
+raw/raw_3rd_batch/_DSC1260.ARW: SONY ILCE-7C matches, 3267 K, interpolated table
+raw/raw_3rd_batch/_DSC1261.ARW: SONY ILCE-7C matches, 4918 K, interpolated table
+raw/raw_3rd_batch/_DSC1262.ARW: SONY ILCE-7C matches, 4895 K, interpolated table
+raw/raw_3rd_batch/_DSC1263.ARW: SONY ILCE-7C matches, 4895 K, interpolated table
+raw/raw_3rd_batch/_DSC1264.ARW: SONY ILCE-7C matches, 4865 K, interpolated table
+raw/raw_3rd_batch/_DSC1265.ARW: SONY ILCE-7C matches, 5076 K, interpolated table
+raw/raw_3rd_batch/_DSC1266.ARW: SONY ILCE-7C matches, 5004 K, interpolated table
+raw/raw_3rd_batch/_DSC1267.ARW: SONY ILCE-7C matches, 4949 K, interpolated table
+raw/raw_3rd_batch/_DSC1268.ARW: SONY ILCE-7C matches, 5036 K, interpolated table
+raw/raw_3rd_batch/_DSC1269.ARW: SONY ILCE-7C matches, 4988 K, interpolated table
+raw/raw_3rd_batch/_DSC1270.ARW: SONY ILCE-7C matches, 4933 K, interpolated table
+raw/raw_3rd_batch/_DSC1271.ARW: SONY ILCE-7C matches, 4671 K, interpolated table
+raw/raw_3rd_batch/_DSC1272.ARW: SONY ILCE-7C matches, 4671 K, interpolated table
+raw/raw_3rd_batch/_DSC1273.ARW: SONY ILCE-7C matches, 4848 K, interpolated table
+raw/raw_3rd_batch/_DSC1274.ARW: SONY ILCE-7C matches, 4490 K, interpolated table
+raw/raw_3rd_batch/_DSC1275.ARW: SONY ILCE-7C matches, 5928 K, interpolated table
+raw/raw_3rd_batch/_DSC1276.ARW: SONY ILCE-7C matches, 5678 K, interpolated table
+raw/raw_3rd_batch/_DSC1277.ARW: SONY ILCE-7C matches, 5814 K, interpolated table
+raw/raw_3rd_batch/_DSC1278.ARW: SONY ILCE-7C matches, 5893 K, interpolated table
+raw/raw_3rd_batch/_DSC1279.ARW: SONY ILCE-7C matches, 5237 K, interpolated table
+raw/raw_3rd_batch/_DSC1280.ARW: SONY ILCE-7C matches, 5296 K, interpolated table
+raw/raw_3rd_batch/_DSC1281.ARW: SONY ILCE-7C matches, 4878 K, interpolated table
+raw/raw_3rd_batch/_DSC1282.ARW: SONY ILCE-7C matches, 4495 K, interpolated table
+raw/raw_3rd_batch/_DSC1283.ARW: SONY ILCE-7C matches, 4559 K, interpolated table
+raw/raw_3rd_batch/_DSC1284.ARW: SONY ILCE-7C matches, 4078 K, interpolated table
+raw/raw_3rd_batch/_DSC1285.ARW: SONY ILCE-7C matches, 5119 K, interpolated table
+raw/raw_3rd_batch/_DSC1286.ARW: SONY ILCE-7C matches, 4696 K, interpolated table
+raw/raw_3rd_batch/_DSC1287.ARW: SONY ILCE-7C matches, 4715 K, interpolated table
+raw/raw_3rd_batch/_DSC1288.ARW: SONY ILCE-7C matches, 5362 K, interpolated table
+raw/raw_3rd_batch/_DSC1289.ARW: SONY ILCE-7C matches, 4787 K, interpolated table
+raw/raw_3rd_batch/_DSC1290.ARW: SONY ILCE-7C matches, 4160 K, interpolated table
+raw/raw_backlit2/_DSC1337.ARW: SONY ILCE-7C matches, 4784 K, interpolated table
+raw/raw_backlit2/_DSC1338.ARW: SONY ILCE-7C matches, 4827 K, interpolated table
+raw/raw_backlit2/_DSC1339.ARW: SONY ILCE-7C matches, 4798 K, interpolated table
+raw/raw_backlit2/_DSC1340.ARW: SONY ILCE-7C matches, 4865 K, interpolated table
+raw/raw_backlit2/_DSC1341.ARW: SONY ILCE-7C matches, 5143 K, interpolated table
+raw/raw_backlit2/_DSC1342.ARW: SONY ILCE-7C matches, 4903 K, interpolated table
+raw/raw_backlit2/_DSC1343.ARW: SONY ILCE-7C matches, 4842 K, interpolated table
+raw/raw_backlit2/_DSC1344.ARW: SONY ILCE-7C matches, 4850 K, interpolated table
+raw/raw_backlit2/_DSC1345.ARW: SONY ILCE-7C matches, 4850 K, interpolated table
+raw/raw_backlit2/_DSC1346.ARW: SONY ILCE-7C matches, 4910 K, interpolated table
+raw/raw_backlit2/_DSC1347.ARW: SONY ILCE-7C matches, 4933 K, interpolated table
+raw/raw_backlit2/_DSC1348.ARW: SONY ILCE-7C matches, 4601 K, interpolated table
+raw/raw_backlit2/_DSC1349.ARW: SONY ILCE-7C matches, 4421 K, interpolated table
+raw/raw_backlit2/_DSC1350.ARW: SONY ILCE-7C matches, 4423 K, interpolated table
+raw/raw_extremely_bright/_DSC1291.ARW: SONY ILCE-7C matches, 5049 K, interpolated table
+raw/raw_extremely_bright/_DSC1292.ARW: SONY ILCE-7C matches, 4964 K, interpolated table
+raw/raw_extremely_bright/_DSC1293.ARW: SONY ILCE-7C matches, 4980 K, interpolated table
+raw/raw_extremely_bright/_DSC1294.ARW: SONY ILCE-7C matches, 4618 K, interpolated table
+raw/raw_extremely_bright/_DSC1295.ARW: SONY ILCE-7C matches, 4748 K, interpolated table
+raw/raw_extremely_bright/_DSC1296.ARW: SONY ILCE-7C matches, 4658 K, interpolated table
+raw/raw_extremely_bright/_DSC1297.ARW: SONY ILCE-7C matches, 4644 K, interpolated table
+raw/raw_extremely_bright/_DSC1298.ARW: SONY ILCE-7C matches, 5060 K, interpolated table
