@@ -2517,6 +2517,19 @@ record raw-autotune.evidence.spatial-floor-declines-to-the-current-path-20260826
         """
 }
 
+record raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829/1 : evidence {
+    title "vivid is the only preset that reaches the camera's chroma where the camera is boldest, and it pays for it in hue"
+    state verified
+    result pass
+    method command
+    observed_at git:607c37a6d8aba5c6617163ef8ad45123321c08dd
+    command "python3 tools/compare_presets.py OUT/auto OUT/standard OUT/vivid --reference raw/jpeg raw/arw_better raw/raw_backlit2 raw/raw_extremely_bright raw/indoor_tungsten --match '^_dsc' --against OUT/standard --json sony.json"
+    artifact "docs/evidence/preset-standard-vivid-20260829/medians.json"
+    summary """
+        86 Sony pairs, medians vs the camera JPEG: chroma restricted to the camera's own C*>40 pixels is 0.652 (auto), 0.698 (standard), 0.956 (vivid), while whole-frame chroma is 1.115 / 1.172 / 1.709. Directly against standard, vivid is chroma x1.46 (x1.51 blue, x1.38 warm, x1.51 green) with blue hue +15.2 deg toward violet and warm hue +9.6 deg toward yellow. Vivid's chroma-weighted hue error against the camera rises on four of the five Sony sets (worst raw_backlit2 17.61 -> 23.65 deg); it falls only on raw_3rd_batch (16.16 -> 15.75 deg).
+        """
+}
+
 record raw-autotune.evidence.standard-vivid-preset-suite-20260828/1 : evidence {
     title "All 398 tests passed (383 library, 15 integration/golden); preset regressions confirm auto stays default, standard has no HueSatMap, vivid loads the embedded public-domain A7C HueSatMap, and punchy aliases standard."
     state verified
@@ -2551,6 +2564,19 @@ record raw-autotune.evidence.uncertainty-gate-consolidation/1 : evidence {
     command "cargo test --release && raw-autotune raw/raw_3rd_batch --dry-run --summary before|after.json --jobs 8 && raw-autotune <sky cohort> --dry-run --hdr 0.5 --summary hdr_before|after.json"
     summary """
         localtone::build and build_hdr now consume highlight's per-pixel reconstruction-uncertainty map instead of re-deriving a developed-pixel proxy; default output byte-identical over raw/raw_3rd_batch (58 frames), --hdr 0.5 highlight compression rises 18.5->19.0 / 16.1->18.3 / 20.9->25.8 / 26.8->29.1 / 19.0->18.3 % on _DSC1282/1283/1288/1289/1290 with EV caps and shadow-lift fraction unchanged; 277 lib tests pass.
+        """
+}
+
+record raw-autotune.evidence.vivid-does-not-neutralise-saturated-colour-20260829/1 : evidence {
+    title "`--preset vivid` never flattens saturated colour: 0.00% median, 0.9% worst frame, over 86 Sony pairs"
+    state verified
+    result pass
+    method command
+    observed_at git:607c37a6d8aba5c6617163ef8ad45123321c08dd
+    command "python3 tools/compare_presets.py OUT/auto OUT/standard OUT/vivid --reference raw/jpeg raw/arw_better raw/raw_backlit2 raw/raw_extremely_bright raw/indoor_tungsten --match '^_dsc' --against OUT/standard"
+    artifact "docs/evidence/preset-standard-vivid-20260829/README.md"
+    summary """
+        Over all 86 Sony RAW+JPEG pairs, the share of `--preset standard`'s CIELAB C*>40 pixels that `--preset vivid` drops more than 25% below is 0.00% median and 0.9% on the worst frame. Vivid's per-family chroma ratio over standard is above 1.0 on every frame for blue (min 1.30) and on all but a handful for warm (min 0.83) and green (min 0.68). The table lifts chroma; it does not neutralise it, so the failure mode the work item asked about does not occur.
         """
 }
 

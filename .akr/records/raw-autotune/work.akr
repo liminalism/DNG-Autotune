@@ -169,7 +169,7 @@ record raw-autotune.work.calibrated-hue-sat-table-candidate-d/4 : work {
 
 record raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 : work {
     title "Candidate D: calibrated HueSatMap and opt-in vivid preset"
-    state active
+    state completed
     scope [
         path "CHANGELOG.md",
         path "README.md",

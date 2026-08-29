@@ -1,6 +1,33 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/1 : observation {
+    title "The bundled A7C HueSatMap runs without its own matrix, without illuminant interpolation on Sony, and without any camera check"
+    state verified
+    scope [
+        path "profiles/**",
+        path "src/color.rs",
+        path "src/dngcolor.rs",
+        path "src/huesatmap.rs"
+    ]
+    statement """
+        Three structural properties of `--preset vivid` / `--hue-sat-map`, all read off the run's own sidecars and the DCP's tag list on 2026-08-29. None is a defect in the LUT arithmetic, which follows the DNG SDK for the 2.5-D (val_div == 1) table, and `ProfileHueSatMapEncoding` is absent so the linear application space is right.
+
+        1. The profile's Std A table never runs on the camera it was calibrated for. `HueSatMap::apply` interpolates `CalibrationIlluminant1` (17, Std A) and `CalibrationIlluminant2` (21, D65) only when a CCT is available, and that CCT is `dng_color.estimated_cct`, produced only when `dngcolor::camera_to_working_any` finds a DNG `ColorMatrix1` tag. A Sony ARW carries no such tag. Census over the 102-frame run: 86/86 Sony frames reported `table: illuminant2` with no CCT, and 16/16 Samsung DNGs reported `table: interpolated` at 4729-5174 K. The interpolation therefore runs only on the camera the profile is not calibrated for, and `raw/indoor_tungsten` is the worst Sony set as a result (blue hue error against the camera JPEG 11.4 -> 24.5 degrees under vivid).
+
+        2. Nothing compares the profile to the file. `unique_camera_model` is parsed and written into the sidecar's `color.hue_sat_map` block, but no code in src/ compares it to the RAW being developed and no warning is printed. `--preset vivid` on a Samsung DNG silently applies the Sony A7C table: warm chroma 1.664x the camera's and warm hue bias +24.15 degrees, against 1.036x and +15.41 degrees under standard.
+
+        3. The table is applied without the DCP's own forward matrix. `profiles/SONY_ILCE-7C.dcp` carries `ColorMatrix1/2` and `ForwardMatrix1/2`; the pipeline uses none of them and applies the HueSatMap on top of the transform derived from the RAW's own calibration. A HueSatMap encodes the residual of the profile's own forward matrix, so after a different one it is a look and not a calibration -- even on the A7C.
+        """
+    observed_at git:607c37a6d8aba5c6617163ef8ad45123321c08dd
+    method observation
+    watches [ "src/huesatmap.rs", "src/color.rs", "src/dngcolor.rs", "profiles/**" ]
+    derived_from [
+        @raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829,
+        @raw-autotune.work.calibrated-hue-sat-table-candidate-d
+    ]
+}
+
 record raw-autotune.observation.camsdd-dataset-local-and-licensed/1 : observation {
     title "CamSDD is local and licensed CC BY-NC-SA 4.0"
     state verified
