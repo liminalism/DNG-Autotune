@@ -5,7 +5,7 @@ build {
     tool "akr 0.4.0"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:b499a038901d4e83b03d272484510b6419ce3e6e330b3abe42abd1ffebd68a56"
+    source_graph "sha256:3c1763abab15372c82baae9544c7f7a144af9643aecf8248b2ae478e0371cedb"
 }
 
 source ".akr/project.akr" {
@@ -19,18 +19,18 @@ source ".akr/records/raw-autotune/assessments.akr" {
 }
 
 source ".akr/records/raw-autotune/decisions.akr" {
-    hash "sha256:ccce84ad38a53f5e3e2bbe118a3e9c4aac5de7446d6946b58f04450084a1fa86"
-    records 15
+    hash "sha256:3553237c5d9a2fcfd314daf7fa82191e6c9e091d4fad57ea074b52f84a2990d1"
+    records 16
 }
 
 source ".akr/records/raw-autotune/evidence.akr" {
-    hash "sha256:58b7c248a12f2376eaeb495526e9f1e2e45738afbc1da860b995dc7afd5cd2fd"
-    records 189
+    hash "sha256:40445ee570b98b3c6ffbee5a192b21919ca0048bdc6950b066d8692521827fe0"
+    records 192
 }
 
 source ".akr/records/raw-autotune/observations.akr" {
-    hash "sha256:32dc8aee92bbf8d875e0dfb25f2ee6ef6eb84d29b31b6c99d77525c20de8086d"
-    records 13
+    hash "sha256:f3e5a5391f578484e38ca26dc0acb6accec3991a82601e7f7d00fa1e72ef8442"
+    records 16
 }
 
 source ".akr/records/raw-autotune/papercuts.akr" {
@@ -54,8 +54,8 @@ source ".akr/records/raw-autotune/requirements.akr" {
 }
 
 source ".akr/records/raw-autotune/work.akr" {
-    hash "sha256:29e9fb3bd418fca2c19915599e53e67f2103f97fb7571ad7fa6022eb2031a362"
-    records 71
+    hash "sha256:8901b250f917e3139a98a2723d9667b31b19d2ee6202b32f3fffd31873ae4bf9"
+    records 72
 }
 
 resolution @raw-autotune.assessment.scene-evidence-usefulness/3 {
@@ -228,8 +228,8 @@ resolution @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1
 
 resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/1 {
     slot derived_from
-    to @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/1
-    hash "sha256:2b8b6ce4ebb52eecef15c22f47ee92be525c4fec1e7bdc78fd27d9ce0ea441c3"
+    to @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/2
+    hash "sha256:a2cabc878895ff047ecd03c8321dee436e4807cbf84db2f0703b592a389a83c1"
 }
 
 resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/1 {
@@ -239,6 +239,42 @@ resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-
 }
 
 resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/1 {
+    slot supported_by
+    to @raw-autotune.evidence.vivid-does-not-neutralise-saturated-colour-20260829/1
+    hash "sha256:53fa83f4c37409c90ce00478c251682faad72ec8950361d9864225c96d9ed7ec"
+}
+
+resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2 {
+    slot derived_from
+    to @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/2
+    hash "sha256:a2cabc878895ff047ecd03c8321dee436e4807cbf84db2f0703b592a389a83c1"
+}
+
+resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2 {
+    slot supported_by
+    to @raw-autotune.evidence.a-declined-profile-is-an-exact-no-op-20260829/1
+    hash "sha256:7422a47db5be7e7351710d463c4b3eae7c8d138dc24cf296ea3869019949e3ed"
+}
+
+resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2 {
+    slot supported_by
+    to @raw-autotune.evidence.pairing-the-profile-removes-the-hue-rotation-20260829/1
+    hash "sha256:2eb6ffc273ac5be7852ce86cb664e484fedfddf1327db2b63e4163c5e525522d"
+}
+
+resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2 {
+    slot supported_by
+    to @raw-autotune.evidence.standard-global-saturation-is-not-a-double-count-20260829/1
+    hash "sha256:21004fcaf6772ee1b7fb47767979e7a2b029369445fc1ee92f8f50e2343b2b60"
+}
+
+resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2 {
+    slot supported_by
+    to @raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829/1
+    hash "sha256:a9518b31db08ff423bc2360131ea4488fce2942225872516fd9887b764df3df4"
+}
+
+resolution @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2 {
     slot supported_by
     to @raw-autotune.evidence.vivid-does-not-neutralise-saturated-colour-20260829/1
     hash "sha256:53fa83f4c37409c90ce00478c251682faad72ec8950361d9864225c96d9ed7ec"
@@ -269,6 +305,18 @@ resolution @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolate
 }
 
 resolution @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/1 {
+    slot derived_from
+    to @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5
+    hash "sha256:2515fc062f935da19c00252a321a73c6ade678b6befbe8fbd82189149f3f358d"
+}
+
+resolution @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/2 {
+    slot derived_from
+    to @raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829/1
+    hash "sha256:a9518b31db08ff423bc2360131ea4488fce2942225872516fd9887b764df3df4"
+}
+
+resolution @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/2 {
     slot derived_from
     to @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5
     hash "sha256:2515fc062f935da19c00252a321a73c6ade678b6befbe8fbd82189149f3f358d"
@@ -338,6 +386,36 @@ resolution @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-f
     slot verified_by
     to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/3
     hash "sha256:f95210e34b95ff20c3de58625b927757ef8644151bc48e2b0b79cc1964d52f60"
+}
+
+resolution @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/5 {
+    slot verified_by
+    to @raw-autotune.evidence.harmonic-neutral-fallback-20260827/2
+    hash "sha256:1497052cb96652af312583ab4be416f4e528a7fd872260074e740b83d3f03133"
+}
+
+resolution @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/5 {
+    slot verified_by
+    to @raw-autotune.evidence.sky-stage-attribution-20260816-r2/3
+    hash "sha256:f95210e34b95ff20c3de58625b927757ef8644151bc48e2b0b79cc1964d52f60"
+}
+
+resolution @raw-autotune.observation.the-bundled-huesatmap-now-travels-with-its-own-profile/1 {
+    slot supersedes
+    to @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/2
+    hash "sha256:a2cabc878895ff047ecd03c8321dee436e4807cbf84db2f0703b592a389a83c1"
+}
+
+resolution @raw-autotune.observation.the-bundled-huesatmap-now-travels-with-its-own-profile/1 {
+    slot verified_by
+    to @raw-autotune.evidence.a-declined-profile-is-an-exact-no-op-20260829/1
+    hash "sha256:7422a47db5be7e7351710d463c4b3eae7c8d138dc24cf296ea3869019949e3ed"
+}
+
+resolution @raw-autotune.observation.the-bundled-huesatmap-now-travels-with-its-own-profile/1 {
+    slot verified_by
+    to @raw-autotune.evidence.pairing-the-profile-removes-the-hue-rotation-20260829/1
+    hash "sha256:2eb6ffc273ac5be7852ce86cb664e484fedfddf1327db2b63e4163c5e525522d"
 }
 
 resolution @raw-autotune.question.deleted-chroma-hull-clamp/1 {
@@ -426,26 +504,26 @@ resolution @raw-autotune.question.unfitted-partial-cell-floor/2 {
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/2 {
     slot derived_from
-    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4
-    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/5
+    hash "sha256:6f7e9d21894823e82fb5e9f057d66bf5e16c7ffa729cccfeb9bf1e9b0c392d63"
 }
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/3 {
     slot derived_from
-    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4
-    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/5
+    hash "sha256:6f7e9d21894823e82fb5e9f057d66bf5e16c7ffa729cccfeb9bf1e9b0c392d63"
 }
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/4 {
     slot derived_from
-    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4
-    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/5
+    hash "sha256:6f7e9d21894823e82fb5e9f057d66bf5e16c7ffa729cccfeb9bf1e9b0c392d63"
 }
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 {
     slot derived_from
-    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4
-    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
+    to @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/5
+    hash "sha256:6f7e9d21894823e82fb5e9f057d66bf5e16c7ffa729cccfeb9bf1e9b0c392d63"
 }
 
 resolution @raw-autotune.work.calibrated-hue-sat-table-candidate-d/5 {
@@ -464,6 +542,18 @@ resolution @raw-autotune.work.midtone-shadow-contrast-versus-reference-renderers
     slot verified_by
     to @raw-autotune.evidence.midtone-toe-corpus-20260827/1
     hash "sha256:888d3c03cc08a799dff8bd8846305466ccfdfae9201b510160cf8a5bd2c99d0b"
+}
+
+resolution @raw-autotune.work.pair-the-huesatmap-with-its-own-profile/1 {
+    slot derived_from
+    to @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2
+    hash "sha256:cf34e9c6267f11d7e0fe34d9b2921c25adb2c5ccd4b52c240fa599c06b0d19bb"
+}
+
+resolution @raw-autotune.work.pair-the-huesatmap-with-its-own-profile/1 {
+    slot derived_from
+    to @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/2
+    hash "sha256:a2cabc878895ff047ecd03c8321dee436e4807cbf84db2f0703b592a389a83c1"
 }
 
 resolution @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {
@@ -821,8 +911,18 @@ seal @raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 {
 }
 
 seal @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/1 {
+    state superseded
+    hash "sha256:c1e0a77751750047b7ed93a2b1c270ace63129e2b43a40f2a57b6277da1239f3"
+}
+
+seal @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2 {
     state active
-    hash "sha256:bd92d19668ca6c67348f4e9825486c70b4cb5e6e52c480779a076af12d7d01a6"
+    hash "sha256:cf34e9c6267f11d7e0fe34d9b2921c25adb2c5ccd4b52c240fa599c06b0d19bb"
+}
+
+seal @raw-autotune.evidence.a-declined-profile-is-an-exact-no-op-20260829/1 {
+    state verified
+    hash "sha256:7422a47db5be7e7351710d463c4b3eae7c8d138dc24cf296ea3869019949e3ed"
 }
 
 seal @raw-autotune.evidence.agpl-license-field-20260827/1 {
@@ -1268,6 +1368,11 @@ seal @raw-autotune.evidence.night-low-light-byte-identical-20260810/1 {
 seal @raw-autotune.evidence.night-low-light-render-improvement-20260810/1 {
     state verified
     hash "sha256:1818a1e06e04c6ae9b05fcfa5070d49f73ed77d61447f66d72a72ae0959cb7e0"
+}
+
+seal @raw-autotune.evidence.pairing-the-profile-removes-the-hue-rotation-20260829/1 {
+    state verified
+    hash "sha256:2eb6ffc273ac5be7852ce86cb664e484fedfddf1327db2b63e4163c5e525522d"
 }
 
 seal @raw-autotune.evidence.profile-experiment-regression-gate/1 {
@@ -1740,6 +1845,11 @@ seal @raw-autotune.evidence.spatial-floor-declines-to-the-current-path-20260826/
     hash "sha256:3bc3f2989c33d9a5238b9a84afe4bdb601c639beabac610aae6232193b6e3240"
 }
 
+seal @raw-autotune.evidence.standard-global-saturation-is-not-a-double-count-20260829/1 {
+    state verified
+    hash "sha256:21004fcaf6772ee1b7fb47767979e7a2b029369445fc1ee92f8f50e2343b2b60"
+}
+
 seal @raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829/1 {
     state verified
     hash "sha256:a9518b31db08ff423bc2360131ea4488fce2942225872516fd9887b764df3df4"
@@ -1771,8 +1881,13 @@ seal @raw-autotune.evidence.yunet-lege-gpu-cpu-probe/1 {
 }
 
 seal @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/1 {
-    state verified
-    hash "sha256:2b8b6ce4ebb52eecef15c22f47ee92be525c4fec1e7bdc78fd27d9ce0ea441c3"
+    state superseded
+    hash "sha256:a5f11f7e362c93517137996e68ed865df9ab905fae45ad9f85695d569afcea7d"
+}
+
+seal @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/2 {
+    state superseded
+    hash "sha256:a2cabc878895ff047ecd03c8321dee436e4807cbf84db2f0703b592a389a83c1"
 }
 
 seal @raw-autotune.observation.camsdd-dataset-local-and-licensed/1 {
@@ -1831,8 +1946,18 @@ seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage
 }
 
 seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4 {
+    state superseded
+    hash "sha256:9e0dec22f718310fbdaabde663711b81dc104f60f2d79d8ea0756f492ce6b310"
+}
+
+seal @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/5 {
     state verified
-    hash "sha256:d1f1955734ee6c5cf29b76b7552ec180343117140bfa3a0906ade5514d53c555"
+    hash "sha256:6f7e9d21894823e82fb5e9f057d66bf5e16c7ffa729cccfeb9bf1e9b0c392d63"
+}
+
+seal @raw-autotune.observation.the-bundled-huesatmap-now-travels-with-its-own-profile/1 {
+    state verified
+    hash "sha256:0d7829ae2be00d253e7e9e19918fcca457526a8a5946737199105e7a4bbde659"
 }
 
 seal @raw-autotune.papercut.a-chained-focused-test-build-command-exceeded/1 {
@@ -2408,6 +2533,11 @@ seal @raw-autotune.work.night-low-light-rendering/2 {
 seal @raw-autotune.work.open-questions/1 {
     state abandoned
     hash "sha256:74e762938edd9b58e993e57aad5a8ba0c1c068f0bcc0bfc9c6d67ab12626b9c9"
+}
+
+seal @raw-autotune.work.pair-the-huesatmap-with-its-own-profile/1 {
+    state completed
+    hash "sha256:3a56d581c1a978b7ecdb38c18f5f1d7fb569bf977512481335a2220797d41696"
 }
 
 seal @raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 {

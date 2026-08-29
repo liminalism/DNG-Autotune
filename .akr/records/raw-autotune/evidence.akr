@@ -1,6 +1,19 @@
 akr 0.1
 project raw-autotune
 
+record raw-autotune.evidence.a-declined-profile-is-an-exact-no-op-20260829/1 : evidence {
+    title "The regression gate is clean: the default path is field-identical, declined frames are byte-identical to standard, and the render is deterministic"
+    state verified
+    result pass
+    method command
+    observed_at git:2abb7e77a26bde9c5090317c4c554f81ddc4571f
+    command "raw-autotune <corpus> --dry-run --summary after.json, diffed field-by-field against the previous binary; sha256sum of every corpus frame under --preset standard vs --preset vivid; cargo test --release"
+    artifact "docs/evidence/huesatmap-calibration-20260829/huesat-decisions.txt"
+    summary """
+        Gate step 1: the 372-file `--dry-run --summary` is field-identical to the pre-change binary built from 31d8288, bar elapsed_ms. Step 2: 406 tests pass, clippy and fmt clean. Step 3: two `--jobs 8` runs of raw/arw_better under vivid are byte-identical in images and in sidecars once the output path and elapsed_ms are normalised. Additionally, under `--preset vivid` over the 102-frame corpus, 16/16 Samsung DNGs are byte-identical to `--preset standard` and 86/86 Sony ARWs differ, and `--preset auto` and `--preset standard` on _DSC1236 are byte-identical to their pre-change hashes (570242f0..., abac6a0a...). The batch reports "applied to 86 file(s), declined on 16".
+        """
+}
+
 record raw-autotune.evidence.agpl-license-field-20260827/1 : evidence {
     title "Cargo.toml declares AGPL-3.0-or-later; no reverse JPXL dependency"
     state verified
@@ -1239,6 +1252,19 @@ record raw-autotune.evidence.night-low-light-render-improvement-20260810/1 : evi
         On the 8 night pairs the raw low_light_score is 0.98-1.00 (bright day frames 0), triggering automatic night tone (edge-aware single-frame HDR at strength 0.85: base EV span compressed ~28->16, bright light sources pulled down, shadows lifted +~0.4-0.5 EV locally without a global exposure lift) and noise-aware luma denoise (strength ~0.90-0.94). 100% crops show the ISO-12800 luminance grain markedly reduced while cloud/edge detail is preserved; the dark-but-bright daytime _DSC1275 scores 0.19 and is correctly NOT treated as night.
         """
     author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.pairing-the-profile-removes-the-hue-rotation-20260829/1 : evidence {
+    title "Pairing the HueSatMap with its own ForwardMatrix removes 78% of the blue rotation and 94% of the warm rotation"
+    state verified
+    result pass
+    method command
+    observed_at git:2abb7e77a26bde9c5090317c4c554f81ddc4571f
+    command "python3 tools/compare_presets.py out/standard out/vivid out/vivid-sat100 --reference raw/jpeg raw/arw_better raw/raw_backlit2 raw/raw_extremely_bright raw/indoor_tungsten --match '^_dsc' --against out/standard"
+    artifact "docs/evidence/huesatmap-calibration-20260829/README.md"
+    summary """
+        Same 102 RAW+JPEG pairs, same binary, three arms. Against `--preset standard` on the same pixels, `--preset vivid` goes from chroma x1.462 / blue hue +15.16 deg / warm hue +9.60 deg to x1.109 / +3.38 deg / +0.62 deg once the DCP's own ColorMatrix/ForwardMatrix drive the conversion. Overshoot on the camera's own C*>40 pixels falls from 25.5% to 4.7%, and chroma there rises from standard's 0.698 to 0.753. raw/indoor_tungsten, the set the missing illuminant interpolation hurt most, flips from 10.9 deg worse than standard on blue hue bias (+24.52 vs +13.65) to 5.2 deg better (+8.49). All 86 Sony frames now report an interpolated table with a scene CCT where all 86 previously read illuminant2 with none.
+        """
 }
 
 record raw-autotune.evidence.profile-experiment-regression-gate/1 : evidence {
@@ -2514,6 +2540,19 @@ record raw-autotune.evidence.spatial-floor-declines-to-the-current-path-20260826
         _DSC1126 carries 1552 clipped CFA sites (6.377e-5, above the 1e-5 floor) and renders byte-identically to --spatial-highlight-floor 0 while differing from --highlight-method current. So the floor does not touch a frame that clears it.
 
         Amplitude of the change on a declined frame, _DSC0883 16-bit PNG, floored against floor-0: 153 of 30,984,192 samples differ (0.0005%), mean absolute delta 598 and maximum 18529 of 65535. Small in extent, not negligible per affected sample.
+        """
+}
+
+record raw-autotune.evidence.standard-global-saturation-is-not-a-double-count-20260829/1 : evidence {
+    title "Removing `standard`'s global saturation scalar under vivid makes every measure worse, so the calibrated table is not duplicating it"
+    state verified
+    result pass
+    method command
+    observed_at git:2abb7e77a26bde9c5090317c4c554f81ddc4571f
+    command "raw-autotune ... --preset vivid --saturation-scale 0.7874016, graded by tools/compare_presets.py against the camera JPEGs"
+    artifact "docs/evidence/huesatmap-calibration-20260829/medians.json"
+    summary """
+        `derive_params` gives Vivid the same global `saturation` 1.27 as Standard, a scalar that exists to close the colorimetric-vs-camera chroma shortfall a per-hue calibration also closes. Returning it to neutral's 1.00 (--saturation-scale 0.7874) drops chroma on the camera's own C*>40 pixels to 0.585, below standard's 0.698 and vivid's 0.753; raises the share of those pixels left more than 25% under the camera to 71.3% from vivid's 44.1%; and newly desaturates 10.5% of standard's bold pixels by more than a quarter. No double count exists, because a paired table is nearly chroma-neutral (x1.109) -- a correction rather than a boost. `--preset standard` needs no change.
         """
 }
 

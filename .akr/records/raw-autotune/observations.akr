@@ -3,7 +3,7 @@ project raw-autotune
 
 record raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/1 : observation {
     title "The bundled A7C HueSatMap runs without its own matrix, without illuminant interpolation on Sony, and without any camera check"
-    state verified
+    state superseded
     scope [
         path "profiles/**",
         path "src/color.rs",
@@ -25,6 +25,36 @@ record raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and
     derived_from [
         @raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829,
         @raw-autotune.work.calibrated-hue-sat-table-candidate-d
+    ]
+}
+
+record raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/2 : observation {
+    title "The bundled A7C HueSatMap runs without its own matrix, without illuminant interpolation on Sony, and without any camera check"
+    state superseded
+    scope [
+        path "profiles/**",
+        path "src/color.rs",
+        path "src/dngcolor.rs",
+        path "src/huesatmap.rs"
+    ]
+    statement """
+        Three structural properties of `--preset vivid` / `--hue-sat-map`, all read off the run's own sidecars and the DCP's tag list on 2026-08-29. None is a defect in the LUT arithmetic, which follows the DNG SDK for the 2.5-D (val_div == 1) table, and `ProfileHueSatMapEncoding` is absent so the linear application space is right.
+
+        1. The profile's Std A table never runs on the camera it was calibrated for. `HueSatMap::apply` interpolates `CalibrationIlluminant1` (17, Std A) and `CalibrationIlluminant2` (21, D65) only when a CCT is available, and that CCT is `dng_color.estimated_cct`, produced only when `dngcolor::camera_to_working_any` finds a DNG `ColorMatrix1` tag. A Sony ARW carries no such tag. Census over the 102-frame run: 86/86 Sony frames reported `table: illuminant2` with no CCT, and 16/16 Samsung DNGs reported `table: interpolated` at 4729-5174 K. The interpolation therefore runs only on the camera the profile is not calibrated for, and `raw/indoor_tungsten` is the worst Sony set as a result (blue hue error against the camera JPEG 11.4 -> 24.5 degrees under vivid).
+
+        2. Nothing compares the profile to the file. `unique_camera_model` is parsed and written into the sidecar's `color.hue_sat_map` block, but no code in src/ compares it to the RAW being developed and no warning is printed. `--preset vivid` on a Samsung DNG silently applies the Sony A7C table: warm chroma 1.664x the camera's and warm hue bias +24.15 degrees, against 1.036x and +15.41 degrees under standard.
+
+        3. The table is applied without the DCP's own forward matrix. `profiles/SONY_ILCE-7C.dcp` carries `ColorMatrix1/2` and `ForwardMatrix1/2`; the pipeline uses none of them and applies the HueSatMap on top of the transform derived from the RAW's own calibration. A HueSatMap encodes the residual of the profile's own forward matrix, so after a different one it is a look and not a calibration -- even on the A7C.
+        """
+    observed_at git:607c37a6d8aba5c6617163ef8ad45123321c08dd
+    method observation
+    watches [ "src/huesatmap.rs", "src/color.rs", "src/dngcolor.rs", "profiles/**" ]
+    derived_from [
+        @raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829,
+        @raw-autotune.work.calibrated-hue-sat-table-candidate-d
+    ]
+    supersedes [
+        @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked/1
     ]
 }
 
@@ -339,7 +369,7 @@ record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliag
 
 record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4 : observation {
     title "Spatial-highlight false colour remains fixed; ebe3125 reporting/LUT changes revalidated"
-    state verified
+    state superseded
     statement """
         On indoor-outdoor frames with a large clipped exterior seen through an opening (raw/raw_backlit), both spatial highlight estimators painted the reconstructed area with large pink/magenta false-colour regions while --highlight-method current rendered it nearly camera-like. Root cause (found 2026-08-27, fixed in git c09b7f9): the joint chroma solve's region-global heterogeneity guard attenuated toward the clipped floor, whose chroma is the sensor's clipping order, not the scene — discarding a correct harmonic colour-line reconstruction (probed G 1.75 predicted vs 1.15 after the guard, ~1.71 true). The guard now falls back to neutral chroma at the harmonic luminance; the corpus-wide pink-patch population clears with coherent skies and sunsets byte-stable.
 
@@ -357,5 +387,53 @@ record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliag
     verified_by [
         @raw-autotune.evidence.harmonic-neutral-fallback-20260827,
         @raw-autotune.evidence.sky-stage-attribution-20260816-r2
+    ]
+}
+
+record raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/5 : observation {
+    title "Spatial-highlight false colour remains fixed; the profile-calibration change does not reach it"
+    state verified
+    statement """
+        Re-checked at 2abb7e77 because that commit touched the watched `src/color.rs`. The change is confined to the branch guarded by `options.hue_sat_map`, which the highlight path never sets, so it cannot reach this behaviour. Confirmed rather than argued: `_DSC1288` and `_DSC1289` rendered with `--highlight-method harmonic` are byte-identical between the pre-change binary built from 31d8288 and this commit, and the 372-file `--dry-run --summary` over the corpus is field-identical bar `elapsed_ms`. The finding of revision 4 stands unchanged.
+        """
+    observed_at git:2abb7e77a26bde9c5090317c4c554f81ddc4571f
+    method command
+    watches [ "src/raw_highlight*.rs", "src/color.rs" ]
+    supersedes [ @raw-autotune.observation.spatial-highlight-false-colour-on-clipped-foliage/4 ]
+    verified_by [
+        @raw-autotune.evidence.harmonic-neutral-fallback-20260827,
+        @raw-autotune.evidence.sky-stage-attribution-20260816-r2
+    ]
+}
+
+record raw-autotune.observation.the-bundled-huesatmap-now-travels-with-its-own-profile/1 : observation {
+    title "The bundled A7C HueSatMap now runs with its own matrix, interpolates its illuminants on ARW, and is gated on the camera"
+    state verified
+    scope [
+        path "profiles/**",
+        path "src/color.rs",
+        path "src/dngcolor.rs",
+        path "src/huesatmap.rs"
+    ]
+    statement """
+        The three structural properties recorded in @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked no longer hold. Verified on the 102-frame corpus and in `tests/profile_calibration.rs`.
+
+        1. The matrix is the profile's own. `dngcolor::gather` is split into `gather_profile` (calibration) and `attach_neutral` (scene white), because the halves need not come from the same file; `camera_to_working_from_profile` composes the DNG 1.7 model from the DCP's `ColorMatrix1/2` and `ForwardMatrix1/2` while the neutral still comes from the RAW. `ColorTransform::derive_profile` is used only when a table is about to be applied and only when the profile matches.
+
+        2. The illuminants interpolate on every camera. `solve_white` returns the scene CCT from the same solve, so `CalibrationIlluminant1` (Std A) and `CalibrationIlluminant2` (D65) blend on an ARW. All 86 Sony frames now report an interpolated table with a CCT; before, all 86 read `illuminant2` with none, because `camera_to_working_any` requires a DNG `ColorMatrix1` tag an ARW does not carry.
+
+        3. The profile is checked against the file. `HueSatMap::matches_camera` compares `UniqueCameraModel` to the file's make and model, case- and whitespace-insensitively, accepting both the "MAKE MODEL" and bare-model spellings and refusing an anonymous profile outright. On a mismatch neither half applies, `HUESAT` names the profile and the camera, `color.hue_sat_map.skipped` records it, and the batch prints how many files were reached.
+
+        What is left, deliberately: only one profile is bundled, so `--preset vivid` is `standard` plus a warning on every other camera; `ProfileLookTableData` and `ProfileToneCurve` are still not read; and a calibration corrects downward as well as up, so vivid can now reduce chroma where the unpaired table only ever lifted -- 4 of 86 frames lose more than a quarter of the chroma on more than 1% of their bold pixels.
+        """
+    observed_at git:2abb7e77a26bde9c5090317c4c554f81ddc4571f
+    method command
+    watches [ "src/huesatmap.rs", "src/color.rs", "src/dngcolor.rs", "profiles/**" ]
+    supersedes [
+        @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked
+    ]
+    verified_by [
+        @raw-autotune.evidence.a-declined-profile-is-an-exact-no-op-20260829,
+        @raw-autotune.evidence.pairing-the-profile-removes-the-hue-rotation-20260829
     ]
 }

@@ -349,7 +349,7 @@ record raw-autotune.decision.slice-5-continuous-confidence-edge-semantics/1 : de
 
 record raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/1 : decision {
     title "vivid is a saturated-daylight Sony look; standard is the choice whenever hue placement matters"
-    state active
+    state superseded
     scope [
         path "README.md",
         path "docs/KNOWN_LIMITATIONS.md",
@@ -369,6 +369,43 @@ record raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-f
         @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked
     ]
     supported_by [
+        @raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829,
+        @raw-autotune.evidence.vivid-does-not-neutralise-saturated-colour-20260829
+    ]
+}
+
+record raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/2 : decision {
+    title "vivid is the bundled profile's calibration and applies only to the body it names; standard is everything else"
+    state active
+    scope [
+        path "README.md",
+        path "docs/KNOWN_LIMITATIONS.md",
+        path "src/cli.rs",
+        path "src/huesatmap.rs"
+    ]
+    decision """
+        `--preset vivid` develops through the bundled profile's own calibration: `profiles/SONY_ILCE-7C.dcp`'s `ColorMatrix`/`ForwardMatrix` build the conversion, its HueSatMap corrects the residual, and the scene CCT interpolates its Std A and D65 tables. Because it is a calibration and not a grade, it applies only to the body the profile names: on any other camera both halves are declined with a warning and the frame is byte-identical to `--preset standard`.
+
+        `--preset standard` is the documented choice for every other camera, for a render meant to be the matrix answer and nothing else, and where one rendering across a heterogeneous batch matters. `auto` remains the unattended archive default, and `standard`'s tone grade is unchanged -- including its global `saturation` 1.27, which measurement showed is not duplicated by the calibrated table.
+        """
+    context """
+        Revision 1 documented `vivid` as a saturated-daylight look, because that is what it then was: the profile's residual table applied on top of a transform derived from the RAW's own calibration, which measured as +15 deg of blue rotation, +10 deg of warm, and chroma x1.46. Revision 1's own consequences slot named the three structural gaps behind that as deliberate follow-on work; @raw-autotune.work.pair-the-huesatmap-with-its-own-profile closed all three on 2026-08-29. Re-measured over the same 102 RAW+JPEG pairs, the rotation falls to +3.4 deg blue and +0.6 deg warm at chroma x1.109, and `raw/indoor_tungsten` -- where the profile's Std A table had never once been reached -- flips from 10.9 deg worse than `standard` on blue to 5.2 deg better. The mismatch policy was the user's call on 2026-08-29: skip and warn, over failing the file or applying anyway.
+        """
+    consequences """
+        README.md's 'Choosing between standard and vivid' and the `vivid` preset section are rewritten around calibration rather than punch; docs/KNOWN_LIMITATIONS.md records what remains true of the table. The sidecar's `color.hue_sat_map` block goes to schema 28: it now appears on declined frames too, carrying `skipped`, and `dng_color` beside it carries `profile_source`.
+
+        What is still open, and deliberately: the bundle ships one profile, so `vivid` is `standard` plus a warning on every camera but the A7C; `ProfileLookTable*` and the profile tone curve are still not read; and a calibration corrects downward as well as up, so `vivid` can now reduce chroma on a few frames where the unpaired table only ever lifted (4 of 86 lose more than a quarter of the chroma on more than 1% of their bold pixels). Against the camera JPEG its chroma-weighted absolute hue error stays slightly above `standard`'s on all five Sony sets, because the calibration is not aimed at the camera's look and the camera JPEG is not ground truth.
+        """
+    derived_from [
+        @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked
+    ]
+    supersedes [
+        @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice/1
+    ]
+    supported_by [
+        @raw-autotune.evidence.a-declined-profile-is-an-exact-no-op-20260829,
+        @raw-autotune.evidence.pairing-the-profile-removes-the-hue-rotation-20260829,
+        @raw-autotune.evidence.standard-global-saturation-is-not-a-double-count-20260829,
         @raw-autotune.evidence.standard-vivid-chroma-and-hue-trade-20260829,
         @raw-autotune.evidence.vivid-does-not-neutralise-saturated-colour-20260829
     ]

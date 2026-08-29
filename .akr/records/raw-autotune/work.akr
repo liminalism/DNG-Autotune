@@ -949,6 +949,43 @@ record raw-autotune.work.open-questions/1 : work {
     }
 }
 
+record raw-autotune.work.pair-the-huesatmap-with-its-own-profile/1 : work {
+    title "Make `--preset vivid` a calibration: pair the DCP's own matrices, interpolate its illuminants, and gate it on the camera"
+    state completed
+    scope [
+        path "CHANGELOG.md",
+        path "README.md",
+        path "docs/KNOWN_LIMITATIONS.md",
+        path "profiles/**",
+        path "src/analyze.rs",
+        path "src/cli.rs",
+        path "src/color.rs",
+        path "src/dngcolor.rs",
+        path "src/huesatmap.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        Close the three structural gaps recorded in @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked, so `--preset vivid` is the bundled profile's calibrated rendering rather than that profile's residual table stacked on an unrelated matrix.
+
+        1. Pair the table with its own matrix. `profiles/SONY_ILCE-7C.dcp` carries ColorMatrix1/2, ForwardMatrix1/2 and CalibrationIlluminant1/2 (17 Std A, 21 D65). `dngcolor.rs` already implements the DNG 1.7 model against a file's own tags; split `gather` so the profile half can come from the DCP's TIFF while the scene neutral still comes from the RAW, and derive camera->working from the profile when its table is in use.
+
+        2. Interpolate the illuminants. `solve_white` returns the CCT from the same solve, so pairing the matrix also supplies the CCT that `HueSatMap::apply` needs. Before this, 86/86 Sony frames used the D65 table alone because no ARW carries a DNG ColorMatrix1 tag.
+
+        3. Gate on the camera. Compare the profile's UniqueCameraModel to the file's make/model. On a mismatch, skip both the profile matrix and the table, warn naming both, record the skip in the sidecar, and let the file render as `standard`. Decided with the user 2026-08-29: a calibration for one sensor means nothing on another, and the batch must still complete.
+
+        4. Then re-examine `standard`'s side of the same question. `derive_params` gives Vivid the same global `saturation` 1.27 as Standard, and that scalar exists (docs/KNOWN_LIMITATIONS.md) to close the colorimetric-vs-camera-JPEG chroma shortfall -- which is what a calibrated per-hue table also closes. Measure whether vivid double-counts it and place the scalar on evidence.
+
+        `auto` and `standard` must stay byte-identical throughout; only the paths that load a profile may move.
+        """
+    note """
+        Follows the closed @raw-autotune.work.calibrated-hue-sat-table-candidate-d and the guidance decision @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice, whose consequences slot named these three as deliberate follow-on work rather than side effects.
+        """
+    derived_from [
+        @raw-autotune.decision.vivid-is-a-sony-daylight-look-standard-is-the-hue-faithful-choice,
+        @raw-autotune.observation.bundled-huesatmap-is-unpaired-uninterpolated-and-unchecked
+    ]
+}
+
 record raw-autotune.work.phase-4-backlit-scene-lighting-wiring/1 : work {
     title "Phase 4: in-pipeline scene classifier + SceneLighting fusion, backlit first"
     state superseded
