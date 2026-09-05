@@ -12,25 +12,45 @@
 //! # The two numbers
 //!
 //! **What one image costs.** Peak resident set was measured per file with
-//! `/usr/bin/time -v`, on this corpus, at 0.1.18, with every optional operator
-//! forced on (`--chroma-denoise 2 --local-tone 1`):
+//! `/usr/bin/time`, on this corpus, re-swept at 0.1.19 over 33 frames spanning
+//! 10.0 to 49.9 megapixels and all four sources, with every per-pixel operator
+//! forced on (`--chroma-denoise 2 --local-tone 1 --luma-denoise 2 --sharpen 2
+//! --local-white-balance 1 --night-tone 1 --reference --illuminant
+//! --spatial-highlight-floor 0 --highlight-method harmonic`):
 //!
 //! | frame | pixels | peak RSS | bytes/pixel |
 //! |---|---|---|---|
-//! | `_DSC0883.ARW` | 10.5 MP | 417 MiB | 41.6 |
-//! | `20260729_114901.dng` | 12.5 MP | 479 MiB | 40.2 |
-//! | `_DSC1236.ARW` | 24.3 MP | 913 MiB | 39.3 |
-//! | `_DSC1250.ARW` (ISO 12800) | 24.3 MP | 1216 MiB | **52.4** |
-//! | `20260728_114800.dng` | 49.9 MP | 1882 MiB | 39.5 |
+//! | `_DSC1105.ARW` (noisy) | 10.5 MP | 672 MiB | **60.7** |
+//! | `20260223_192940.dng` (ISO 1600) | 10.0 MP | 638 MiB | 60.3 |
+//! | `_DSC1250.ARW` (ISO 12800) | 24.3 MP | 1464 MiB | 60.3 |
+//! | `_DSC1139.ARW` (ISO 10000) | 24.3 MP | 1463 MiB | 60.3 |
+//! | `proshot.dng` (clean) | 12.5 MP | 570 MiB | 42.5 |
+//! | `20260728_114800.dng` (clean) | 49.9 MP | 2075 MiB | 42.2 |
+//! | `_DSC1027.ARW` (clean) | 10.5 MP | 460 MiB | 39.5 |
 //!
 //! The spread is not noise and not resolution: it is `chroma::apply`, which
 //! allocates a full-resolution `chroma` (12 B/px), `luma` (4 B/px) and
 //! `scratch` (12 B/px) plus the guided stage's `guide` and per-channel `plane`
-//! (4 B/px each) — and which runs only on frames noisy enough to need it. Two
-//! frames of identical dimensions differ twofold in peak memory depending on
-//! their ISO, so the budget has to assume the noisy path always. `--local-tone`
-//! is memory-heavy too but peaks *below* the chroma stage (38.4 B/px against
-//! 52.4 on the same frame), so covering chroma covers it.
+//! (4 B/px each) — and which runs only on frames noisy enough to need it. The
+//! sweep is sharply bimodal for that reason: every frame the chroma stage
+//! engages on lands in 60.3–60.7 B/px whatever its size or source, and every
+//! frame it does not lands in 39.5–42.5. Two frames of identical dimensions
+//! differ by half again depending on their ISO, so the budget has to assume the
+//! noisy path always. `--local-tone` is memory-heavy too but peaks *below* the
+//! chroma stage, so covering chroma covers it.
+//!
+//! The 0.1.18 fit of this table was 52.4 B/px and the constant was set to 56.
+//! By 0.1.19 the real figure had drifted to 60.7 without anything catching it,
+//! so the constant was quietly 8% under the cost it exists to bound. That is
+//! the failure mode of fitting tight, and it is why 68 is now chosen over the
+//! 65 the same rounding rule would give.
+//!
+//! **What the semantic models cost.** `--scene-classify`, `--semantic` and
+//! `--semantic-faces` load an ONNX graph and run it on a fixed 288x192 proxy,
+//! so their cost is a flat per-worker figure and not a per-pixel one: measured
+//! +234 MiB on a 10.5 MP frame, +315 MiB on 24.3 MP and +273 MiB on 49.9 MP.
+//! A process-wide session cache was tried and rejected — it turns a transient
+//! into a resident and moved peak RSS the wrong way (see `CHANGELOG.md`).
 //!
 //! **How much memory there is.** `MemAvailable` on Linux, `ullAvailPhys` on
 //! Windows — the kernel's own estimate of what can be handed out without
@@ -43,14 +63,20 @@
 //! biggest in flight together. Sizing on the batch maximum is the only bound
 //! that holds; sizing on the mean would be wrong exactly when it mattered.
 //!
-//! "Most expensive" is not always "most pixels". Expert RAW is LinearRaw — already
-//! demosaiced in-camera — so `reconstruct_cfa` never runs and the harmonic
-//! 64 B/px reserve would be paid for a solver that cannot run. The planner reads
-//! photometric interpretation from the same TIFF directory it already probes for
-//! dimensions, and a LinearRaw file is budgeted as `Current` even when the
-//! requested method is Harmonic. A mixed batch then takes the max of those
-//! per-file costs: a 24 MP Bayer frame at Harmonic can out-cost a 50 MP
-//! LinearRaw frame at Current, and that is the number `--jobs` is sized on.
+//! Expert RAW is LinearRaw — already demosaiced in-camera — so `reconstruct_cfa`
+//! never runs and a spatial reserve would be paid for a solver that cannot run.
+//! The planner reads photometric interpretation from the same TIFF directory it
+//! already probes for dimensions, and a LinearRaw file is budgeted as `Current`
+//! even when the requested method is Harmonic. A mixed batch then takes the max
+//! of those per-file costs.
+//!
+//! When the harmonic reserve was 64 B/px — more than the entire per-pixel budget
+//! — that discount was large enough to invert the ordering: a 24 MP Bayer frame
+//! was budgeted above a 50 MP LinearRaw one, though the measured peaks are
+//! 1464 MiB and 2075 MiB the other way round. Since the reserve was re-fitted to
+//! what the solver actually adds, pixels dominate again and the biggest file
+//! binds, which is the ordinary case a shared queue wants. The discount is still
+//! real, just no longer big enough to reorder files.
 //!
 //! The planner still cannot see the archive-speed spatial floor (that needs a
 //! decode). LinearRaw is knowable from the header; the floor is not.
@@ -70,12 +96,15 @@ use std::str::FromStr;
 
 /// Peak working set per developed pixel, in bytes.
 ///
-/// The measured maximum over the corpus is 52.4 B/px (`_DSC1250.ARW`, ISO
-/// 12800, where the guided chroma stage runs at full radius); the table in the
-/// module documentation has the rest. Rounded up to 56 rather than fitted,
-/// because the cost of overestimating is one fewer worker and the cost of
-/// underestimating is a batch killed hours in.
-pub const PEAK_BYTES_PER_PIXEL: u64 = 56;
+/// The measured maximum over the corpus is 60.7 B/px (`_DSC1105.ARW`, where the
+/// guided chroma stage runs at full radius); the table in the module
+/// documentation has the rest, and the ceiling it describes is structural — the
+/// chroma stage's plane count — rather than a property of one frame. Rounded up
+/// to 68 rather than fitted, because the cost of overestimating is one fewer
+/// worker and the cost of underestimating is a batch killed hours in, and
+/// because the previous value was fitted tightly enough that ordinary feature
+/// work walked past it unnoticed.
+pub const PEAK_BYTES_PER_PIXEL: u64 = 68;
 
 /// Fixed cost of having a file in flight at all, independent of its size:
 /// the decoder's own tables, the memory-mapped source, and the allocator's
@@ -95,6 +124,16 @@ pub const PER_IMAGE_OVERHEAD_BYTES: u64 = 64 << 20;
 /// desktop, filesystem cache, allocator fragmentation, and changes in
 /// availability between planning and the workers reaching their peaks.
 pub const AVAILABLE_PERCENT: u64 = 50;
+
+/// Flat per-worker reserve for the semantic/classifier ONNX graphs.
+///
+/// These run on a fixed-size proxy, so unlike everything else here the cost
+/// does not scale with the image: measured +234 MiB, +315 MiB and +273 MiB on
+/// 10.5, 24.3 and 49.9 megapixel frames respectively, which is one figure with
+/// allocator noise around it rather than three. Charged only when an option
+/// that loads a model is set; before this it was not charged at all, and a
+/// `--scene-classify` batch was budgeted about 28% under what it used.
+pub const SEMANTIC_MODEL_BYTES: u64 = 384 << 20;
 
 /// Additional transient source/output planes reserved for exact-profile
 /// geometry. This is deliberately additive to the measured worst ordinary
@@ -238,7 +277,7 @@ pub fn peak_bytes_for_highlight(
     lens_correction: crate::lens::LensCorrectionMode,
     highlight_method: crate::raw_highlight::HighlightMethod,
 ) -> u64 {
-    peak_bytes_for_input(pixels, lens_correction, highlight_method, true)
+    peak_bytes_for_input(pixels, lens_correction, highlight_method, true, false)
 }
 
 /// Budgeted peak for one file, given whether a spatial estimator can run on it.
@@ -246,11 +285,16 @@ pub fn peak_bytes_for_highlight(
 /// `spatial_possible` is false for LinearRaw (Expert RAW): the mosaic solver
 /// is never called, so the harmonic/pyramid reserve would be fiction. Unknown
 /// or CFA files pass `true` and pay the requested method's extra.
+///
+/// `semantic_models` is true when the run sets an option that loads an ONNX
+/// graph. That cost is flat rather than per-pixel — the models see a fixed
+/// proxy — so it is added once, not multiplied by the frame.
 pub fn peak_bytes_for_input(
     pixels: u64,
     lens_correction: crate::lens::LensCorrectionMode,
     highlight_method: crate::raw_highlight::HighlightMethod,
     spatial_possible: bool,
+    semantic_models: bool,
 ) -> u64 {
     let method = if spatial_possible {
         highlight_method
@@ -264,7 +308,13 @@ pub fn peak_bytes_for_input(
             0
         }
         + method.extra_bytes_per_pixel();
-    PER_IMAGE_OVERHEAD_BYTES.saturating_add(pixels.saturating_mul(bytes_per_pixel))
+    PER_IMAGE_OVERHEAD_BYTES
+        .saturating_add(pixels.saturating_mul(bytes_per_pixel))
+        .saturating_add(if semantic_models {
+            SEMANTIC_MODEL_BYTES
+        } else {
+            0
+        })
 }
 
 /// Memory the operating system says can be handed out without swapping.
@@ -473,6 +523,7 @@ pub fn plan(
         jobs,
         lens_correction,
         crate::raw_highlight::HighlightMethod::Current,
+        false,
     )
 }
 
@@ -481,6 +532,7 @@ pub fn plan_with_highlight_method(
     jobs: &[InputJob],
     lens_correction: crate::lens::LensCorrectionMode,
     highlight_method: crate::raw_highlight::HighlightMethod,
+    semantic_models: bool,
 ) -> Result<Plan, String> {
     let processors = std::thread::available_parallelism()
         .map(|count| count.get())
@@ -498,6 +550,7 @@ pub fn plan_with_highlight_method(
             lens_correction,
             highlight_method,
             probe.spatial_possible,
+            semantic_models,
         ));
         if probe.from_directory {
             probed += 1;
@@ -677,11 +730,41 @@ mod tests {
             crate::lens::LensCorrectionMode::ProfileExact,
             crate::raw_highlight::HighlightMethod::Harmonic,
         );
-        assert_eq!(pyramid - current, pixels * 24);
+        // Against the constants, not against literals: the previous form spelled
+        // 24 and 64 out, so re-fitting the reserves changed the code and the
+        // test that was supposed to check it in the same edit.
+        assert_eq!(
+            pyramid - current,
+            pixels * crate::raw_highlight::HighlightMethod::RawPyramid.extra_bytes_per_pixel()
+        );
         assert_eq!(
             harmonic_profile - current,
-            pixels * (PROFILE_EXTRA_BYTES_PER_PIXEL + 64)
+            pixels
+                * (PROFILE_EXTRA_BYTES_PER_PIXEL
+                    + crate::raw_highlight::HighlightMethod::Harmonic.extra_bytes_per_pixel())
         );
+    }
+
+    #[test]
+    fn the_semantic_model_reserve_is_flat_and_only_charged_when_asked_for() {
+        let lens = crate::lens::LensCorrectionMode::Embedded;
+        let harmonic = crate::raw_highlight::HighlightMethod::Harmonic;
+        let small = 10_507_264;
+        let large = 49_939_200;
+        for pixels in [small, large] {
+            let without = peak_bytes_for_input(pixels, lens, harmonic, true, false);
+            let with = peak_bytes_for_input(pixels, lens, harmonic, true, true);
+            // Flat, because the models see a fixed-size proxy rather than the
+            // frame: a 50 megapixel file pays exactly what a 10 megapixel one
+            // pays.
+            assert_eq!(with - without, SEMANTIC_MODEL_BYTES);
+        }
+        // And the options predicate is what turns it on, so a default run is
+        // not charged for a model it never loads.
+        let mut options = crate::types::RunOptions::automatic(std::path::PathBuf::from("out"));
+        assert!(!options.loads_semantic_models());
+        options.scene_classify = true;
+        assert!(options.loads_semantic_models());
     }
 
     #[test]
@@ -689,30 +772,41 @@ mod tests {
         let pixels = 49_939_200; // 8160×6120 Expert RAW
         let lens = crate::lens::LensCorrectionMode::Embedded;
         let harmonic = crate::raw_highlight::HighlightMethod::Harmonic;
-        let cfa = peak_bytes_for_input(pixels, lens, harmonic, true);
-        let linear = peak_bytes_for_input(pixels, lens, harmonic, false);
+        let cfa = peak_bytes_for_input(pixels, lens, harmonic, true, false);
+        let linear = peak_bytes_for_input(pixels, lens, harmonic, false, false);
         assert_eq!(
             linear,
             peak_bytes_for_highlight(pixels, lens, crate::raw_highlight::HighlightMethod::Current)
         );
-        assert_eq!(cfa - linear, pixels * 64);
+        assert_eq!(
+            cfa - linear,
+            pixels * crate::raw_highlight::HighlightMethod::Harmonic.extra_bytes_per_pixel()
+        );
     }
 
     #[test]
-    fn mixed_batch_ceiling_is_the_max_per_file_cost_not_max_pixels_times_harmonic() {
+    fn linear_raw_is_charged_for_its_pixels_but_not_for_a_solver_it_cannot_run() {
         let lens = crate::lens::LensCorrectionMode::Embedded;
         let harmonic = crate::raw_highlight::HighlightMethod::Harmonic;
         // 50 MP LinearRaw cannot run the solver; 24 MP Bayer can.
-        let linear_50mp = peak_bytes_for_input(49_939_200, lens, harmonic, false);
-        let bayer_24mp = peak_bytes_for_input(24_337_152, lens, harmonic, true);
+        let linear_50mp = peak_bytes_for_input(49_939_200, lens, harmonic, false, false);
+        let bayer_24mp = peak_bytes_for_input(24_337_152, lens, harmonic, true, false);
         let naive = peak_bytes_for_highlight(49_939_200, lens, harmonic);
+        // Until the 2026-09-05 re-fit the harmonic reserve was 64 B/px, more
+        // than the whole per-pixel budget, and it made a 24 megapixel Bayer
+        // frame look more expensive than a 50 megapixel LinearRaw one. It is
+        // not, and the measured peaks say so: 1464 MiB against 2075 MiB. With
+        // the reserve fitted to what the solver actually adds, the biggest file
+        // binds again, which is what a shared queue needs.
         assert!(
-            bayer_24mp > linear_50mp,
-            "24 MP harmonic ({bayer_24mp}) should bind over 50 MP LinearRaw ({linear_50mp})"
+            linear_50mp > bayer_24mp,
+            "50 MP LinearRaw ({linear_50mp}) should bind over 24 MP Bayer ({bayer_24mp})"
         );
+        // The LinearRaw discount is still real: it is charged no spatial
+        // reserve, because `reconstruct_cfa` is never called on it.
         assert!(
-            naive > bayer_24mp,
-            "sizing 50 MP as harmonic ({naive}) over-reserves against the real ceiling ({bayer_24mp})"
+            naive > linear_50mp,
+            "sizing 50 MP as harmonic ({naive}) over-reserves against the real ceiling ({linear_50mp})"
         );
     }
 

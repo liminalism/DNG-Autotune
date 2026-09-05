@@ -164,6 +164,7 @@ fn run_pipeline(
         &jobs,
         options.lens_correction,
         highlight_method,
+        options.loads_semantic_models(),
     )
     .map_err(anyhow::Error::msg)?;
 
