@@ -94,6 +94,17 @@ record raw-autotune.evidence.blown-sky-renders-white-again/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.budget-covers-measurement-20260905/1 : evidence {
+    title "The new budget exceeds every measured peak, tightest margin 1.12x"
+    state verified
+    result pass
+    method observation
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    summary """
+        Working tree at 8a6c8f5. Against the worst-case operator set: 10.5 MP current 0.65 GiB measured / 0.73 GiB budgeted (old 0.61, 0.94x and therefore under); 24.3 MP current 1.39 / 1.60 (old 1.33, 0.96x, under); 24.3 MP with --scene-classify 1.74 / 2.16 (old 2.78); 49.9 MP LinearRaw 2.03 / 3.23 (old 2.67). Across the 33-frame harmonic sweep the tightest budget-to-measured ratio is 1.23x. No case is under.
+        """
+}
+
 record raw-autotune.evidence.c5-acceptance-20260826/1 : evidence {
     title "C5 Rust integration: goldens, byte-identity, determinism, CCT separation"
     state superseded
@@ -508,6 +519,18 @@ record raw-autotune.evidence.default-lege-gpu-build-20260813/1 : evidence {
         """
 }
 
+record raw-autotune.evidence.determinism-jobs-8-20260905/1 : evidence {
+    title "Two --jobs 8 runs agree with each other and with the pre-change baseline"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "two runs of raw-autotune <7 frames> --output {f1,f2} --format png --jobs 8; md5sum compared"
+    summary """
+        Working tree at 8a6c8f5. Images and per-file sidecars are byte-identical between the two runs and to the baseline binary's output; the only summary.json difference is the recorded output path. Every parallel split introduced by this change keeps the arithmetic order inside a pixel or cell unchanged, and the two reductions that cross tasks are an integer count and a boolean any.
+        """
+}
+
 record raw-autotune.evidence.encoder-hints-api-tests/1 : evidence {
     title "Encoder hints API and report tests"
     state verified
@@ -626,6 +649,18 @@ record raw-autotune.evidence.first-principles-highlight-suite-20260809/1 : evide
     artifact "src/synthetic.rs"
     summary """
         All targets passed: 299 library tests plus 10 integration tests. The end-to-end raw-to-render bench covers analytical Bayer fixtures through production demosaic, colour, reconstruction, tone, chroma, white-mix, and gamut checkpoints.
+        """
+}
+
+record raw-autotune.evidence.gate-corpus-unmoved-20260905/1 : evidence {
+    title "The 268-file gate survey is identical field by field after the allocation pass"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "raw-autotune raw/arw raw/raw_old --dry-run --summary {before,after}.json --jobs 6"
+    summary """
+        Working tree at 8a6c8f5. Both binaries built from the same source apart from this change; 268 files, 268 completed, 0 failed in each. Every field of every per-file report and of the batch summary compares equal after dropping elapsed_ms. The survey itself went from 1286.8 s to 196.0 s wall, system time 1430.9 s to 99.3 s, peak RSS 3403 MB to 2900 MB.
         """
 }
 
@@ -804,6 +839,18 @@ record raw-autotune.evidence.harmonic-default-promotion-full-gate-committed-2026
         At committed code 1fb96284, all 307 library and integration/doc tests passed; clippy with warnings denied, formatting, and diff checks were clean.
         """
     author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.harmonic-frame-cost-20260905/1 : evidence {
+    title "_DSC1289 at --jobs 1 falls from 21.94 s to 7.31 s and from 1334 MB to 1056 MB"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "/usr/bin/time -f '%e %U %S %M %R' raw-autotune raw/raw_3rd_batch/_DSC1289.ARW --output out --format jpeg --jobs 1 --overwrite"
+    summary """
+        Working tree at 8a6c8f5, release profile, median of three back-to-back runs of each binary on an idle machine. Wall 21.94 s to 7.31 s, peak RSS 1334116 KB to 1056584 KB, minor page faults 10651218 to 780547, system time 11.71 s to 1.25 s. Stage timing on a second frame put the saving in reconstruct_cfa (3941 ms to 541 ms), propagate_mosaic_confidence (862 ms to 99 ms) and sharpen (250 ms to 66 ms).
+        """
 }
 
 record raw-autotune.evidence.harmonic-leverage-abstention-20260809/1 : evidence {
@@ -1254,6 +1301,18 @@ record raw-autotune.evidence.night-low-light-render-improvement-20260810/1 : evi
     author "GitHub Uploader"
 }
 
+record raw-autotune.evidence.onnx-session-cache-rejected-20260905/1 : evidence {
+    title "Caching the ONNX sessions saves no time and raises peak RSS"
+    state verified
+    result fail
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "raw-autotune <4 frames> --output out --format jpeg --jobs {1,4} --overwrite --scene-classify --illuminant"
+    summary """
+        Working tree at 8a6c8f5. Every inference site calls OnnxSession::from_path per image, so a process-wide cache keyed by path was implemented (OnnxSession is an Arc<PreparedGraph> of immutable data and is Send+Sync, which the static's bound checks). Measured over four frames: 19.16 s to 19.75 s at --jobs 1, and peak RSS 1354 MB to 1592 MB at --jobs 1 and 2353 MB to 2740 MB at --jobs 4. The ~300 MiB is the inference workspace, not the graph, so loading was already cheap and caching only converts a transient into a resident. Reverted; recorded so it is not retried.
+        """
+}
+
 record raw-autotune.evidence.pairing-the-profile-removes-the-hue-rotation-20260829/1 : evidence {
     title "Pairing the HueSatMap with its own ForwardMatrix removes 78% of the blue rotation and 94% of the warm rotation"
     state verified
@@ -1264,6 +1323,18 @@ record raw-autotune.evidence.pairing-the-profile-removes-the-hue-rotation-202608
     artifact "docs/evidence/huesatmap-calibration-20260829/README.md"
     summary """
         Same 102 RAW+JPEG pairs, same binary, three arms. Against `--preset standard` on the same pixels, `--preset vivid` goes from chroma x1.462 / blue hue +15.16 deg / warm hue +9.60 deg to x1.109 / +3.38 deg / +0.62 deg once the DCP's own ColorMatrix/ForwardMatrix drive the conversion. Overshoot on the camera's own C*>40 pixels falls from 25.5% to 4.7%, and chroma there rises from standard's 0.698 to 0.753. raw/indoor_tungsten, the set the missing illuminant interpolation hurt most, flips from 10.9 deg worse than standard on blue hue bias (+24.52 vs +13.65) to 5.2 deg better (+8.49). All 86 Sony frames now report an interpolated table with a scene CCT where all 86 previously read illuminant2 with none.
+        """
+}
+
+record raw-autotune.evidence.peak-bytes-per-pixel-resweep-20260905/1 : evidence {
+    title "The re-swept corpus maximum is 60.7 B/px, above the 56 the planner budgeted"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "/usr/bin/time -f '%e %M' raw-autotune <frame> --output out --format jpeg --jobs 1 --overwrite --chroma-denoise 2 --local-tone 1 --luma-denoise 2 --sharpen 2 --local-white-balance 1 --night-tone 1 --reference --illuminant --spatial-highlight-floor 0 --highlight-method harmonic"
+    summary """
+        Working tree at 8a6c8f5. 33 frames spanning 10.0-49.9 MP across Sony ARW, Samsung Expert RAW, ProShot and camera Pro mode. Distribution is bimodal: 60.3-60.7 B/px wherever the guided chroma stage engages, 39.5-42.5 where it does not, independent of size and source. Max 60.7 (_DSC1105.ARW). The 0.1.18 fit of the same table was 52.4, so the constant had drifted 8% under. The under-budget is present in the parent commit's binary too and is not caused by the allocation pass.
         """
 }
 
@@ -1336,6 +1407,18 @@ record raw-autotune.evidence.raw-highlight-invariants-20260809/1 : evidence {
     artifact "src/raw_highlight.rs"
     summary """
         Five focused tests passed: no-clipping bit exactness, trusted-CFA-site and floor invariants, deterministic harmonic reconstruction, analytical sensor-knee inversion without modifying hard-clipped sites, and occlusion containment beyond demosaic support.
+        """
+}
+
+record raw-autotune.evidence.rendered-pixels-unmoved-20260905/1 : evidence {
+    title "Rendered pixels are byte-identical across every stage the change touches"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "raw-autotune <7 frames> --output out --format png --jobs 8 --overwrite; md5sum"
+    summary """
+        Working tree at 8a6c8f5. Seven frames chosen to cover the harmonic solver (_DSC1289, 623593 clipped sites, 399 regions; _DSC1292 extremely bright), the declined/Current path (_DSC1309 night), the preview-guided and backlit arms (_DSC1236, _DSC1332, _DSC1132) and the non-Sony ProShot DNG decode path. All seven PNGs and their sidecars have the same MD5 before and after. _DSC1289's JPEG at --jobs 1 is likewise identical.
         """
 }
 
@@ -1585,6 +1668,18 @@ record raw-autotune.evidence.scene-visual-audit/2 : evidence {
     author "GitHub Uploader"
 }
 
+record raw-autotune.evidence.scheduling-effect-and-identity-20260905/1 : evidence {
+    title "13 workers instead of 8 at the same availability, with byte-identical output"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "raw-autotune <60 raw/arw frames> --output out --format jpeg --jobs auto --overwrite"
+    summary """
+        Working tree at 8a6c8f5. Run back to back twice per binary at ~21 GiB available: old constants 8 workers, 44.5-46.8 s wall, 3.7-3.9 GB peak; new constants 13 workers, 41.9-42.2 s wall, 6.3 GB peak against a 10.8 GiB budget. All 60 rendered JPEGs and their sidecars are byte-identical between the two, as they must be. Wall clock gains only ~7% here because a 20-core machine is already CPU-saturated at 8 workers; the change matters where the old numbers forced one or two workers. The 268-file gate survey is identical field by field to the pre-change baseline, in 171.6 s against 1286.8 s.
+        """
+}
+
 record raw-autotune.evidence.semantic-inference-is-observational-20260813/1 : evidence {
     title "Enabling semantic inference added only the declared schema-20 scene evidence and semantic limitation: output PNG bytes were identical, and all other sidecar fields were identical after removing path/schema/scene/limitations."
     state superseded
@@ -1610,6 +1705,18 @@ record raw-autotune.evidence.semantic-inference-is-observational-20260813/2 : ev
         """
     supersedes [ @raw-autotune.evidence.semantic-inference-is-observational-20260813/1 ]
     author "GitHub Uploader"
+}
+
+record raw-autotune.evidence.semantic-model-reserve-20260905/1 : evidence {
+    title "The semantic ONNX models cost a flat ~300 MiB per worker and were unbudgeted"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "/usr/bin/time -f '%M' raw-autotune <frame> <worst-case flags> --scene-classify --jobs 1"
+    summary """
+        Working tree at 8a6c8f5. --scene-classify adds +234 MiB at 10.5 MP, +315 MiB at 24.3 MP and +273 MiB at 49.9 MP: flat, because the models run on a fixed 288x192 proxy, and the 49.9 MP frame adds less than the 24.3 MP one. SEMANTIC_MODEL_BYTES is 384 MiB, charged once per worker when RunOptions::loads_semantic_models is true. At --highlight-method current --scene-classify the old budget was 31% under what the run used.
+        """
 }
 
 record raw-autotune.evidence.semantic-pixel-identity-20260813/1 : evidence {
@@ -2543,6 +2650,18 @@ record raw-autotune.evidence.spatial-floor-declines-to-the-current-path-20260826
         """
 }
 
+record raw-autotune.evidence.spatial-reserve-resweep-20260905/1 : evidence {
+    title "The spatial estimators now add at most 1.89 B/px, against reserves of 64 and 24"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "/usr/bin/time -f '%M' raw-autotune <frame> --highlight-method {current,raw-pyramid,harmonic} --spatial-highlight-floor 0 <worst-case flags> --jobs 1"
+    summary """
+        Working tree at 8a6c8f5. Difference against the same frame at --highlight-method current: harmonic +1.89 / +0.97 / +0.26 B/px and raw-pyramid +0.16 / +0.25 / +0.75 B/px on _DSC1139 (24.3 MP), _DSC1289 (24.3 MP, 623593 clipped sites) and _DSC1105 (10.5 MP). Both reserves set to 8, about four times the worst measurement. At the old 64 the planner budgeted a 24 MP Bayer frame above a 50 MP Expert RAW one although the measured peaks are 1464 MiB and 2075 MiB the other way round.
+        """
+}
+
 record raw-autotune.evidence.standard-global-saturation-is-not-a-double-count-20260829/1 : evidence {
     title "Removing `standard`'s global saturation scalar under vivid makes every measure worse, so the calibrated table is not duplicating it"
     state verified
@@ -2579,6 +2698,30 @@ record raw-autotune.evidence.standard-vivid-preset-suite-20260828/1 : evidence {
     artifact "src/cli.rs"
     summary """
         All 398 tests passed (383 library, 15 integration/golden); preset regressions confirm auto stays default, standard has no HueSatMap, vivid loads the embedded public-domain A7C HueSatMap, and punchy aliases standard.
+        """
+}
+
+record raw-autotune.evidence.tests-lints-clean-20260905/1 : evidence {
+    title "407 tests, clippy and fmt clean, with the in-place solve's rollback path covered"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "cargo test --release && cargo clippy --all-targets --release && cargo fmt --check"
+    summary """
+        Working tree at 8a6c8f5. 388 lib tests plus the integration suites pass; clippy reports only three pre-existing warnings in examples/probe-highlight-gt.rs, which this change does not touch; fmt is clean. a_failed_direct_solve_leaves_the_buffer_untouched solves one channel and then poisons the next channel's right-hand side, asserting both the pixel buffer and the scratch return unchanged; it fails when the rollback is disabled, which was verified by disabling it.
+        """
+}
+
+record raw-autotune.evidence.tests-lints-clean-planner-20260905/1 : evidence {
+    title "408 tests, clippy and fmt clean after the budget re-fit"
+    state verified
+    result pass
+    method command
+    observed_at git:8a6c8f59aabfb65020cb1103ce448f92017759d7
+    command "cargo test --release && cargo clippy --all-targets --release && cargo fmt --check"
+    summary """
+        Working tree at 8a6c8f5. 389 lib tests plus the integration suites pass; clippy reports only the three pre-existing warnings in examples/probe-highlight-gt.rs, untouched by this work; fmt is clean. the_semantic_model_reserve_is_flat_and_only_charged_when_asked_for checks that a 50 megapixel file pays the same model reserve as a 10 megapixel one and that a default RunOptions is not charged for it. spatial_highlight_reserves_are_additive_with_exact_lens_profiles and linear_raw_does_not_reserve_harmonic_bytes now assert against HighlightMethod::extra_bytes_per_pixel rather than the literals 24 and 64, so a future re-fit cannot silently update the code and its own check together.
         """
 }
 

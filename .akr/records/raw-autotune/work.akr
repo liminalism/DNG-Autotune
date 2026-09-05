@@ -1378,6 +1378,125 @@ record raw-autotune.work.recommended-approach/1 : work {
     }
 }
 
+record raw-autotune.work.refit-the-batch-memory-budget/1 : work {
+    title "Re-fit the per-image memory budget the batch planner sizes --jobs against"
+    state completed
+    scope [
+        path "src/main.rs",
+        path "src/memory.rs",
+        path "src/raw_highlight.rs",
+        path "src/types.rs"
+    ]
+    intent """
+        `PEAK_BYTES_PER_PIXEL` was fitted at 0.1.18 from a corpus maximum of 52.4 B/px and set to 56; re-measuring at 0.1.19 puts the real maximum at 60.7, so the planner was budgeting under the cost it exists to bound on the one path that carries no other reserve. In the other direction, the spatial-estimator reserves (64 and 24 B/px) were fitted when the harmonic solver's transient was the tallest thing in the process, which it no longer is, and they were large enough to budget a 24 MP Bayer frame above a 50 MP Expert RAW one against the measured peaks. The semantic ONNX models were not budgeted at all. Re-fit all three from measurement and give the flat model cost a line item of its own.
+        """
+    target 2026-09-05
+    note """
+        Follows @raw-autotune.work.render-path-allocation-and-parallelism-pass, which is what made the spatial reserves obsolete. The under-budget on the Current path predates both and is not caused by either.
+        """
+    acceptance {
+        check budget-covers-measurement {
+            statement """
+                For every frame in the re-swept corpus, under the worst-case operator set, the budgeted peak exceeds the measured peak; the tightest margin is stated.
+                """
+            method command
+            command "/usr/bin/time -f '%e %M' raw-autotune <frame> --output out --format jpeg --jobs 1 --overwrite <worst-case flags>"
+            verified_by [ @raw-autotune.evidence.budget-covers-measurement-20260905/1 ]
+        }
+        check constants-derived-not-guessed {
+            statement """
+                Each constant's doc comment carries the measurement it was fitted from, and the planner tests assert against the constants rather than spelling their values out.
+                """
+            method manual
+            verified_by [ @raw-autotune.evidence.peak-bytes-per-pixel-resweep-20260905/1 ]
+        }
+        check output-unchanged {
+            statement """
+                Worker count never reaches the render path: a real batch produces byte-identical output under the old and new budgets, and the gate survey is unchanged.
+                """
+            method command
+            command "raw-autotune <60 frames> --output out --format jpeg --jobs auto --overwrite; md5sum"
+            verified_by [ @raw-autotune.evidence.scheduling-effect-and-identity-20260905/1 ]
+        }
+        check scheduling-effect-measured {
+            statement """
+                The effect on --jobs auto is measured back to back at the same memory availability, and reported without overclaiming wall-clock gain on a machine that is already CPU-saturated.
+                """
+            method command
+            command "raw-autotune <60 frames> --output out --format jpeg --jobs auto --overwrite"
+            verified_by [ @raw-autotune.evidence.scheduling-effect-and-identity-20260905/1 ]
+        }
+        check tests-and-lints {
+            statement """
+                `cargo test --release`, `cargo clippy --all-targets --release` and `cargo fmt --check` are clean, and a test covers the new flat reserve and the predicate that switches it on.
+                """
+            method command
+            command "cargo test --release && cargo clippy --all-targets --release && cargo fmt --check"
+            verified_by [ @raw-autotune.evidence.tests-lints-clean-planner-20260905/1 ]
+        }
+    }
+}
+
+record raw-autotune.work.render-path-allocation-and-parallelism-pass/1 : work {
+    title "Remove the per-region grid allocations and the serial full-frame loops from the render path"
+    state completed
+    scope [
+        path "src/color.rs",
+        path "src/raw_highlight.rs",
+        path "src/sharpen.rs",
+        path "src/tone.rs"
+    ]
+    intent """
+        Stage timing on a 24 MP A7C frame put 81% of wall clock in `develop`, and 3.9 s of that in `reconstruct_cfa` reconstructing 4 267 clipped photosites out of 24.3 M. The cost was allocation, not arithmetic: `solve_region_direct` took a full-frame working copy and a grid-sized row map per region, and `fully_clipped_components` two more grid-sized buffers, so 69 regions allocated, zeroed and copied roughly 20 GB. Hoist those into one per-frame scratch, solve in place with an undo log, parallelise the full-frame loops that were serial for no reason, and cut the buffers that hold the high-water mark. Output must not move.
+        """
+    target 2026-09-05
+    note """
+        Purely an implementation change: no policy, threshold, constant or rendering decision moves. `HighlightMethod::Harmonic`'s 64 bytes/pixel reserve and `memory::PEAK_BYTES_PER_PIXEL` are deliberately left alone even though the measured peak fell — lowering them is a scheduling decision that wants its own corpus measurement.
+        """
+    acceptance {
+        check deterministic {
+            statement """
+                Two `--jobs 8` runs of the same inputs produce byte-identical images and sidecars, and match the pre-change baseline.
+                """
+            method command
+            command "two --jobs 8 runs to different directories, md5sum compared"
+            verified_by [ @raw-autotune.evidence.determinism-jobs-8-20260905/1 ]
+        }
+        check faster-and-smaller {
+            statement """
+                Wall clock and peak RSS on `_DSC1289` at `--jobs 1`, release profile, are both measurably lower than the parent commit's, measured back to back on the same machine.
+                """
+            method command
+            command "/usr/bin/time -v raw-autotune raw/raw_3rd_batch/_DSC1289.ARW --output out --format jpeg --jobs 1"
+            verified_by [ @raw-autotune.evidence.harmonic-frame-cost-20260905/1 ]
+        }
+        check output-does-not-move {
+            statement """
+                Over `raw/arw` and `raw/raw_old` the `--dry-run --summary` output is identical field by field, ignoring `elapsed_ms`, to the same corpus run on the parent commit's binary.
+                """
+            method command
+            command "raw-autotune raw/arw raw/raw_old --dry-run --summary after.json"
+            verified_by [ @raw-autotune.evidence.gate-corpus-unmoved-20260905/1 ]
+        }
+        check rendered-pixels-identical {
+            statement """
+                Rendered output is byte-identical to the parent commit's on frames that exercise the harmonic solver, the Current estimator, and the sharpen and tone stages.
+                """
+            method command
+            command "md5sum of rendered PNG/JPEG from before and after binaries on the same inputs"
+            verified_by [ @raw-autotune.evidence.rendered-pixels-unmoved-20260905/1 ]
+        }
+        check tests-and-lints {
+            statement """
+                `cargo test --release`, `cargo clippy --all-targets --release` and `cargo fmt --check` are clean, and a regression test covers the in-place solve's rollback path.
+                """
+            method command
+            command "cargo test --release && cargo clippy --all-targets --release && cargo fmt --check"
+            verified_by [ @raw-autotune.evidence.tests-lints-clean-20260905/1 ]
+        }
+    }
+}
+
 record raw-autotune.work.residual-purple-sky-external-scope/1 : work {
     title "Scope residual purple-sky problem for external review"
     state completed
