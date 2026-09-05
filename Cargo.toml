@@ -50,3 +50,14 @@ strip = "symbols"
 inherits = "release"
 debug = true
 strip = false
+
+# Day-to-day testing: release codegen, LTO off for fast rebuilds, symbols kept.
+[profile.debug-release]
+inherits = "release"
+lto = false
+debug = 1
+strip = false
+
+# Alias for the shipping artifact; `release` above already carries thin LTO.
+[profile.release-final]
+inherits = "release"
