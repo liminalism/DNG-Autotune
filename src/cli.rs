@@ -387,7 +387,7 @@ pub struct Cli {
 
     /// Fraction of clipped CFA sites below which a spatial highlight estimator
     /// is skipped and the frame develops on the post-demosaic `current`
-    /// estimator instead. The spatial solvers cost about 20 s and 1.3 GB on a
+    /// estimator instead. The spatial solvers cost about 8 s and 1.05 GB on a
     /// 24 MP frame whether or not anything is clipped, so this is what keeps an
     /// unclipped archive batch cheap. Pass `0` to always solve.
     #[arg(long, value_name = "FRACTION",

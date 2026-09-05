@@ -635,7 +635,6 @@ pub fn render(
     reconstruction_uncertainty: Option<&[f32]>,
     working_to_display: Option<&crate::color::Matrix3>,
 ) -> Rgb16Image {
-    let mut linear = vec![0.0_f32; image.pixels.len() * 3];
     let lut = ToneLut::new(params);
 
     if let Some(local_tone) = local_tone {
@@ -656,30 +655,46 @@ pub fn render(
     // `exp2()` is hoisted out of the loop rather than run ~31M times.
     let base_gain = params.exposure_ev.exp2();
 
-    linear
-        .par_chunks_exact_mut(3)
+    // Rendered and encoded a block at a time, so the display-linear values
+    // never exist as a whole frame: the old full-length `Vec<f32>` cost
+    // 12 B/px (288 MB on a 24 megapixel frame) alive alongside both the
+    // scene-linear input and the `u16` output. `linear_to_srgb_u16_slice` is
+    // element-wise, so blocking it changes nothing about the result, and each
+    // thread reuses one small scratch buffer instead of allocating per block.
+    const BLOCK_PIXELS: usize = 16_384;
+    let mut output = vec![0_u16; image.pixels.len() * 3];
+    output
+        .par_chunks_mut(BLOCK_PIXELS * 3)
+        .zip(image.pixels.par_chunks(BLOCK_PIXELS))
         .enumerate()
-        .zip(image.pixels.par_iter())
-        .for_each(|((index, destination), source)| {
-            let exposure_gain = match local_tone {
-                Some(local_tone) => {
-                    (params.exposure_ev + local_tone.corrections_ev()[index]).exp2()
+        .for_each_init(
+            || vec![0.0_f32; BLOCK_PIXELS * 3],
+            |scratch, (block, (destination, sources))| {
+                let scratch = &mut scratch[..sources.len() * 3];
+                let base = block * BLOCK_PIXELS;
+                for ((offset, slot), source) in scratch.chunks_exact_mut(3).enumerate().zip(sources)
+                {
+                    let index = base + offset;
+                    let exposure_gain = match local_tone {
+                        Some(local_tone) => {
+                            (params.exposure_ev + local_tone.corrections_ev()[index]).exp2()
+                        }
+                        None => base_gain,
+                    };
+                    let uncertainty = reconstruction_uncertainty.map_or(0.0, |map| map[index]);
+                    let rendered = render_pixel_linear(
+                        *source,
+                        params,
+                        &lut,
+                        exposure_gain,
+                        uncertainty,
+                        working_to_display,
+                    );
+                    slot.copy_from_slice(&rendered);
                 }
-                None => base_gain,
-            };
-            let uncertainty = reconstruction_uncertainty.map_or(0.0, |map| map[index]);
-            let rendered = render_pixel_linear(
-                *source,
-                params,
-                &lut,
-                exposure_gain,
-                uncertainty,
-                working_to_display,
-            );
-            destination.copy_from_slice(&rendered);
-        });
-
-    let output = encode_srgb_u16(&linear);
+                linear_srgb::default::linear_to_srgb_u16_slice(scratch, destination);
+            },
+        );
 
     ImageBuffer::from_raw(image.width as u32, image.height as u32, output)
         .expect("rendered buffer dimensions are internally consistent")

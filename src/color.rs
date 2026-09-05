@@ -745,60 +745,66 @@ pub(crate) fn propagate_mosaic_confidence(
     out_w: usize,
     out_h: usize,
 ) -> Vec<[f32; 3]> {
-    let mut out = Vec::with_capacity(out_w * out_h);
-    for y_out in 0..out_h {
-        for x_out in 0..out_w {
-            let x = roi.p.x + x_out;
-            let y = roi.p.y + y_out;
-            let mut acc = [0.0f32; 3];
-            let mut cnt = [0usize; 3];
-            for dy in -1..=1 {
-                for dx in -1..=1 {
-                    let nx = x as i32 + dx;
-                    let ny = y as i32 + dy;
-                    if nx < 0 || ny < 0 || nx >= width as i32 || ny >= height as i32 {
-                        continue;
-                    }
-                    let nx = nx as usize;
-                    let ny = ny as usize;
-                    let color = cfa.cfa_color_at(ny, nx);
-                    let idx = ny * width + nx;
-                    let conf = mosaic_conf[idx];
-                    match color {
-                        rawler::cfa::CFAColor::RED => {
-                            acc[0] += conf;
-                            cnt[0] += 1;
+    // One output row per rayon task. Every output pixel reads `mosaic_conf`
+    // only, so the split is deterministic: the accumulation order inside a
+    // pixel is the 3x3 walk below, whatever thread runs it. Serial, this was
+    // ~0.9 s of a 6.8 s frame — the single largest non-solver cost.
+    let mut out = vec![[0.0f32; 3]; out_w * out_h];
+    out.par_chunks_mut(out_w)
+        .enumerate()
+        .for_each(|(y_out, row)| {
+            for (x_out, pixel) in row.iter_mut().enumerate() {
+                let x = roi.p.x + x_out;
+                let y = roi.p.y + y_out;
+                let mut acc = [0.0f32; 3];
+                let mut cnt = [0usize; 3];
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        let nx = x as i32 + dx;
+                        let ny = y as i32 + dy;
+                        if nx < 0 || ny < 0 || nx >= width as i32 || ny >= height as i32 {
+                            continue;
                         }
-                        rawler::cfa::CFAColor::GREEN => {
-                            acc[1] += conf;
-                            cnt[1] += 1;
+                        let nx = nx as usize;
+                        let ny = ny as usize;
+                        let color = cfa.cfa_color_at(ny, nx);
+                        let idx = ny * width + nx;
+                        let conf = mosaic_conf[idx];
+                        match color {
+                            rawler::cfa::CFAColor::RED => {
+                                acc[0] += conf;
+                                cnt[0] += 1;
+                            }
+                            rawler::cfa::CFAColor::GREEN => {
+                                acc[1] += conf;
+                                cnt[1] += 1;
+                            }
+                            rawler::cfa::CFAColor::BLUE => {
+                                acc[2] += conf;
+                                cnt[2] += 1;
+                            }
+                            _ => {}
                         }
-                        rawler::cfa::CFAColor::BLUE => {
-                            acc[2] += conf;
-                            cnt[2] += 1;
-                        }
-                        _ => {}
                     }
                 }
+                let r = if cnt[0] > 0 {
+                    acc[0] / cnt[0] as f32
+                } else {
+                    0.0
+                };
+                let g = if cnt[1] > 0 {
+                    acc[1] / cnt[1] as f32
+                } else {
+                    0.0
+                };
+                let b = if cnt[2] > 0 {
+                    acc[2] / cnt[2] as f32
+                } else {
+                    0.0
+                };
+                *pixel = [r, g, b];
             }
-            let r = if cnt[0] > 0 {
-                acc[0] / cnt[0] as f32
-            } else {
-                0.0
-            };
-            let g = if cnt[1] > 0 {
-                acc[1] / cnt[1] as f32
-            } else {
-                0.0
-            };
-            let b = if cnt[2] > 0 {
-                acc[2] / cnt[2] as f32
-            } else {
-                0.0
-            };
-            out.push([r, g, b]);
-        }
-    }
+        });
     out
 }
 
@@ -925,8 +931,10 @@ fn demosaic_camera_rgb_with_lens(
                     ));
                     // Recompute per-CFA confidence from the corrected samples
                     if let Some(ref mut mconf) = mosaic_confidence {
+                        // Element-wise and pure, so the parallel collect is the
+                        // same buffer the serial one produced.
                         *mconf = samples
-                            .iter()
+                            .par_iter()
                             .map(|&x| {
                                 const T0: f32 = 0.92;
                                 const T1: f32 = 0.985;

@@ -433,8 +433,8 @@ pub struct RunOptions {
     /// Fraction of clipped CFA sites a frame must carry before a spatial
     /// highlight estimator is run at all. Below it the frame develops on the
     /// post-demosaic `Current` estimator, which is byte-identical to
-    /// `--highlight-method current` and costs neither the solver's ~20 s nor its
-    /// ~1.3 GB. `0` always solves. See
+    /// `--highlight-method current` and costs neither the solver's ~8 s nor its
+    /// ~1.05 GB. `0` always solves. See
     /// [`crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR`].
     pub spatial_highlight_floor: f32,
     /// Use the DNG matrix model (ForwardMatrix/ColorMatrix, CameraCalibration,
@@ -461,6 +461,22 @@ impl RunOptions {
     /// deliberately moves default rendered pixels on frames with essentially no
     /// clipping, so the profile version advances with it.
     pub const AUTO_PROFILE_VERSION: &'static str = "archive-auto-v8";
+
+    /// Whether this run will load an ONNX graph.
+    ///
+    /// The scene classifier, the semantic masks and the C5 illuminant estimator
+    /// each load a model and run it on a fixed proxy, which costs a flat
+    /// [`crate::memory::SEMANTIC_MODEL_BYTES`] per worker on top of the
+    /// per-pixel budget. Read by the memory planner before anything is decoded,
+    /// so it has to be answerable from the options alone.
+    pub fn loads_semantic_models(&self) -> bool {
+        self.semantic
+            || self.semantic_faces
+            || self.scene_classify
+            || self.illuminant
+            || self.semantic_sky_highlights > 0.0
+            || self.semantic_sky_chroma > 0.0
+    }
 
     /// The unattended archive profile shared by the flag CLI and the minimal
     /// interactive front-end. Callers change only explicit user overrides.

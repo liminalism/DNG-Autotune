@@ -58,17 +58,33 @@ impl HighlightMethod {
         !matches!(self, Self::Current)
     }
 
-    /// Transient reserve `memory.rs` sizes `--jobs` against. The harmonic
-    /// figure is measured, not nominal: peak RSS on a 24 MP frame at
-    /// `--jobs 1` is ~1324 MB against ~992 MB for the pre-joint-chromaticity
-    /// path, i.e. ~14 bytes/pixel on top of the previous 48 for the joint
-    /// solver's `initial_uv`/`current_uv`/`next_uv`/`guide`/`output` plus the
-    /// grid's `confidence` and `trust`. Rounded up for headroom.
+    /// Transient reserve `memory.rs` sizes `--jobs` against, on top of
+    /// `memory::PEAK_BYTES_PER_PIXEL`, for what a spatial estimator adds to a
+    /// frame's high-water mark.
+    ///
+    /// These were 24 and 64, fitted when the solver allocated a full-frame
+    /// working copy and a grid-sized row map per connected clipped region and
+    /// its transient was the tallest thing in the process. Since the 2026-09-05
+    /// allocation pass it is not: the solver's whole peak now sits below the
+    /// chroma stage's, and what it adds to the frame's maximum is what is
+    /// measured here. Same worst-case flag set as the `memory.rs` sweep,
+    /// `--spatial-highlight-floor 0` so the solve cannot decline:
+    ///
+    /// | frame | pixels | `raw_pyramid` | `harmonic` |
+    /// |---|---|---|---|
+    /// | `_DSC1139.ARW` | 24.3 MP | +0.16 B/px | +1.89 B/px |
+    /// | `_DSC1289.ARW` (623 593 clipped sites) | 24.3 MP | +0.25 B/px | +0.97 B/px |
+    /// | `_DSC1105.ARW` | 10.5 MP | +0.75 B/px | +0.26 B/px |
+    ///
+    /// 8 is roughly four times the worst of those. It is deliberately not 0:
+    /// the reserve is the line item that makes a future solver's growth visible
+    /// in the budget rather than in an OOM kill, and 8 B/px on a 24 megapixel
+    /// frame is 195 MB — enough to absorb a new full-grid buffer or two.
     pub const fn extra_bytes_per_pixel(self) -> u64 {
         match self {
             Self::Current => 0,
-            Self::RawPyramid => 24,
-            Self::Harmonic => 64,
+            Self::RawPyramid => 8,
+            Self::Harmonic => 8,
         }
     }
 }
@@ -76,11 +92,12 @@ impl HighlightMethod {
 /// Fraction of CFA sites that must read as clipped before a spatial estimator
 /// is worth its cost.
 ///
-/// The spatial solvers are the expensive part of the whole program: on a 24 MP
-/// frame the harmonic path costs ~20.75 s of wall clock and ~1324 MB of peak
-/// RSS at `--jobs 1` (`CHANGELOG.md`, "Joint chromaticity solve"). Almost all of
-/// that is paid whether or not there is anything to reconstruct, because
-/// `build_grid`, `build_pyramid` and `pyramid_prediction` are full-image passes.
+/// The spatial solvers are the expensive part of the whole program: on `_DSC1289`
+/// (24 MP, 623 593 clipped CFA sites) the harmonic path costs ~7.31 s of wall
+/// clock and ~1056 MB of peak RSS at `--jobs 1`, down from ~21.9 s and ~1334 MB
+/// before the 2026-09-05 allocation work (`CHANGELOG.md`). Almost all of that is
+/// paid whether or not there is anything to reconstruct, because `build_grid`,
+/// `build_pyramid` and `pyramid_prediction` are full-image passes.
 /// A frame with a few hundred isolated clipped sites gets nothing back for it,
 /// and the post-demosaic `Current` estimator — the default for the whole life of
 /// the project before the harmonic promotion — already handles isolated clipped
@@ -174,6 +191,43 @@ struct Region {
     boundary: Vec<usize>,
 }
 
+/// Grid-sized scratch buffers reused across every region of one frame.
+///
+/// These used to be allocated inside the per-region helpers, so their cost
+/// scaled with the number of connected clipped regions rather than with how
+/// much of the frame was clipped. On a 24 megapixel frame with 69 regions and
+/// 4 267 clipped photosites that is roughly 20 GB of `vec![...;
+/// grid.value.len()]` allocated, zeroed and (for the solver's working copy)
+/// copied — the largest single cost in the whole pipeline, and most of the
+/// process's minor page faults. Every buffer here is left in its neutral state
+/// by whoever borrows it, so reusing one is indistinguishable from a fresh
+/// allocation.
+struct RegionScratch {
+    /// `usize::MAX` everywhere except while a direct solve is numbering rows.
+    row_of: Vec<usize>,
+    /// `false` everywhere between uses.
+    in_region: Vec<bool>,
+    /// `false` everywhere between uses.
+    seen: Vec<bool>,
+    /// `f32::INFINITY` everywhere between uses.
+    depth: Vec<f32>,
+    /// Cells a direct solve has overwritten, so a failed solve can restore the
+    /// buffer the iterative fallback expects to find untouched.
+    undo: Vec<(usize, usize, f32)>,
+}
+
+impl RegionScratch {
+    fn new(cells: usize) -> Self {
+        Self {
+            row_of: vec![usize::MAX; cells],
+            in_region: vec![false; cells],
+            seen: vec![false; cells],
+            depth: vec![f32::INFINITY; cells],
+            undo: Vec::new(),
+        }
+    }
+}
+
 #[inline]
 fn channel(color: CFAColor) -> Option<usize> {
     match color {
@@ -206,6 +260,18 @@ fn confidence_at(samples: &[f32], confidence: Option<&[f32]>, index: usize) -> f
         .clamp(0.0, 1.0)
 }
 
+/// Per-cell sums for [`build_grid`], kept together so one rayon task can own
+/// a whole grid row without six separate mutable borrows.
+#[derive(Clone, Copy, Default)]
+struct CellAccumulator {
+    sum: [f32; 3],
+    floor: [f32; 3],
+    weighted_sum: [f32; 3],
+    confidence_sum: [f32; 3],
+    trust_sum: [f32; 3],
+    count: [u8; 3],
+}
+
 fn build_grid(
     samples: &[f32],
     confidence: Option<&[f32]>,
@@ -215,57 +281,73 @@ fn build_grid(
 ) -> Grid {
     let grid_width = width.div_ceil(2);
     let grid_height = height.div_ceil(2);
-    let mut sum = vec![[0.0_f32; 3]; grid_width * grid_height];
     let mut floor = vec![[0.0_f32; 3]; grid_width * grid_height];
-    let mut weighted_sum = vec![[0.0_f32; 3]; grid_width * grid_height];
-    let mut confidence_sum = vec![[0.0_f32; 3]; grid_width * grid_height];
-    let mut trust_sum = vec![[0.0_f32; 3]; grid_width * grid_height];
-    let mut count = vec![[0_u8; 3]; grid_width * grid_height];
-
-    for y in 0..height {
-        for x in 0..width {
-            let source = y * width + x;
-            let Some(c) = channel(cfa.cfa_color_at(y, x)) else {
-                continue;
-            };
-            let cell = (y / 2) * grid_width + x / 2;
-            let value = samples[source];
-            let clip = confidence_at(samples, confidence, source);
-            let trust = (1.0 - clip).powi(2);
-            sum[cell][c] += value;
-            floor[cell][c] = floor[cell][c].max(value);
-            weighted_sum[cell][c] += value * trust;
-            confidence_sum[cell][c] += clip;
-            trust_sum[cell][c] += trust;
-            count[cell][c] += 1;
-        }
-    }
-
     let mut value = vec![[0.0_f32; 3]; grid_width * grid_height];
     let mut grid_confidence = vec![[0.0_f32; 3]; grid_width * grid_height];
     let mut trust = vec![[0.0_f32; 3]; grid_width * grid_height];
     let mut valid = vec![[false; 3]; grid_width * grid_height];
-    for i in 0..value.len() {
-        for c in 0..3 {
-            if count[i][c] > 0 {
-                let n = f32::from(count[i][c]);
-                grid_confidence[i][c] = confidence_sum[i][c] / n;
-                trust[i][c] = trust_sum[i][c] / n;
-                value[i][c] = if trust_sum[i][c] > EPSILON {
-                    weighted_sum[i][c] / trust_sum[i][c]
-                } else {
-                    sum[i][c] / n
-                };
-                // This threshold is compatibility topology for the older
-                // pyramid/line-fit luminance initializer. The joint chroma
-                // solve and final per-site application use continuous trust
-                // and confidence instead. Mean confidence deliberately keeps
-                // a Bayer quad with one clean and one clipped green from being
-                // treated as wholly measured.
-                valid[i][c] = grid_confidence[i][c] < VALID_CONFIDENCE_MAX;
-            }
-        }
-    }
+
+    // A Bayer quad maps to exactly one grid row, so a task can own grid row
+    // `gy` together with source rows `2*gy` and `2*gy+1` and touch nothing
+    // else: the accumulation order inside a cell is still row-major over that
+    // quad, so the f32 sums are the ones the serial loop produced. Summing and
+    // finalising in the same pass keeps the accumulators to one row per thread
+    // instead of a whole extra grid (~384 MB on a 24 megapixel frame, live
+    // alongside the five planes below).
+    value
+        .par_chunks_mut(grid_width)
+        .zip(floor.par_chunks_mut(grid_width))
+        .zip(grid_confidence.par_chunks_mut(grid_width))
+        .zip(trust.par_chunks_mut(grid_width))
+        .zip(valid.par_chunks_mut(grid_width))
+        .enumerate()
+        .for_each_init(
+            || vec![CellAccumulator::default(); grid_width],
+            |cells, (grid_y, ((((value, floor), grid_confidence), trust), valid))| {
+                cells.fill(CellAccumulator::default());
+                for y in (2 * grid_y)..(2 * grid_y + 2).min(height) {
+                    for x in 0..width {
+                        let source = y * width + x;
+                        let Some(c) = channel(cfa.cfa_color_at(y, x)) else {
+                            continue;
+                        };
+                        let cell = &mut cells[x / 2];
+                        let sample = samples[source];
+                        let clip = confidence_at(samples, confidence, source);
+                        let site_trust = (1.0 - clip).powi(2);
+                        cell.sum[c] += sample;
+                        cell.floor[c] = cell.floor[c].max(sample);
+                        cell.weighted_sum[c] += sample * site_trust;
+                        cell.confidence_sum[c] += clip;
+                        cell.trust_sum[c] += site_trust;
+                        cell.count[c] += 1;
+                    }
+                }
+                for (i, cell) in cells.iter().enumerate() {
+                    floor[i] = cell.floor;
+                    for c in 0..3 {
+                        if cell.count[c] > 0 {
+                            let n = f32::from(cell.count[c]);
+                            grid_confidence[i][c] = cell.confidence_sum[c] / n;
+                            trust[i][c] = cell.trust_sum[c] / n;
+                            value[i][c] = if cell.trust_sum[c] > EPSILON {
+                                cell.weighted_sum[c] / cell.trust_sum[c]
+                            } else {
+                                cell.sum[c] / n
+                            };
+                            // This threshold is compatibility topology for the
+                            // older pyramid/line-fit luminance initializer. The
+                            // joint chroma solve and final per-site application
+                            // use continuous trust and confidence instead. Mean
+                            // confidence deliberately keeps a Bayer quad with
+                            // one clean and one clipped green from being treated
+                            // as wholly measured.
+                            valid[i][c] = grid_confidence[i][c] < VALID_CONFIDENCE_MAX;
+                        }
+                    }
+                }
+            },
+        );
 
     Grid {
         width: grid_width,
@@ -299,32 +381,39 @@ fn reduce(previous: &PyramidLevel) -> PyramidLevel {
     let mut value = vec![[0.0_f32; 3]; width * height];
     let mut weight = vec![[0.0_f32; 3]; width * height];
 
-    for y in 0..height {
-        for x in 0..width {
-            let out = y * width + x;
-            for (ky, &kernel_y) in PYRAMID_KERNEL.iter().enumerate() {
-                let sy = mirror(2 * y as isize + ky as isize - 2, previous.height);
-                for (kx, &kernel_x) in PYRAMID_KERNEL.iter().enumerate() {
-                    let sx = mirror(2 * x as isize + kx as isize - 2, previous.width);
-                    let source = sy * previous.width + sx;
-                    let kernel = kernel_y * kernel_x;
-                    for c in 0..3 {
-                        let w = kernel * previous.weight[source][c];
-                        value[out][c] += previous.value[source][c] * w;
-                        weight[out][c] += w;
+    // Each output row reads `previous` only, so a row per task is deterministic
+    // and the tap order inside a pixel is unchanged.
+    value
+        .par_chunks_mut(width)
+        .zip(weight.par_chunks_mut(width))
+        .enumerate()
+        .for_each(|(y, (value_row, weight_row))| {
+            for (x, (value, weight)) in value_row.iter_mut().zip(weight_row.iter_mut()).enumerate()
+            {
+                for (ky, &kernel_y) in PYRAMID_KERNEL.iter().enumerate() {
+                    let sy = mirror(2 * y as isize + ky as isize - 2, previous.height);
+                    for (kx, &kernel_x) in PYRAMID_KERNEL.iter().enumerate() {
+                        let sx = mirror(2 * x as isize + kx as isize - 2, previous.width);
+                        let source = sy * previous.width + sx;
+                        let kernel = kernel_y * kernel_x;
+                        for c in 0..3 {
+                            let w = kernel * previous.weight[source][c];
+                            value[c] += previous.value[source][c] * w;
+                            weight[c] += w;
+                        }
+                    }
+                }
+                for c in 0..3 {
+                    if weight[c] > EPSILON {
+                        value[c] /= weight[c];
+                        // A propagated value has one vote at the next scale.
+                        // The absolute kernel mass is irrelevant after
+                        // renormalisation.
+                        weight[c] = 1.0;
                     }
                 }
             }
-            for c in 0..3 {
-                if weight[out][c] > EPSILON {
-                    value[out][c] /= weight[out][c];
-                    // A propagated value has one vote at the next scale.  The
-                    // absolute kernel mass is irrelevant after renormalisation.
-                    weight[out][c] = 1.0;
-                }
-            }
-        }
-    }
+        });
 
     PyramidLevel {
         width,
@@ -402,15 +491,21 @@ fn knee_reference_line(grid: &Grid, target: usize, guide: usize) -> Option<LineF
 /// Infer a raise-only inverse for a smooth sensor shoulder. Hard-clipped sites
 /// are deliberately excluded; this stage may recover roll-off but cannot
 /// manufacture information beyond the white level.
+///
+/// `original` is the caller's untouched copy of `samples`; this stage reads the
+/// pre-knee value at every site while writing the lifted one, and the caller
+/// already holds exactly that copy, so taking it here avoids a second
+/// full-mosaic clone (~97 MB on a 24 megapixel frame).
 fn apply_sensor_knee(
     samples: &mut [f32],
+    original: &[f32],
     confidence: Option<&[f32]>,
     width: usize,
     height: usize,
     cfa: &CFA,
 ) -> usize {
-    let original = samples.to_vec();
-    let grid = build_grid(&original, None, width, height, cfa);
+    debug_assert_eq!(samples.len(), original.len());
+    let grid = build_grid(original, None, width, height, cfa);
     let mut lifts = [[0.0_f32; KNEE_BINS]; 3];
     let mut accepted = [[false; KNEE_BINS]; 3];
 
@@ -462,39 +557,47 @@ fn apply_sensor_knee(
         }
     }
 
-    let mut corrected_sites = 0_usize;
-    for y in 0..height {
-        for x in 0..width {
-            let i = y * width + x;
-            let Some(c) = channel(cfa.cfa_color_at(y, x)) else {
-                continue;
-            };
-            let value = original[i];
-            if !(KNEE_LOW..KNEE_HIGH).contains(&value) {
-                continue;
-            }
-            let bin = (((value - KNEE_LOW) / (KNEE_HIGH - KNEE_LOW) * KNEE_BINS as f32).floor()
-                as usize)
-                .min(KNEE_BINS - 1);
-            if accepted[c][bin] {
-                // An explicit per-site zero means "do not touch"; honour that
-                // as a veto. Do not scale the lift by clip confidence: this
-                // stage inverts a measured shoulder over [KNEE_LOW,
-                // KNEE_HIGH), which begins well below CLIP_RAMP_LOW, so a clip
-                // ramp would zero the correction across most of the stage's own
-                // range and apply a fraction of an analytic inverse above it.
-                // `accepted[c][bin]` is already the evidence gate.
-                if confidence.is_some_and(|map| map[i] <= 0.0) {
+    // One row per task: every site reads `original` and writes only its own
+    // `samples[i]`, and the total is a sum of per-row counts, so the split
+    // changes neither the pixels nor the reported figure.
+    let corrected_sites: usize = samples
+        .par_chunks_mut(width)
+        .enumerate()
+        .map(|(y, row)| {
+            let mut corrected_sites = 0_usize;
+            for (x, sample) in row.iter_mut().enumerate() {
+                let i = y * width + x;
+                let Some(c) = channel(cfa.cfa_color_at(y, x)) else {
+                    continue;
+                };
+                let value = original[i];
+                if !(KNEE_LOW..KNEE_HIGH).contains(&value) {
                     continue;
                 }
-                let corrected = value + lifts[c][bin];
-                if corrected > samples[i] {
-                    samples[i] = corrected;
-                    corrected_sites += 1;
+                let bin = (((value - KNEE_LOW) / (KNEE_HIGH - KNEE_LOW) * KNEE_BINS as f32).floor()
+                    as usize)
+                    .min(KNEE_BINS - 1);
+                if accepted[c][bin] {
+                    // An explicit per-site zero means "do not touch"; honour that
+                    // as a veto. Do not scale the lift by clip confidence: this
+                    // stage inverts a measured shoulder over [KNEE_LOW,
+                    // KNEE_HIGH), which begins well below CLIP_RAMP_LOW, so a clip
+                    // ramp would zero the correction across most of the stage's own
+                    // range and apply a fraction of an analytic inverse above it.
+                    // `accepted[c][bin]` is already the evidence gate.
+                    if confidence.is_some_and(|map| map[i] <= 0.0) {
+                        continue;
+                    }
+                    let corrected = value + lifts[c][bin];
+                    if corrected > *sample {
+                        *sample = corrected;
+                        corrected_sites += 1;
+                    }
                 }
             }
-        }
-    }
+            corrected_sites
+        })
+        .sum();
     corrected_sites
 }
 
@@ -881,8 +984,11 @@ fn continuous_luminance_support(grid: &Grid, region: &Region) -> [f32; 3] {
     [rg.max(rb), rg.max(gb), rb.max(gb)]
 }
 
-fn depth_map(grid: &Grid, region: &Region) -> Vec<f32> {
-    let mut depth = vec![f32::INFINITY; grid.value.len()];
+/// Breadth-first distance from the region's rim, written into `depth`.
+///
+/// `depth` arrives all-`INFINITY` and is left that way by [`clear_depth`] once
+/// the caller has read it; only the region's own cells are ever written.
+fn depth_map(grid: &Grid, region: &Region, depth: &mut [f32]) {
     let mut queue = VecDeque::new();
     for &i in &region.boundary {
         depth[i] = 1.0;
@@ -905,15 +1011,26 @@ fn depth_map(grid: &Grid, region: &Region) -> Vec<f32> {
             }
         }
     }
-    depth
 }
 
-fn fully_clipped_components(grid: &Grid, region: &Region) -> Vec<Region> {
-    let mut in_region = vec![false; grid.value.len()];
+/// Undo [`depth_map`]: only rim and region cells can have been written.
+fn clear_depth(region: &Region, depth: &mut [f32]) {
+    for &i in region.boundary.iter().chain(&region.cells) {
+        depth[i] = f32::INFINITY;
+    }
+}
+
+fn fully_clipped_components(
+    grid: &Grid,
+    region: &Region,
+    scratch: &mut RegionScratch,
+) -> Vec<Region> {
+    let RegionScratch {
+        in_region, seen, ..
+    } = scratch;
     for &i in &region.cells {
         in_region[i] = true;
     }
-    let mut seen = vec![false; grid.value.len()];
     let mut cores = Vec::new();
     for &seed in &region.cells {
         // Domes are reserved for hard-clipped cores with no surviving local
@@ -956,6 +1073,12 @@ fn fully_clipped_components(grid: &Grid, region: &Region) -> Vec<Region> {
         }
         core.cells.sort_unstable();
         cores.push(core);
+    }
+    // `seen` is only ever set inside the region, so clearing the region clears
+    // the buffer for the next one.
+    for &i in &region.cells {
+        in_region[i] = false;
+        seen[i] = false;
     }
     cores
 }
@@ -1080,13 +1203,15 @@ fn solve_region_direct(
     region: &Region,
     fits: [Option<LineFit>; 3],
     current: &mut [[f32; 3]],
+    scratch: &mut RegionScratch,
 ) -> bool {
     // Bound the system by what it actually solves for. Gating on
     // `region.cells.len()` rejected regions on padding that is not even
     // unknown, which the widened `affected` predicate in `regions()` made
     // common: a region that fits comfortably would fall into the 300-sweep
     // iterative path on trusted cells alone. The per-channel check below is
-    // the real guard; this one only avoids the full-image clone that follows.
+    // the real guard; this one only avoids assembling a system that cannot be
+    // used.
     let widest_unknown = (0..3)
         .map(|target| {
             region
@@ -1100,7 +1225,12 @@ fn solve_region_direct(
     if widest_unknown > DIRECT_SOLVE_MAX_UNKNOWNS {
         return false;
     }
-    let mut candidate = current.to_vec();
+    // Edited in place. This used to work on a full-frame `current.to_vec()`
+    // per region — 144 MB copied for a few thousand solved cells — but the only
+    // writes are to `unknown`, and the old code copied exactly those cells back
+    // on success. Recording them instead lets a failed solve restore the buffer
+    // the iterative fallback expects, at the cost of one entry per solved cell.
+    scratch.undo.clear();
     let mut channels = [0_usize, 1, 2];
     // Channels with the most missing data are evaluated last so they can use
     // the already solved guides.
@@ -1123,9 +1253,10 @@ fn solve_region_direct(
             continue;
         }
         if unknown.len() > DIRECT_SOLVE_MAX_UNKNOWNS {
+            roll_back(current, &mut scratch.undo);
             return false;
         }
-        let mut row_of = vec![usize::MAX; grid.value.len()];
+        let row_of = &mut scratch.row_of;
         for (row, &cell) in unknown.iter().enumerate() {
             row_of[cell] = row;
         }
@@ -1139,12 +1270,12 @@ fn solve_region_direct(
                 || {
                     (0..3)
                         .filter(|&c| c != target)
-                        .max_by(|&a, &b| candidate[i][a].total_cmp(&candidate[i][b]))
+                        .max_by(|&a, &b| current[i][a].total_cmp(&current[i][b]))
                         .unwrap_or((target + 1) % 3)
                 },
                 |fit| fit.guides[0],
             );
-            let guide_scale = candidate[i][guide].abs().max(0.05);
+            let guide_scale = current[i][guide].abs().max(0.05);
             let mut diagonal = 1.0e-8_f64;
             for (dx, dy) in [(1_isize, 0_isize), (-1, 0), (0, 1), (0, -1)] {
                 let nx = mirror(x as isize + dx, grid.width);
@@ -1153,14 +1284,14 @@ fn solve_region_direct(
                 if n == i {
                     continue;
                 }
-                let delta = (candidate[i][guide] - candidate[n][guide]).abs();
+                let delta = (current[i][guide] - current[n][guide]).abs();
                 let weight = (-(delta / (GUIDE_K * guide_scale)).powi(2))
                     .exp()
                     .max(WEIGHT_FLOOR);
                 diagonal += f64::from(weight);
                 let other_row = row_of[n];
                 if other_row == usize::MAX {
-                    rhs[row] += f64::from(weight * candidate[n][target]);
+                    rhs[row] += f64::from(weight * current[n][target]);
                 } else if other_row < row {
                     triplets.push(Triplet::new(row, other_row, -f64::from(weight)));
                 }
@@ -1170,11 +1301,15 @@ fn solve_region_direct(
                 diagonal += f64::from(weight);
                 rhs[row] += f64::from(
                     weight
-                        * fit_data(line, &candidate, i, grid.valid[i] != [false; 3])
+                        * fit_data(line, current, i, grid.valid[i] != [false; 3])
                             .max(grid.floor[i][target]),
                 );
             }
             triplets.push(Triplet::new(row, row, diagonal));
+        }
+        // Left neutral for the next channel and the next region.
+        for &cell in &unknown {
+            row_of[cell] = usize::MAX;
         }
 
         let Ok(matrix) = SparseColMat::<usize, f64>::try_new_from_triplets(
@@ -1182,9 +1317,11 @@ fn solve_region_direct(
             unknown.len(),
             &triplets,
         ) else {
+            roll_back(current, &mut scratch.undo);
             return false;
         };
         let Ok(cholesky) = matrix.sp_cholesky(Side::Lower) else {
+            roll_back(current, &mut scratch.undo);
             return false;
         };
         let rhs = Col::from_fn(unknown.len(), |row| rhs[row]);
@@ -1192,21 +1329,32 @@ fn solve_region_direct(
         for (row, &i) in unknown.iter().enumerate() {
             let value = solution[row] as f32;
             if !value.is_finite() {
+                roll_back(current, &mut scratch.undo);
                 return false;
             }
-            candidate[i][target] = value.max(grid.floor[i][target]);
+            scratch.undo.push((i, target, current[i][target]));
+            current[i][target] = value.max(grid.floor[i][target]);
         }
     }
 
-    for &i in &region.cells {
-        current[i] = candidate[i];
-    }
     true
 }
 
-fn apply_luminance_domes(grid: &Grid, cores: &[Region], current: &mut [[f32; 3]]) {
+/// Restore every cell a failed direct solve wrote, newest first.
+fn roll_back(current: &mut [[f32; 3]], undo: &mut Vec<(usize, usize, f32)>) {
+    for (i, target, value) in undo.drain(..).rev() {
+        current[i][target] = value;
+    }
+}
+
+fn apply_luminance_domes(
+    grid: &Grid,
+    cores: &[Region],
+    current: &mut [[f32; 3]],
+    depth: &mut [f32],
+) {
     for core in cores {
-        let depth = depth_map(grid, core);
+        depth_map(grid, core, depth);
         let (rim, slope) = dome_model(grid, core, current);
         for &i in &core.cells {
             let old_luma = current[i].iter().sum::<f32>() / 3.0;
@@ -1217,17 +1365,22 @@ fn apply_luminance_domes(grid: &Grid, cores: &[Region], current: &mut [[f32; 3]]
                 current[i][c] = (current[i][c] * scale).max(grid.floor[i][c]);
             }
         }
+        clear_depth(core, depth);
     }
 }
 
 fn harmonic_prediction(
     grid: &Grid,
-    pyramid: &[[f32; 3]],
+    pyramid: Vec<[f32; 3]>,
     all_regions: &[Region],
     _white_balance: [f32; 3],
 ) -> (Vec<[f32; 3]>, Vec<[f32; 3]>, f32, usize, usize) {
-    let mut current = pyramid.to_vec();
+    // Taken by value: the pyramid prediction is this solve's starting point and
+    // has no other reader once the harmonic arm is chosen, so copying it would
+    // only add a second full grid (~72 MB) to the frame's high-water mark.
+    let mut current = pyramid;
     let mut luminance_support = vec![[1.0_f32; 3]; grid.value.len()];
+    let mut scratch = RegionScratch::new(grid.value.len());
     let mut fit_quality_sum = 0.0_f64;
     let mut fit_count = 0_usize;
     let mut full_cores = 0_usize;
@@ -1260,11 +1413,11 @@ fn harmonic_prediction(
             fit_quality_sum += f64::from(fit.r2);
             fit_count += 1;
         }
-        let cores = fully_clipped_components(grid, region);
+        let cores = fully_clipped_components(grid, region, &mut scratch);
         full_cores += cores.len();
 
-        if solve_region_direct(grid, region, fits, &mut current) {
-            apply_luminance_domes(grid, &cores, &mut current);
+        if solve_region_direct(grid, region, fits, &mut current, &mut scratch) {
+            apply_luminance_domes(grid, &cores, &mut current, &mut scratch.depth);
             continue;
         }
         solver_fallbacks += 1;
@@ -1318,7 +1471,7 @@ fn harmonic_prediction(
             }
             std::mem::swap(&mut current, &mut next);
         }
-        apply_luminance_domes(grid, &cores, &mut current);
+        apply_luminance_domes(grid, &cores, &mut current, &mut scratch.depth);
     }
 
     let mean_fit = if fit_count == 0 {
@@ -1911,20 +2064,17 @@ pub fn reconstruct_cfa(
     );
     let confidence = confidence.filter(|map| map.len() == samples.len());
     let strength = strength.clamp(0.0, 1.0);
-    let original = samples.to_vec();
     // One pass, not two: both counts read the same per-sample confidence, and
-    // at 24 M samples the second scan is pure duplicate work.
-    let mut clipped_cfa_sites = 0_usize;
-    let mut has_reconstruction_authority = false;
-    for i in 0..samples.len() {
-        let site = confidence_at(&original, confidence, i);
-        if site >= VALID_CONFIDENCE_MAX {
-            clipped_cfa_sites += 1;
-        }
-        if site > 0.0 {
-            has_reconstruction_authority = true;
-        }
-    }
+    // at 24 M samples the second scan is pure duplicate work. A count and an
+    // "any" are both order-independent, so splitting the scan across the pool
+    // reports the same pair the serial walk did.
+    let (clipped_cfa_sites, has_reconstruction_authority) = (0..samples.len())
+        .into_par_iter()
+        .map(|i| {
+            let site = confidence_at(samples, confidence, i);
+            (usize::from(site >= VALID_CONFIDENCE_MAX), site > 0.0)
+        })
+        .reduce(|| (0_usize, false), |a, b| (a.0 + b.0, a.1 || b.1));
     if !has_reconstruction_authority || strength == 0.0 {
         return Ok(RawHighlightReport {
             method,
@@ -1950,17 +2100,26 @@ pub fn reconstruct_cfa(
         });
     }
 
+    // Taken here rather than before the gate above: this is the first point at
+    // which the pre-reconstruction mosaic is actually read, and a declined
+    // frame would otherwise pay ~97 MB and a full copy for nothing.
+    let original = samples.to_vec();
+
     // Build one full-strength target, then blend the complete knee + spatial
     // result once below. This keeps strength 1 byte-identical while giving an
     // eventual fractional API one linear, stage-order-independent meaning.
     let knee_corrected_sites = if method == HighlightMethod::Harmonic {
-        apply_sensor_knee(samples, confidence, width, height, cfa)
+        apply_sensor_knee(samples, &original, confidence, width, height, cfa)
     } else {
         0
     };
     let grid = build_grid(samples, confidence, width, height, cfa);
     let pyramid = build_pyramid(&grid);
     let pyramid_prediction = pyramid_prediction(&grid, &pyramid);
+    // The level stack is the coarse-colour source for that one call and nothing
+    // else. Returning it here (~190 MB on a 24 megapixel frame) keeps it out of
+    // the harmonic solve, which is where the process's high-water mark sits.
+    drop(pyramid);
     let all_regions = regions(&grid);
     debug_dump_grid("00-grid-value", &grid, &grid.value, white_balance);
     debug_dump_grid("01-pyramid", &grid, &pyramid_prediction, white_balance);
@@ -1991,7 +2150,7 @@ pub fn reconstruct_cfa(
         HighlightMethod::RawPyramid => (pyramid_prediction, 0.0, 0, 0),
         HighlightMethod::Harmonic => {
             let (luminance, support, fit, cores, fallbacks) =
-                harmonic_prediction(&grid, &pyramid_prediction, &all_regions, white_balance);
+                harmonic_prediction(&grid, pyramid_prediction, &all_regions, white_balance);
             debug_dump_grid("02-harmonic", &grid, &luminance, white_balance);
             for &(x, y) in &probe_cells {
                 let i = y * grid.width + x;
@@ -2381,8 +2540,12 @@ mod tests {
             "the fixture needs several regions, found {}",
             all_regions.len()
         );
-        let (luminance, support, ..) =
-            harmonic_prediction(&grid, &pyramid_prediction, &all_regions, white_balance);
+        let (luminance, support, ..) = harmonic_prediction(
+            &grid,
+            pyramid_prediction.clone(),
+            &all_regions,
+            white_balance,
+        );
 
         let forward =
             joint_log_chromaticity(&grid, &all_regions, &luminance, &support, white_balance);
@@ -2553,6 +2716,70 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_direct_solve_leaves_the_buffer_untouched() {
+        // The direct solve edits `current` in place instead of working on a
+        // full-frame copy, so the iterative fallback only sees the state it used
+        // to see if every write is rolled back when a later channel fails. This
+        // fixture solves one channel and then poisons the next one's right-hand
+        // side, which is the order the rollback exists for.
+        let width = 5;
+        let mut value: Vec<[f32; 3]> = (0..width)
+            .map(|x| {
+                let intensity = 0.2 + x as f32 * 0.1;
+                [intensity, intensity * 1.1, intensity * 0.9]
+            })
+            .collect();
+        // A known neighbour with no green reading: channel 1's system inherits
+        // the NaN through its right-hand side and cannot produce a finite
+        // solution, while channel 0 (solved first, fewer unknowns) can.
+        value[width - 2][1] = f32::NAN;
+        let mut valid = vec![[true; 3]; width];
+        valid[width - 1] = [false, false, true];
+        let grid = Grid {
+            width,
+            height: 1,
+            floor: vec![[0.0; 3]; width],
+            value: value.clone(),
+            confidence: valid
+                .iter()
+                .map(|channels| channels.map(|v| if v { 0.0 } else { 1.0 }))
+                .collect(),
+            trust: valid
+                .iter()
+                .map(|channels| channels.map(|v| if v { 1.0 } else { 0.0 }))
+                .collect(),
+            valid,
+        };
+        let region = Region {
+            cells: (0..width).collect(),
+            boundary: vec![0, width - 1],
+        };
+        let mut scratch = RegionScratch::new(grid.value.len());
+        let mut current = value.clone();
+        let solved = solve_region_direct(&grid, &region, [None; 3], &mut current, &mut scratch);
+        assert!(!solved, "a non-finite system must be reported as unsolved");
+        for (after, before) in current.iter().zip(&value) {
+            for c in 0..3 {
+                assert_eq!(
+                    after[c].is_nan(),
+                    before[c].is_nan(),
+                    "a failed solve must not change the buffer"
+                );
+                if !before[c].is_nan() {
+                    assert_eq!(
+                        after[c], before[c],
+                        "a failed solve must not change the buffer"
+                    );
+                }
+            }
+        }
+        // And the scratch is handed back neutral, or the next region would read
+        // this region's row numbering.
+        assert!(scratch.row_of.iter().all(|&row| row == usize::MAX));
+        assert!(scratch.undo.is_empty());
+    }
+
+    #[test]
     fn luminance_domes_require_a_hard_clipped_core() {
         let grid = Grid {
             width: 2,
@@ -2568,7 +2795,8 @@ mod tests {
             boundary: vec![0, 1],
         };
 
-        let cores = fully_clipped_components(&grid, &region);
+        let cores =
+            fully_clipped_components(&grid, &region, &mut RegionScratch::new(grid.value.len()));
         assert_eq!(cores.len(), 1);
         assert_eq!(cores[0].cells, vec![1]);
     }
@@ -2596,7 +2824,7 @@ mod tests {
         );
         assert!(best_fits(&grid, &region)[0].is_none());
 
-        let (_, support, ..) = harmonic_prediction(&grid, &value, &[region], [1.0; 3]);
+        let (_, support, ..) = harmonic_prediction(&grid, value.clone(), &[region], [1.0; 3]);
         assert_eq!(support[2][0], 0.0);
     }
 
@@ -2682,7 +2910,14 @@ mod tests {
         // No explicit map: the stage has to engage across its whole operating
         // range on its own evidence. An all-ones map here would make any
         // confidence gating inside the stage untestable.
-        let corrected = apply_sensor_knee(&mut captured, None, width, height, &rggb());
+        let corrected = apply_sensor_knee(
+            &mut captured,
+            &before_knee.clone(),
+            None,
+            width,
+            height,
+            &rggb(),
+        );
         assert!(corrected > 0, "the verified knee should engage");
         let mut squared = 0.0_f64;
         let mut count = 0_usize;

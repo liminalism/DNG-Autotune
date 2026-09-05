@@ -167,31 +167,45 @@ pub fn apply(image: &mut Rgb16Image, snr10_ev: Option<f32>, scale: f32) -> Optio
             }
         });
 
-    let mut headroom_limited = 0usize;
-    let mut correction_sum = 0.0f64;
+    // Apply in parallel, total afterwards. The headroom clamp and the pixel
+    // write are per pixel, but `correction_sum` is an f64 running total whose
+    // value depends on summation order, so it cannot be split across threads
+    // without moving the reported `mean_correction`. Writing each pixel's
+    // applied magnitude back over its own slot in `correction` lets the sum
+    // stay a single in-order walk without a second full-frame plane.
     let raw = image.as_mut();
-    for (index, delta) in correction.iter().enumerate() {
-        let pixel = &mut raw[index * 3..index * 3 + 3];
-        // Headroom is measured on the outermost *channel*, not on luminance.
-        // Clipping is per channel, and the correction is added to all three, so
-        // a pixel whose luminance has room can still have a channel that does
-        // not — a blue sky at luma 0.9 with its blue channel at 0.99. Guarding
-        // on luminance cost 20 frames of the highlight win the first time this
-        // shipped; it is the same per-channel lesson as 0.1.12's chroma cap.
-        let brightest = f32::from(*pixel.iter().max().unwrap_or(&0)) / f32::from(u16::MAX);
-        let darkest = f32::from(*pixel.iter().min().unwrap_or(&0)) / f32::from(u16::MAX);
-        let upper = (1.0 - brightest) * HEADROOM_FRACTION;
-        let lower = -darkest * HEADROOM_FRACTION;
-        let limited = delta.clamp(lower, upper);
-        if (limited - delta).abs() > 1.0e-9 {
-            headroom_limited += 1;
-        }
-        correction_sum += f64::from(limited.abs());
-        let scaled = limited * f32::from(u16::MAX);
-        for channel in pixel.iter_mut() {
-            *channel = (f32::from(*channel) + scaled).clamp(0.0, f32::from(u16::MAX)) as u16;
-        }
-    }
+    let headroom_limited: usize = correction
+        .par_chunks_mut(width)
+        .zip(raw.par_chunks_mut(width * 3))
+        .map(|(corrections, pixels)| {
+            let mut headroom_limited = 0usize;
+            for (delta, pixel) in corrections.iter_mut().zip(pixels.chunks_exact_mut(3)) {
+                // Headroom is measured on the outermost *channel*, not on
+                // luminance. Clipping is per channel, and the correction is
+                // added to all three, so a pixel whose luminance has room can
+                // still have a channel that does not — a blue sky at luma 0.9
+                // with its blue channel at 0.99. Guarding on luminance cost 20
+                // frames of the highlight win the first time this shipped; it
+                // is the same per-channel lesson as 0.1.12's chroma cap.
+                let brightest = f32::from(*pixel.iter().max().unwrap_or(&0)) / f32::from(u16::MAX);
+                let darkest = f32::from(*pixel.iter().min().unwrap_or(&0)) / f32::from(u16::MAX);
+                let upper = (1.0 - brightest) * HEADROOM_FRACTION;
+                let lower = -darkest * HEADROOM_FRACTION;
+                let limited = delta.clamp(lower, upper);
+                if (limited - *delta).abs() > 1.0e-9 {
+                    headroom_limited += 1;
+                }
+                let scaled = limited * f32::from(u16::MAX);
+                for channel in pixel.iter_mut() {
+                    *channel =
+                        (f32::from(*channel) + scaled).clamp(0.0, f32::from(u16::MAX)) as u16;
+                }
+                *delta = limited.abs();
+            }
+            headroom_limited
+        })
+        .sum();
+    let correction_sum: f64 = correction.iter().map(|applied| f64::from(*applied)).sum();
 
     let total = correction.len().max(1);
     Some(SharpenReport {

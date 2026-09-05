@@ -74,7 +74,7 @@ pub struct RenderOptions {
     pub highlight_method: crate::raw_highlight::HighlightMethod,
     /// Fraction of clipped CFA sites below which the spatial highlight solver
     /// is declined and the frame develops on the post-demosaic `Current`
-    /// estimator. This is what keeps an unclipped frame off the ~20 s / ~1.3 GB
+    /// estimator. This is what keeps an unclipped frame off the ~8 s / ~1.05 GB
     /// path. `0.0` always solves. See
     /// [`crate::raw_highlight::DEFAULT_SPATIAL_CLIPPED_FLOOR`].
     pub spatial_highlight_floor: f32,

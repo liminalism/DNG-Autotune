@@ -11,8 +11,14 @@ semantic scene masks (2026-08-13), the Slice 5 joint raw-domain
 log-chromaticity estimator (2026-08-23), the archive-speed spatial-highlight
 floor plus the in-memory EXIF/ICC surface (2026-08-26), the CamSDD scene
 classifier / C5 illuminant observational sidecars (`--scene-classify`,
-`--illuminant`, 2026-08-26/27), and the harmonic false-colour fixes
-(neutral-guard fallback then base neutralization, 2026-08-27) — is recorded in
+`--illuminant`, 2026-08-26/27), the harmonic false-colour fixes
+(neutral-guard fallback then base neutralization, 2026-08-27), and the
+allocation/parallelism pass on the render path plus the memory-budget re-fit
+(2026-09-05: `_DSC1289` at `--jobs 1` from 21.94 s to 7.31 s wall and 1334 MB to
+1056 MB peak RSS, the `raw/arw`+`raw/raw_old` survey from 1286.8 s to 196.0 s at
+`--jobs 6`, `PEAK_BYTES_PER_PIXEL` 56 to 68 because the old value was 7% under
+the measured cost, the spatial-estimator reserves 64/24 to 8/8, and a new flat
+`SEMANTIC_MODEL_BYTES` for the ONNX paths; output byte-identical throughout) — is recorded in
 `CHANGELOG.md` and in the AKR ledger, and is reflected here only where a section
 below says so explicitly. `REPORT_SCHEMA_VERSION` is now 22 (23/24 for the
 semantic sidecars) and `AUTO_PROFILE_VERSION` is `archive-auto-v8`.

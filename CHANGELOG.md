@@ -2,6 +2,147 @@
 
 ## Unreleased — a standalone front-end
 
+### The memory budget was 7% under the cost it exists to bound
+
+`PEAK_BYTES_PER_PIXEL` was fitted at 0.1.18 from a corpus maximum of 52.4 B/px
+and set to 56. Re-swept at 0.1.19 over 33 frames spanning 10.0 to 49.9
+megapixels and all four sources, with every per-pixel operator forced on, the
+real maximum is **60.7 B/px** — so ordinary feature work had walked past the
+constant without anything catching it, and the planner was budgeting under the
+cost on exactly the path that carries no other reserve.
+
+The sweep is sharply bimodal and the ceiling is structural rather than a
+property of one frame: every frame the guided chroma stage engages on lands in
+60.3–60.7 B/px whatever its size or source, and every frame it does not lands
+in 39.5–42.5. `PEAK_BYTES_PER_PIXEL` is now **68**, chosen above the 65 the old
+rounding rule would give precisely because the old value was fitted tight enough
+to drift unnoticed.
+
+Two costs the planner could not see are now line items of their own.
+
+**The spatial estimators no longer reserve what they used to need.** `Harmonic`
+reserved 64 B/px and `RawPyramid` 24, fitted when the solver allocated a
+full-frame working copy and a grid-sized row map per clipped region and its
+transient was the tallest thing in the process. After the allocation pass below
+it is not: measured against the same frame at `--highlight-method current`,
+harmonic now adds at most **1.89 B/px** and raw-pyramid **0.75**. Both reserves
+are **8** — about four times the worst measurement, and deliberately not zero, so
+a future solver's growth shows up in the budget rather than in an OOM kill.
+
+That reserve was large enough to distort the ordering it fed: at 64 B/px a 24 MP
+Bayer frame was budgeted above a 50 MP Expert RAW one, though their measured
+peaks are 1464 MiB and 2075 MiB the other way round. With it fitted, pixels
+dominate again and the biggest file in a mixed batch binds, which is what a
+shared queue wants. `linear_raw_does_not_reserve_harmonic_bytes` and its
+neighbour now assert against the constants instead of spelling `24` and `64`
+out, so the next re-fit cannot change the code and its own check together.
+
+**The semantic models were not budgeted at all.** `--scene-classify`,
+`--semantic` and `--semantic-faces` load an ONNX graph and run it on a fixed
+288x192 proxy, so the cost is flat rather than per-pixel: measured +234 MiB at
+10.5 MP, +315 MiB at 24.3 MP and +273 MiB at 49.9 MP. `SEMANTIC_MODEL_BYTES`
+(384 MiB) is now added once per worker when `RunOptions::loads_semantic_models`
+says a model will be loaded. At `--highlight-method current --scene-classify`
+the old budget was 31% under what the run used.
+
+Where the old and new budgets sit against measurement, worst-case flags:
+
+| case | measured | old budget | new budget |
+| --- | --- | --- | --- |
+| 10.5 MP, `current` | 0.65 GiB | 0.61 GiB (**0.94x**) | 0.73 GiB (1.12x) |
+| 24.3 MP, `current` | 1.39 GiB | 1.33 GiB (**0.96x**) | 1.60 GiB (1.16x) |
+| 24.3 MP, `+--scene-classify` | 1.74 GiB | 2.78 GiB (1.60x) | 2.16 GiB (1.24x) |
+| 49.9 MP LinearRaw | 2.03 GiB | 2.67 GiB (1.32x) | 3.23 GiB (1.59x) |
+
+Net effect on scheduling, same machine and the same ~21 GiB available: a 60-file
+Sony batch at `--jobs auto` goes from 8 workers to 13, and a 24 MP frame from
+2.78 GiB budgeted to 1.79. Wall clock barely moves on a 20-core machine already
+saturated at 8 workers (46.8 s to 42.2 s), because the worker count stopped
+being the bottleneck there; the change matters on the memory-constrained
+machines where the old numbers forced one or two workers, and it closes the
+under-budget. Output is byte-identical across all 60 files, as it must be — the
+worker count never reaches the render path.
+
+**Rejected: caching the ONNX sessions.** Each inference site calls
+`OnnxSession::from_path` per image, so the model is re-read and re-prepared for
+every file. A process-wide cache keyed by path was implemented and measured over
+a four-file batch: no time saved at all (19.16 s to 19.75 s at `--jobs 1`), and
+peak RSS **worse** — 1354 MB to 1592 MB at `--jobs 1`, 2353 MB to 2740 MB at
+`--jobs 4`. The ~300 MB is the inference workspace, not the graph, so loading is
+already cheap; caching only converts a transient into a resident and raises the
+figure the planner budgets. Reverted.
+
+### The pipeline stopped allocating a grid per region
+
+Stage timing on a 24 MP A7C frame put 81% of the wall clock inside `develop`,
+and 3.9 s of that inside `reconstruct_cfa` — reconstructing 4 267 clipped
+photosites out of 24.3 M. The arithmetic was not the cost. `solve_region_direct`
+took a full-frame `current.to_vec()` (144 MB) and a `vec![usize::MAX;
+grid.value.len()]` row map (48 MB per channel) **per connected region**, and
+`fully_clipped_components` took two more grid-sized `Vec<bool>`, so a frame with
+69 regions allocated, zeroed and copied roughly 20 GB to change 0.018% of its
+photosites. That is also where the process's 10.6 M minor page faults came from.
+
+Those buffers are now one `RegionScratch` per frame, and the direct solve edits
+`current` in place with an undo log instead of working on a copy: the writes were
+always confined to the cells it copied back on success, so recording them is what
+lets a failed solve hand the iterative fallback the buffer it used to find. Every
+scratch buffer is left in its neutral state by whoever borrows it. `depth_map`
+and `fully_clipped_components` clear only the cells they can have touched, which
+is bounded by the region rather than the grid.
+
+Seven full-frame loops that were serial for no reason now run on the rayon pool,
+each split so the arithmetic order inside a pixel is unchanged and the split
+point cannot be observed: `propagate_mosaic_confidence`, `build_grid` (fused with
+its finalisation pass, which also removes a whole extra grid of accumulators),
+the pyramid `reduce`, `apply_sensor_knee`'s write pass, the clipped-site scan,
+the post-hot-pixel confidence recompute, and `sharpen`'s apply pass. `sharpen`'s
+`correction_sum` stays a single in-order `f64` walk — splitting it would move the
+reported `mean_correction` — and reuses the correction plane it already owns
+rather than allocating a second one to sum afterwards.
+
+Three memory changes, all in the stage that holds the high-water mark.
+`tone::render` renders and encodes in 16 384-pixel blocks, so the display-linear
+values never exist as a whole frame (12 B/px, 288 MB on 24 MP, previously alive
+alongside both the scene-linear input and the `u16` output). The pyramid level
+stack is dropped once `pyramid_prediction` has read it, and that prediction is
+moved into `harmonic_prediction` rather than copied. `apply_sensor_knee` takes
+the caller's existing pre-knee copy instead of making its own, and
+`reconstruct_cfa` only makes that copy once a frame is past the archive-speed
+floor, so a declined frame no longer pays 97 MB for a buffer it never reads.
+
+Measured on `_DSC1289` (the frame the joint-chromaticity entry below used),
+release profile, `--jobs 1`, median of three back-to-back runs of each binary on
+an otherwise idle machine:
+
+| | before | after |
+| --- | --- | --- |
+| wall clock | 21.94 s | **7.31 s** |
+| peak RSS | 1 334 116 KB | **1 056 584 KB** |
+| minor page faults | 10 651 218 | **780 547** |
+| system time | 11.71 s | **1.25 s** |
+
+The rendered JPEG is byte-identical (same MD5). Over the standing gate corpus —
+`raw/arw` and `raw/raw_old`, 268 files — the `--dry-run --summary` output is
+identical field by field ignoring `elapsed_ms`, and that survey went from
+1286.8 s to **196.0 s** wall at `--jobs 6`, with system time from 1430.9 s to
+99.3 s and peak RSS from 3403 MB to 2900 MB. Two `--jobs 8` runs are
+byte-identical to each other and to the pre-change baseline. 407 tests, clippy
+and `cargo fmt --check` are clean.
+
+`HighlightMethod::Harmonic`'s 64 bytes/pixel batch-planner reserve and
+`PEAK_BYTES_PER_PIXEL` are deliberately left alone. Both were fitted on Sony CFA
+frames only, the cost of overestimating is one fewer worker and the cost of
+underestimating is a batch killed hours in, and lowering them is a scheduling
+decision that wants its own corpus measurement across every source in
+`docs/STATUS.md` rather than a side effect of this change.
+
+`a_failed_direct_solve_leaves_the_buffer_untouched` covers the one path where the
+in-place solve could differ from the copy it replaced: a fixture that solves one
+channel and then poisons the next channel's right-hand side, asserting the buffer
+and the scratch both come back as they went in. It fails if the rollback is
+removed.
+
 ### `--preset vivid` is now the profile's calibration, not a table laid over ours
 
 A DCP's `ProfileHueSatMapData` encodes the residual left by *that profile's*
